@@ -15,6 +15,8 @@ import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { ErrorBoundary } from './src/components/common/ErrorBoundary';
+import { OfflineBanner } from './src/components/common/OfflineBanner';
+import { OfflineProvider } from './src/context/OfflineContext';
 import { TourProvider } from './src/context/TourContext';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
 import { configureAmplify } from './src/config/amplify';
@@ -78,6 +80,7 @@ function AuthGate() {
   return (
     <TourProvider>
       <StatusBar style="auto" />
+      <OfflineBanner />
       <DashboardScreen />
     </TourProvider>
   );
@@ -164,9 +167,11 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <ErrorBoundary>
-        <AuthProvider>
-          <AuthGate />
-        </AuthProvider>
+        <OfflineProvider>
+          <AuthProvider>
+            <AuthGate />
+          </AuthProvider>
+        </OfflineProvider>
       </ErrorBoundary>
     </SafeAreaProvider>
   );

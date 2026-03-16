@@ -185,15 +185,9 @@ This should be flagged as a special role where Dashboard access should not be av
 This role is a read-only Dashboard role with all other features disabled or removed. Purpose of having this role is basically to allow users to view the ride progress or historical dashboard.
 
 # Offline Capability:
-Sometime pit stop can be in a very remote location where cellular reception may not be available or intermittent. App should be able to support offline mode. User must have an option to turn on/off 'Offline mode' manually to give user better control when data connectivity is not stable or intermittent. Offline mode indicator is required at Dashboard level.
+The app does not support offline mode. All features require an active internet connection.
 
-All check in should be captured in mobile device local database/storage and asynchronously updated in the main cloud based database table. If network is not available the async update process should be put on hold until network is available.
-
-Dashboard view should use the check in data available in the local database for display in offline mode. This means Dashboard view should automatically switch to filter by stage view using the respective stage to which the pit stop crew user is assigned. Sorting within this filter should be possible.
-
-TODO: Define this use case: If pit stop crew user is assigned manage more than 1 pit stop stage, how the offline mode should work?
-
-Since 'Not Riding' status is records before the ride starts, this data should be synced to local offline database and used in the offline mode Dashboard view. This is to ensure pit stop crew is made aware of riders who won't be checking in for the day at their pit stop location.
+When the device loses connectivity, the app displays a simple **"You are offline"** status banner to inform the user. No data is cached locally.
 
 # Administrator Features  
 
@@ -206,8 +200,7 @@ Data model and fields to be determined as part of design and development stage.
 Data model and APIs for data access is provided by solution developed by the repo - [Backend](https://github.com/kvijay77-in/tour-data-api). Read through it's requirements and how it is implemented. Follow guidelines and recommendations in this repo for any data access implementation. Ensure data privacy and security is not compromised for any reason. 
 
 # Others
-Mobile device permission is only required for Camera to scan QR Code. 
-Check if local database requires storage permission??
+Mobile device permission is only required for Camera to scan QR Code.
 
 ---
 

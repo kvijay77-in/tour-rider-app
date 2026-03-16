@@ -41,14 +41,14 @@ tour-rider-app/
 │   │   └── profile/           # Profile-specific components
 │   │       └── ProfilePicture.tsx
 │   ├── config/                 # Configuration files
-│   │   ├── amplify.ts         # AWS Amplify configuration
-│   │   └── database.ts        # SQLite database configuration
+│   │   └── amplify.ts         # AWS Amplify configuration
 │   ├── constants/              # Application constants
 │   │   ├── colors.ts          # Color palette
 │   │   ├── stages.ts          # Stage definitions
 │   │   └── index.ts           # Exports
 │   ├── context/                # React Context providers
 │   │   ├── AuthContext.tsx    # Authentication state
+│   │   ├── OfflineContext.tsx # Network connectivity state (offline banner)
 │   │   ├── RiderContext.tsx   # Rider profile state
 │   │   └── TourContext.tsx    # Tour enrollment state
 │   ├── hooks/                  # Custom React hooks
@@ -87,15 +87,8 @@ tour-rider-app/
 │   │   │   ├── rideApi.ts     # Ride API
 │   │   │   ├── checkInApi.ts  # Check-in API
 │   │   │   └── notificationApi.ts # Notification API
-│   │   ├── database/          # SQLite database
-│   │   │   ├── database.ts    # Database initialization
-│   │   │   ├── riderDb.ts     # Rider profile DB operations
-│   │   │   ├── tourDb.ts      # Tour DB operations
-│   │   │   ├── rideDb.ts      # Ride DB operations
-│   │   │   ├── checkInDb.ts   # Check-in DB operations
-│   │   │   └── notificationDb.ts # Notification DB operations
-│   │   └── sync/              # Sync service
-│   │       └── syncService.ts # Background data sync
+│   │   └── config/            # Runtime configuration
+│   │       └── orgConfigService.ts # Org config secure storage
 │   ├── types/                  # TypeScript type definitions
 │   │   ├── rider.ts           # Rider types
 │   │   ├── tour.ts            # Tour types
@@ -143,7 +136,7 @@ Reusable UI components organized by scope:
 - Use functional components and hooks
 
 ### `/src/config`
-Configuration files for AWS Amplify, database, and other services. Environment-specific values loaded from `.env` files.
+Configuration files for AWS Amplify and other services. Environment-specific values loaded from `.env` files.
 
 ### `/src/constants`
 Application-wide constants:
@@ -154,6 +147,7 @@ Application-wide constants:
 ### `/src/context`
 React Context providers for global state management:
 - **AuthContext**: Authentication state, login/logout
+- **OfflineContext**: Network connectivity detection, drives offline banner
 - **RiderContext**: Rider profile, statistics
 - **TourContext**: Active tour, enrollment status
 
@@ -184,7 +178,7 @@ Screen-level components, one per screen. Organized by feature area.
 - Type navigation props with TypeScript
 
 ### `/src/services`
-Business logic, API communication, database operations:
+Business logic and API communication:
 
 #### `/src/services/api`
 HTTP client and API service layer for tour-data-api integration:
@@ -196,19 +190,6 @@ HTTP client and API service layer for tour-data-api integration:
 - Handle errors consistently
 - Return typed responses
 - Log API calls at DEBUG level
-
-#### `/src/services/database`
-SQLite database operations for offline caching:
-- **database.ts**: Initialize database, run migrations
-- Feature-specific DB files (riderDb, tourDb, etc.)
-
-**Guidelines:**
-- Use prepared statements to prevent SQL injection
-- Handle errors gracefully
-- Provide typed query results
-
-#### `/src/services/sync`
-Background sync service for keeping local cache up-to-date when online.
 
 ### `/src/types`
 TypeScript type definitions and interfaces:

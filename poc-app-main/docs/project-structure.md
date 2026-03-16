@@ -50,19 +50,15 @@ poc-app/
 │   │   ├── config/                 # Runtime org configuration service
 │   │   │   └── orgConfigService.ts # HMAC verification, expo-secure-store persistence
 │   │   ├── auth/                   # AWS Cognito authentication
-│   │   ├── database/               # SQLite for offline support
-│   │   ├── sync/                   # Data synchronization service
 │   │   └── qrcode/                 # QR code scanning service
 │   │
 │   ├── hooks/                      # Custom React hooks
-│   │   ├── useAuth.ts              # Authentication hook
-│   │   ├── useOffline.ts           # Offline mode hook
-│   │   └── useSync.ts              # Data sync hook
+│   │   └── useAuth.ts              # Authentication hook
 │   │
 │   ├── context/                    # React Context providers
 │   │   ├── AuthContext.tsx         # Authentication context
 │   │   ├── TourContext.tsx         # Active tour context (resolves tourId at startup)
-│   │   ├── OfflineContext.tsx      # Offline mode context
+│   │   ├── OfflineContext.tsx      # Network connectivity context (drives offline banner)
 │   │   └── RoleContext.tsx         # RBAC role context
 │   │
 │   ├── types/                      # TypeScript type definitions
@@ -83,8 +79,7 @@ poc-app/
 │   │   └── stages.ts               # Ride stage definitions
 │   │
 │   └── config/                     # Configuration files
-│       ├── amplify.ts              # AWS Amplify configuration
-│       └── database.ts             # Database configuration
+│       └── amplify.ts              # AWS Amplify configuration
 │
 ├── assets/                         # Static assets
 │   ├── images/                     # Image files
@@ -109,19 +104,19 @@ poc-app/
 ### Source Code (`src/`)
 - **`screens/`**: Page-level components organized by feature domain (dashboard, check-in, admin, auth). Each screen connects to context providers and services.
 - **`components/`**: Reusable UI components. `common/` for shared components, feature-specific folders for domain components.
-- **`services/`**: Business logic layer isolated from UI. Contains API client, org configuration service, SQLite database, and sync service.
-- **`context/`**: React Context providers for global state — authentication, active tour, offline mode, RBAC roles.
+- **`services/`**: Business logic layer isolated from UI. Contains API client, org configuration service.
+- **`context/`**: React Context providers for global state — authentication, active tour, offline status (for banner), RBAC roles.
 - **`types/`**: TypeScript type definitions and interfaces for data models, API responses, and navigation.
 - **`constants/`**: Application-wide constants — color definitions, role definitions, stage definitions.
-- **`hooks/`**: Custom React hooks for reusable stateful logic (auth, offline mode, sync).
+- **`hooks/`**: Custom React hooks for reusable stateful logic (auth).
 - **`utils/`**: Pure utility functions — permissions checking, input validation, data formatting.
-- **`config/`**: Configuration files for Amplify and database setup.
+- **`config/`**: Configuration files for Amplify setup.
 
 ### Documentation (`docs/`)
 - **`Requirements.md`**: Detailed functional requirements, use cases, and feature specifications
 - **`SolutionDesign.md`**: Architecture, design principles, component structure, technical decisions
 - **`Dashboard-Feature.md`**: Dashboard screen specification — grid, stages, sorting, zoom, colors
-- **`DataIntegrationDesign.md`**: Backend API integration architecture, offline sync, conflict resolution
+- **`DataIntegrationDesign.md`**: Backend API integration architecture and offline status
 - **`Generic-App-Distribution-Analysis.md`**: Feasibility analysis for distributing one generic app across multiple organizer AWS subscriptions
 - **`development-guide.md`**: Environment setup, running the app, testing, troubleshooting
 - **`docs-index.md`**: Complete documentation index with persona-based navigation
@@ -136,7 +131,7 @@ poc-app/
 - **Single Entry Point**: `App.tsx` serves as the root component for Android, iOS, and Web
 - **Platform Agnostic**: All code in `/src` is shared across platforms
 - **Services Layer**: Business logic isolated in `/services` for reusability
-- **Offline Support**: Database and sync services handle offline functionality
+- **Offline Banner**: Simple status banner shown when device connectivity is lost
 - **Type Safety**: TypeScript definitions in `/types` for type checking
 - **RBAC Support**: Context and utilities for role-based access control
 - **AWS Integration**: Amplify backend folder for cloud resources (auto-generated)
