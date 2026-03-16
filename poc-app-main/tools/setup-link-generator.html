@@ -1,0 +1,980 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Check-In App — Setup Link Generator</title>
+<style>
+  :root {
+    --primary: #1a73e8;
+    --primary-dark: #1557b0;
+    --bg: #f8f9fa;
+    --card: #ffffff;
+    --text: #202124;
+    --text-secondary: #5f6368;
+    --border: #dadce0;
+    --error: #d93025;
+    --success: #1e8e3e;
+    --radius: 8px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.5;
+    padding: 24px 16px;
+  }
+
+  .container {
+    max-width: 640px;
+    margin: 0 auto;
+  }
+
+  h1 {
+    font-size: 24px;
+    font-weight: 600;
+    margin-bottom: 4px;
+  }
+
+  .subtitle {
+    color: var(--text-secondary);
+    font-size: 14px;
+    margin-bottom: 24px;
+  }
+
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 24px;
+    margin-bottom: 20px;
+  }
+
+  .card h2 {
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 16px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .field {
+    margin-bottom: 14px;
+  }
+
+  .field:last-child {
+    margin-bottom: 0;
+  }
+
+  label {
+    display: block;
+    font-size: 13px;
+    font-weight: 500;
+    margin-bottom: 4px;
+    color: var(--text);
+  }
+
+  label .optional {
+    color: var(--text-secondary);
+    font-weight: 400;
+  }
+
+  input[type="text"] {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    font-size: 14px;
+    font-family: inherit;
+    transition: border-color 0.15s;
+  }
+
+  input[type="text"]:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 2px rgba(26, 115, 232, 0.15);
+  }
+
+  input[type="text"].error {
+    border-color: var(--error);
+  }
+
+  .hint {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-top: 2px;
+  }
+
+  .btn {
+    display: inline-block;
+    padding: 10px 24px;
+    font-size: 14px;
+    font-weight: 500;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background 0.15s;
+    font-family: inherit;
+  }
+
+  .btn-primary {
+    background: var(--primary);
+    color: #fff;
+  }
+
+  .btn-primary:hover {
+    background: var(--primary-dark);
+  }
+
+  .btn-primary:disabled {
+    background: #94c4f7;
+    cursor: not-allowed;
+  }
+
+  .btn-secondary {
+    background: transparent;
+    color: var(--primary);
+    border: 1px solid var(--border);
+    margin-left: 8px;
+  }
+
+  .btn-secondary:hover {
+    background: #f1f3f4;
+  }
+
+  .actions {
+    margin-top: 20px;
+    display: flex;
+    align-items: center;
+  }
+
+  .error-msg {
+    color: var(--error);
+    font-size: 13px;
+    margin-top: 8px;
+  }
+
+  /* Output section */
+  #output {
+    display: none;
+  }
+
+  .output-block {
+    margin-bottom: 16px;
+  }
+
+  .output-block h3 {
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 6px;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .url-box {
+    background: #f1f3f4;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 10px 12px;
+    font-size: 13px;
+    font-family: 'SF Mono', 'Consolas', 'Courier New', monospace;
+    word-break: break-all;
+    position: relative;
+  }
+
+  .copy-btn {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 4px 10px;
+    font-size: 12px;
+    cursor: pointer;
+    font-family: inherit;
+  }
+
+  .copy-btn:hover {
+    background: #e8eaed;
+  }
+
+  .copy-btn.copied {
+    background: var(--success);
+    color: #fff;
+    border-color: var(--success);
+  }
+
+  #qr-container {
+    text-align: center;
+    padding: 16px 0;
+  }
+
+  #qr-container canvas {
+    border: 8px solid #fff;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.12);
+    border-radius: 4px;
+  }
+
+  .link-type-toggle {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+
+  .link-type-toggle button {
+    padding: 6px 14px;
+    font-size: 13px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--card);
+    cursor: pointer;
+    font-family: inherit;
+  }
+
+  .link-type-toggle button.active {
+    background: var(--primary);
+    color: #fff;
+    border-color: var(--primary);
+  }
+
+  .security-note {
+    background: #fef7e0;
+    border: 1px solid #fdd663;
+    border-radius: var(--radius);
+    padding: 12px 16px;
+    font-size: 13px;
+    margin-bottom: 20px;
+  }
+
+  .security-note strong {
+    color: #b06000;
+  }
+
+  .print-section {
+    text-align: center;
+    margin-top: 12px;
+  }
+
+  @media print {
+    body { background: #fff; padding: 0; }
+    .card, .security-note, #form-section, .actions, .link-type-toggle,
+    .copy-btn, .print-section button, .subtitle { display: none; }
+    #output { display: block !important; }
+    #qr-container { page-break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+
+<div class="container">
+  <h1>Check-In App — Setup Link Generator</h1>
+  <p class="subtitle">Generate signed setup links and QR codes for crew member devices.</p>
+
+  <div class="security-note">
+    <strong>Security:</strong> All cryptography runs locally in your browser. The HMAC key is
+    never stored or transmitted — it stays on this page only while you have it open.
+  </div>
+
+  <div id="form-section" class="card">
+    <h2>Organisation Configuration</h2>
+
+    <div class="field">
+      <label for="orgCode">Organisation Code</label>
+      <input type="text" id="orgCode" placeholder="e.g. TOT-2026">
+      <div class="hint">Short identifier — used internally by the app.</div>
+    </div>
+
+    <div class="field">
+      <label for="orgName">Organisation Name</label>
+      <input type="text" id="orgName" placeholder="e.g. Tour of Tropics 2026">
+      <div class="hint">Display name shown in the app.</div>
+    </div>
+
+    <div class="field">
+      <label for="awsRegion">AWS Region</label>
+      <input type="text" id="awsRegion" placeholder="e.g. ap-south-1">
+    </div>
+
+    <div class="field">
+      <label for="userPoolId">Cognito User Pool ID</label>
+      <input type="text" id="userPoolId" placeholder="e.g. ap-south-1_XXXXXXXXX">
+    </div>
+
+    <div class="field">
+      <label for="userPoolClientId">Cognito App Client ID</label>
+      <input type="text" id="userPoolClientId" placeholder="e.g. 31s80dcc5u1oob7shuc2s4up0a">
+    </div>
+
+    <div class="field">
+      <label for="identityPoolId">Cognito Identity Pool ID <span class="optional">(optional)</span></label>
+      <input type="text" id="identityPoolId" placeholder="e.g. ap-south-1:xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
+    </div>
+
+    <div class="field">
+      <label for="apiBaseUrl">API Base URL</label>
+      <input type="text" id="apiBaseUrl" placeholder="e.g. https://xxx.execute-api.ap-south-1.amazonaws.com/dev">
+      <div class="hint">Tour Data API endpoint (from your backend deployment).</div>
+    </div>
+
+    <h2 style="margin-top: 20px;">Signing Key</h2>
+
+    <div class="field">
+      <label for="hmacKey">HMAC Secret Key</label>
+      <input type="text" id="hmacKey" placeholder="256-bit hex key (64 characters)">
+      <div class="hint">Must match EXPO_PUBLIC_SETUP_HMAC_KEY in the app build. Used as a raw string key — not hex-decoded.</div>
+    </div>
+
+    <div class="field">
+      <label for="domain">Domain <span class="optional">(optional — for Universal/App Links)</span></label>
+      <input type="text" id="domain" placeholder="e.g. setup.checkin-app.example.com">
+      <div class="hint">If set, generates an HTTPS link in addition to the deep link.</div>
+    </div>
+
+    <div class="actions">
+      <button class="btn btn-primary" id="generateBtn" onclick="generate()">Generate Link &amp; QR</button>
+      <button class="btn btn-secondary" onclick="resetForm()">Reset</button>
+    </div>
+    <div id="form-error" class="error-msg"></div>
+  </div>
+
+  <div id="output" class="card">
+    <h2>Generated Output</h2>
+
+    <div class="link-type-toggle">
+      <button id="toggleDeep" class="active" onclick="showLinkType('deep')">Deep Link</button>
+      <button id="toggleUniversal" onclick="showLinkType('universal')">Universal Link</button>
+    </div>
+
+    <div class="output-block">
+      <h3>Setup URL</h3>
+      <div class="url-box" id="urlDisplay">
+        <span id="urlText"></span>
+        <button class="copy-btn" onclick="copyUrl(this)">Copy</button>
+      </div>
+    </div>
+
+    <div class="output-block">
+      <h3>QR Code</h3>
+      <div id="qr-container"></div>
+    </div>
+
+    <div class="print-section">
+      <button class="btn btn-secondary" onclick="window.print()">Print QR Code</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/**
+ * Minimal QR Code generator — produces a QR code on a canvas element.
+ * Based on the QR Code specification (ISO/IEC 18004).
+ * Supports alphanumeric and byte mode, error correction level M.
+ *
+ * This is a self-contained implementation to avoid external dependencies.
+ */
+const QRCode = (() => {
+  // Precomputed tables for GF(256) with primitive polynomial 0x11d
+  const EXP = new Uint8Array(512);
+  const LOG = new Uint8Array(256);
+  (() => {
+    let x = 1;
+    for (let i = 0; i < 255; i++) {
+      EXP[i] = x;
+      LOG[x] = i;
+      x = (x << 1) ^ (x & 128 ? 0x11d : 0);
+    }
+    for (let i = 255; i < 512; i++) EXP[i] = EXP[i - 255];
+  })();
+
+  function gfMul(a, b) {
+    return a === 0 || b === 0 ? 0 : EXP[LOG[a] + LOG[b]];
+  }
+
+  function polyMul(a, b) {
+    const r = new Uint8Array(a.length + b.length - 1);
+    for (let i = 0; i < a.length; i++)
+      for (let j = 0; j < b.length; j++)
+        r[i + j] ^= gfMul(a[i], b[j]);
+    return r;
+  }
+
+  function polyMod(data, gen) {
+    const r = new Uint8Array(data.length + gen.length - 1);
+    r.set(data);
+    for (let i = 0; i < data.length; i++) {
+      const coeff = r[i];
+      if (coeff !== 0)
+        for (let j = 0; j < gen.length; j++)
+          r[i + j] ^= gfMul(gen[j], coeff);
+    }
+    return r.slice(data.length);
+  }
+
+  function generatorPoly(n) {
+    let g = new Uint8Array([1]);
+    for (let i = 0; i < n; i++)
+      g = polyMul(g, new Uint8Array([1, EXP[i]]));
+    return g;
+  }
+
+  // EC codewords per block for EC level M (index = version)
+  const EC_M = [0,10,16,26,18,24,16,18,22,22,26,30,22,22,24,24,28,28,26,26,26,26,28,28,28,28,28,28,28,28,28,28,28,28,28,28,28,28,28,28,28,28];
+  // Total codewords per version
+  const TOTAL_CW = [0,26,44,70,100,134,172,196,242,292,346,404,466,532,581,655,733,815,901,991,1085,1177,1273,1367,1465,1528,1628,1732,1840,1952,2068,2188,2303,2431,2563,2699,2809,2953,3101,3253,3409];
+  // Data codewords for EC level M
+  const DATA_CW_M = [0,16,28,44,64,86,108,124,154,182,216,254,290,334,365,415,453,507,563,627,669,714,782,860,914,1000,1062,1128,1193,1267,1373,1455,1541,1631,1725,1812,1914,1992,2102,2216,2334];
+  // Number of blocks for EC level M
+  const BLOCKS_M = [0,1,1,1,2,2,2,2,2,2,4,4,4,4,4,4,4,4,4,4,4,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6];
+  // Alignment pattern positions
+  const ALIGN = [
+    [],[], [6,18], [6,22], [6,26], [6,30], [6,34],
+    [6,22,38], [6,24,42], [6,26,46], [6,28,50], [6,30,54], [6,32,58],
+    [6,34,62], [6,26,46,66], [6,26,48,70], [6,26,50,74], [6,30,54,78],
+    [6,30,56,82], [6,30,58,86], [6,34,62,90], [6,28,50,72,94],
+    [6,26,50,74,98], [6,30,54,78,102], [6,28,54,80,106], [6,32,58,84,110],
+    [6,30,58,86,114], [6,34,62,90,118], [6,26,50,74,98,122],
+    [6,30,54,78,102,126], [6,26,52,78,104,130], [6,30,56,82,108,134],
+    [6,34,60,86,112,138], [6,30,58,86,114,142], [6,34,62,90,118,146],
+    [6,30,54,78,102,126,150], [6,24,50,76,102,128,154],
+    [6,28,54,80,106,132,158], [6,32,58,84,110,136,162],
+    [6,26,54,82,110,138,166], [6,30,58,86,114,142,170]
+  ];
+
+  function getVersion(dataLen) {
+    // Byte mode: 4 bits mode + 8/16 bits length + data bytes * 8 + 4 bits terminator
+    for (let v = 1; v <= 40; v++) {
+      const charCountBits = v <= 9 ? 8 : 16;
+      const bits = 4 + charCountBits + dataLen * 8;
+      const cw = Math.ceil(bits / 8);
+      if (cw <= DATA_CW_M[v]) return v;
+    }
+    throw new Error('Data too long for QR code');
+  }
+
+  function encodeData(bytes, version) {
+    const charCountBits = version <= 9 ? 8 : 16;
+    const totalDataCW = DATA_CW_M[version];
+    const bits = [];
+
+    function pushBits(val, len) {
+      for (let i = len - 1; i >= 0; i--)
+        bits.push((val >> i) & 1);
+    }
+
+    // Mode indicator: byte mode = 0100
+    pushBits(4, 4);
+    // Character count
+    pushBits(bytes.length, charCountBits);
+    // Data
+    for (const b of bytes) pushBits(b, 8);
+    // Terminator (up to 4 zero bits)
+    const maxBits = totalDataCW * 8;
+    const term = Math.min(4, maxBits - bits.length);
+    pushBits(0, term);
+    // Pad to byte boundary
+    while (bits.length % 8 !== 0) bits.push(0);
+    // Pad bytes
+    const padBytes = [0xEC, 0x11];
+    let pi = 0;
+    while (bits.length < maxBits) {
+      pushBits(padBytes[pi % 2], 8);
+      pi++;
+    }
+
+    // Convert to bytes
+    const codewords = new Uint8Array(totalDataCW);
+    for (let i = 0; i < totalDataCW; i++) {
+      let val = 0;
+      for (let b = 0; b < 8; b++) val = (val << 1) | bits[i * 8 + b];
+      codewords[i] = val;
+    }
+    return codewords;
+  }
+
+  function addErrorCorrection(data, version) {
+    const ecCWPerBlock = EC_M[version];
+    const numBlocks = BLOCKS_M[version];
+    const totalCW = TOTAL_CW[version];
+    const totalDataCW = DATA_CW_M[version];
+    const shortBlockDataCW = Math.floor(totalDataCW / numBlocks);
+    const longBlocks = totalDataCW % numBlocks;
+    const gen = generatorPoly(ecCWPerBlock);
+
+    const dataBlocks = [];
+    const ecBlocks = [];
+    let offset = 0;
+
+    for (let b = 0; b < numBlocks; b++) {
+      const blockLen = shortBlockDataCW + (b >= numBlocks - longBlocks ? 1 : 0);
+      const block = data.slice(offset, offset + blockLen);
+      offset += blockLen;
+      dataBlocks.push(block);
+      ecBlocks.push(polyMod(block, gen));
+    }
+
+    // Interleave
+    const result = new Uint8Array(totalCW);
+    let idx = 0;
+    const maxDataLen = shortBlockDataCW + (longBlocks > 0 ? 1 : 0);
+    for (let i = 0; i < maxDataLen; i++)
+      for (let b = 0; b < numBlocks; b++)
+        if (i < dataBlocks[b].length) result[idx++] = dataBlocks[b][i];
+    for (let i = 0; i < ecCWPerBlock; i++)
+      for (let b = 0; b < numBlocks; b++)
+        result[idx++] = ecBlocks[b][i];
+
+    return result;
+  }
+
+  function createMatrix(version) {
+    const size = version * 4 + 17;
+    const matrix = Array.from({ length: size }, () => new Int8Array(size)); // 0=unset, 1=black, -1=white
+    const reserved = Array.from({ length: size }, () => new Uint8Array(size));
+
+    function setModule(r, c, val) {
+      matrix[r][c] = val ? 1 : -1;
+      reserved[r][c] = 1;
+    }
+
+    // Finder patterns
+    for (const [row, col] of [[0, 0], [0, size - 7], [size - 7, 0]]) {
+      for (let r = 0; r < 7; r++)
+        for (let c = 0; c < 7; c++) {
+          const val = (r === 0 || r === 6 || c === 0 || c === 6 ||
+                       (r >= 2 && r <= 4 && c >= 2 && c <= 4));
+          if (row + r < size && col + c < size)
+            setModule(row + r, col + c, val);
+        }
+      // Separators
+      for (let i = 0; i < 8; i++) {
+        if (row + 7 < size && col + i < size) setModule(row + 7, col + i, false);
+        if (row + i < size && col + 7 < size) setModule(row + i, col + 7, false);
+        if (row - 1 >= 0 && col + i < size) setModule(row - 1, col + i, false);
+        if (row + i < size && col - 1 >= 0) setModule(row + i, col - 1, false);
+      }
+      if (row + 7 < size && col + 7 < size) setModule(row + 7, col + 7, false);
+      if (row + 7 < size && col - 1 >= 0) setModule(row + 7, col - 1, false);
+      if (row - 1 >= 0 && col + 7 < size) setModule(row - 1, col + 7, false);
+    }
+
+    // Alignment patterns
+    const positions = ALIGN[version];
+    if (positions.length > 0) {
+      for (const r of positions) {
+        for (const c of positions) {
+          if (reserved[r][c]) continue;
+          for (let dr = -2; dr <= 2; dr++)
+            for (let dc = -2; dc <= 2; dc++)
+              setModule(r + dr, c + dc,
+                Math.abs(dr) === 2 || Math.abs(dc) === 2 || (dr === 0 && dc === 0));
+        }
+      }
+    }
+
+    // Timing patterns
+    for (let i = 8; i < size - 8; i++) {
+      if (!reserved[6][i]) setModule(6, i, i % 2 === 0);
+      if (!reserved[i][6]) setModule(i, 6, i % 2 === 0);
+    }
+
+    // Dark module
+    setModule(size - 8, 8, true);
+
+    // Reserve format info areas
+    for (let i = 0; i < 9; i++) {
+      if (!reserved[8][i]) { reserved[8][i] = 1; }
+      if (!reserved[i][8]) { reserved[i][8] = 1; }
+    }
+    for (let i = 0; i < 8; i++) {
+      if (!reserved[8][size - 1 - i]) { reserved[8][size - 1 - i] = 1; }
+      if (!reserved[size - 1 - i][8]) { reserved[size - 1 - i][8] = 1; }
+    }
+
+    // Reserve version info areas (version >= 7)
+    if (version >= 7) {
+      for (let i = 0; i < 6; i++)
+        for (let j = size - 11; j < size - 8; j++) {
+          reserved[i][j] = 1;
+          reserved[j][i] = 1;
+        }
+    }
+
+    return { matrix, reserved, size };
+  }
+
+  function placeData(matrix, reserved, size, codewords) {
+    let bitIndex = 0;
+    const totalBits = codewords.length * 8;
+    let upward = true;
+
+    for (let col = size - 1; col >= 0; col -= 2) {
+      if (col === 6) col = 5; // Skip timing column
+      const rows = upward
+        ? Array.from({ length: size }, (_, i) => size - 1 - i)
+        : Array.from({ length: size }, (_, i) => i);
+      for (const row of rows) {
+        for (let c = col; c >= Math.max(col - 1, 0); c--) {
+          if (reserved[row][c]) continue;
+          if (bitIndex < totalBits) {
+            const byteIdx = bitIndex >> 3;
+            const bitIdx = 7 - (bitIndex & 7);
+            matrix[row][c] = (codewords[byteIdx] >> bitIdx) & 1 ? 1 : -1;
+            bitIndex++;
+          } else {
+            matrix[row][c] = -1;
+          }
+        }
+      }
+      upward = !upward;
+    }
+  }
+
+  const MASK_FNS = [
+    (r, c) => (r + c) % 2 === 0,
+    (r, c) => r % 2 === 0,
+    (r, c) => c % 3 === 0,
+    (r, c) => (r + c) % 3 === 0,
+    (r, c) => (Math.floor(r / 2) + Math.floor(c / 3)) % 2 === 0,
+    (r, c) => ((r * c) % 2 + (r * c) % 3) === 0,
+    (r, c) => ((r * c) % 2 + (r * c) % 3) % 2 === 0,
+    (r, c) => ((r + c) % 2 + (r * c) % 3) % 2 === 0,
+  ];
+
+  function applyMask(matrix, reserved, size, maskIdx) {
+    const fn = MASK_FNS[maskIdx];
+    for (let r = 0; r < size; r++)
+      for (let c = 0; c < size; c++)
+        if (!reserved[r][c] && fn(r, c))
+          matrix[r][c] = matrix[r][c] === 1 ? -1 : 1;
+  }
+
+  function penalty(matrix, size) {
+    let score = 0;
+
+    // Rule 1: Consecutive same-color modules in row/col
+    for (let r = 0; r < size; r++) {
+      let count = 1;
+      for (let c = 1; c < size; c++) {
+        if (matrix[r][c] === matrix[r][c - 1]) { count++; }
+        else { if (count >= 5) score += count - 2; count = 1; }
+      }
+      if (count >= 5) score += count - 2;
+    }
+    for (let c = 0; c < size; c++) {
+      let count = 1;
+      for (let r = 1; r < size; r++) {
+        if (matrix[r][c] === matrix[r - 1][c]) { count++; }
+        else { if (count >= 5) score += count - 2; count = 1; }
+      }
+      if (count >= 5) score += count - 2;
+    }
+
+    // Rule 2: 2x2 blocks
+    for (let r = 0; r < size - 1; r++)
+      for (let c = 0; c < size - 1; c++)
+        if (matrix[r][c] === matrix[r][c + 1] &&
+            matrix[r][c] === matrix[r + 1][c] &&
+            matrix[r][c] === matrix[r + 1][c + 1])
+          score += 3;
+
+    // Rule 3: Finder-like patterns
+    const pat1 = [1, -1, 1, 1, 1, -1, 1, -1, -1, -1, -1];
+    const pat2 = [-1, -1, -1, -1, 1, -1, 1, 1, 1, -1, 1];
+    for (let r = 0; r < size; r++) {
+      for (let c = 0; c <= size - 11; c++) {
+        let m1 = true, m2 = true;
+        for (let i = 0; i < 11; i++) {
+          if (matrix[r][c + i] !== pat1[i]) m1 = false;
+          if (matrix[r][c + i] !== pat2[i]) m2 = false;
+        }
+        if (m1 || m2) score += 40;
+      }
+    }
+    for (let c = 0; c < size; c++) {
+      for (let r = 0; r <= size - 11; r++) {
+        let m1 = true, m2 = true;
+        for (let i = 0; i < 11; i++) {
+          if (matrix[r + i][c] !== pat1[i]) m1 = false;
+          if (matrix[r + i][c] !== pat2[i]) m2 = false;
+        }
+        if (m1 || m2) score += 40;
+      }
+    }
+
+    // Rule 4: Proportion of dark modules
+    let dark = 0;
+    for (let r = 0; r < size; r++)
+      for (let c = 0; c < size; c++)
+        if (matrix[r][c] === 1) dark++;
+    const pct = dark / (size * size) * 100;
+    score += Math.floor(Math.abs(pct - 50) / 5) * 10;
+
+    return score;
+  }
+
+  // Format info for EC level M (01) with mask pattern
+  const FORMAT_BITS_M = [
+    0x5412, 0x5125, 0x5E7C, 0x5B4B, 0x45F9, 0x40CE, 0x4F97, 0x4AA0
+  ];
+
+  function placeFormatInfo(matrix, size, maskIdx) {
+    const bits = FORMAT_BITS_M[maskIdx];
+    const positions = [
+      // Around top-left finder
+      [8, 0], [8, 1], [8, 2], [8, 3], [8, 4], [8, 5], [8, 7], [8, 8],
+      [7, 8], [5, 8], [4, 8], [3, 8], [2, 8], [1, 8], [0, 8],
+    ];
+    for (let i = 0; i < 15; i++) {
+      const val = (bits >> i) & 1 ? 1 : -1;
+      const [r, c] = positions[i];
+      matrix[r][c] = val;
+    }
+    // Around top-right and bottom-left finders
+    for (let i = 0; i < 8; i++)
+      matrix[8][size - 1 - i] = (bits >> i) & 1 ? 1 : -1;
+    for (let i = 8; i < 15; i++)
+      matrix[size - 15 + i][8] = (bits >> i) & 1 ? 1 : -1;
+  }
+
+  // Version info (version >= 7)
+  const VERSION_INFO = [
+    0,0,0,0,0,0,0,
+    0x07C94, 0x085BC, 0x09A99, 0x0A4D3, 0x0BBF6, 0x0C762, 0x0D847, 0x0E60D,
+    0x0F928, 0x10B78, 0x1145D, 0x12A17, 0x13532, 0x149A6, 0x15683, 0x168C9,
+    0x177EC, 0x18EC4, 0x191E1, 0x1AFAB, 0x1B08E, 0x1CC1A, 0x1D33F, 0x1ED75,
+    0x1F250, 0x209D5, 0x216F0, 0x228BA, 0x2379F, 0x24B0B, 0x2542E, 0x26A64,
+    0x27541, 0x28C69
+  ];
+
+  function placeVersionInfo(matrix, size, version) {
+    if (version < 7) return;
+    const bits = VERSION_INFO[version];
+    for (let i = 0; i < 18; i++) {
+      const val = (bits >> i) & 1 ? 1 : -1;
+      const r = Math.floor(i / 3);
+      const c = size - 11 + (i % 3);
+      matrix[r][c] = val;
+      matrix[c][r] = val;
+    }
+  }
+
+  function render(canvas, matrix, size, scale) {
+    const quiet = 4;
+    const totalSize = (size + quiet * 2) * scale;
+    canvas.width = totalSize;
+    canvas.height = totalSize;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, totalSize, totalSize);
+    ctx.fillStyle = '#000000';
+    for (let r = 0; r < size; r++)
+      for (let c = 0; c < size; c++)
+        if (matrix[r][c] === 1)
+          ctx.fillRect((c + quiet) * scale, (r + quiet) * scale, scale, scale);
+  }
+
+  return {
+    generate(text, canvas, scale = 6) {
+      const bytes = new TextEncoder().encode(text);
+      const version = getVersion(bytes.length);
+      const dataCW = encodeData(bytes, version);
+      const allCW = addErrorCorrection(dataCW, version);
+      const { matrix, reserved, size } = createMatrix(version);
+
+      placeData(matrix, reserved, size, allCW);
+
+      // Try all 8 masks, pick the one with lowest penalty
+      let bestMask = 0, bestPenalty = Infinity;
+      for (let m = 0; m < 8; m++) {
+        const copy = matrix.map(r => Int8Array.from(r));
+        applyMask(copy, reserved, size, m);
+        placeFormatInfo(copy, size, m);
+        placeVersionInfo(copy, size, version);
+        const p = penalty(copy, size);
+        if (p < bestPenalty) { bestPenalty = p; bestMask = m; }
+      }
+
+      applyMask(matrix, reserved, size, bestMask);
+      placeFormatInfo(matrix, size, bestMask);
+      placeVersionInfo(matrix, size, version);
+      render(canvas, matrix, size, scale);
+    }
+  };
+})();
+
+// =========================================================================
+// Form logic
+// =========================================================================
+
+const REQUIRED_FIELDS = ['orgCode', 'orgName', 'awsRegion', 'userPoolId', 'userPoolClientId', 'apiBaseUrl', 'hmacKey'];
+
+let generatedDeepLink = '';
+let generatedUniversalLink = '';
+
+function getField(id) {
+  return document.getElementById(id).value.trim();
+}
+
+function showError(msg) {
+  document.getElementById('form-error').textContent = msg;
+}
+
+function clearError() {
+  document.getElementById('form-error').textContent = '';
+}
+
+function validate() {
+  let valid = true;
+  for (const id of REQUIRED_FIELDS) {
+    const el = document.getElementById(id);
+    if (!el.value.trim()) {
+      el.classList.add('error');
+      valid = false;
+    } else {
+      el.classList.remove('error');
+    }
+  }
+  // Validate HMAC key is hex
+  const hmac = getField('hmacKey');
+  if (hmac && !/^[0-9a-fA-F]+$/.test(hmac)) {
+    document.getElementById('hmacKey').classList.add('error');
+    showError('HMAC key must be a hex string.');
+    return false;
+  }
+  if (!valid) {
+    showError('Please fill in all required fields.');
+  }
+  return valid;
+}
+
+async function computeHmac(keyStr, message) {
+  // The app's @aws-crypto/sha256-js Sha256(key) constructor treats the key as a
+  // raw UTF-8 string — so we must do the same here (encode the hex key string
+  // as UTF-8 bytes, NOT decode it from hex to binary).
+  const encoder = new TextEncoder();
+  const keyBytes = encoder.encode(keyStr);
+
+  const cryptoKey = await crypto.subtle.importKey(
+    'raw', keyBytes, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
+  );
+
+  const encoder = new TextEncoder();
+  const signature = await crypto.subtle.sign('HMAC', cryptoKey, encoder.encode(message));
+
+  // Convert to hex
+  return Array.from(new Uint8Array(signature))
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+async function generate() {
+  clearError();
+  if (!validate()) return;
+
+  const btn = document.getElementById('generateBtn');
+  btn.disabled = true;
+  btn.textContent = 'Generating…';
+
+  try {
+    const config = {
+      orgCode: getField('orgCode'),
+      orgName: getField('orgName'),
+      awsRegion: getField('awsRegion'),
+      userPoolId: getField('userPoolId'),
+      userPoolClientId: getField('userPoolClientId'),
+      apiBaseUrl: getField('apiBaseUrl'),
+    };
+
+    const identityPoolId = getField('identityPoolId');
+    if (identityPoolId) config.identityPoolId = identityPoolId;
+
+    // Base64 encode the JSON payload
+    const jsonStr = JSON.stringify(config);
+    const payloadB64 = btoa(jsonStr);
+
+    // HMAC-SHA256 sign the base64 payload (matches orgConfigService.ts verification)
+    const hmacKey = getField('hmacKey');
+    const sigHex = await computeHmac(hmacKey, payloadB64);
+
+    // Build URLs
+    const params = `payload=${encodeURIComponent(payloadB64)}&sig=${encodeURIComponent(sigHex)}`;
+    generatedDeepLink = `checkin-app://setup?${params}`;
+
+    const domain = getField('domain');
+    generatedUniversalLink = domain
+      ? `https://${domain}/setup?${params}`
+      : '';
+
+    // Display
+    document.getElementById('output').style.display = 'block';
+
+    const universalBtn = document.getElementById('toggleUniversal');
+    if (generatedUniversalLink) {
+      universalBtn.style.display = '';
+    } else {
+      universalBtn.style.display = 'none';
+    }
+
+    showLinkType('deep');
+
+  } catch (err) {
+    showError('Generation failed: ' + err.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Generate Link & QR';
+  }
+}
+
+function showLinkType(type) {
+  const url = type === 'universal' && generatedUniversalLink
+    ? generatedUniversalLink
+    : generatedDeepLink;
+
+  document.getElementById('urlText').textContent = url;
+
+  document.getElementById('toggleDeep').classList.toggle('active', type === 'deep');
+  document.getElementById('toggleUniversal').classList.toggle('active', type === 'universal');
+
+  // Render QR code
+  const container = document.getElementById('qr-container');
+  container.innerHTML = '';
+  const canvas = document.createElement('canvas');
+  container.appendChild(canvas);
+
+  // Scale based on data length for readability
+  const scale = url.length > 300 ? 4 : 6;
+  QRCode.generate(url, canvas, scale);
+}
+
+function copyUrl(btn) {
+  const url = document.getElementById('urlText').textContent;
+  navigator.clipboard.writeText(url).then(() => {
+    btn.classList.add('copied');
+    btn.textContent = 'Copied!';
+    setTimeout(() => {
+      btn.classList.remove('copied');
+      btn.textContent = 'Copy';
+    }, 1500);
+  });
+}
+
+function resetForm() {
+  for (const id of [...REQUIRED_FIELDS, 'identityPoolId', 'domain']) {
+    const el = document.getElementById(id);
+    el.value = '';
+    el.classList.remove('error');
+  }
+  clearError();
+  document.getElementById('output').style.display = 'none';
+  generatedDeepLink = '';
+  generatedUniversalLink = '';
+}
+</script>
+
+</body>
+</html>
