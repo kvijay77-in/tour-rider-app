@@ -321,27 +321,9 @@ Features available to all riders, regardless of tour enrollment status:
 
 ## Offline Capability
 
-The app should work with limited connectivity, which is common during cycling tours in remote areas.
+The app does not support offline mode. All features require an active internet connection.
 
-### Offline Features
-- View cached tour information
-- View cached daily check-in status
-- View cached notifications (already downloaded)
-- View rider profile (from local cache)
-
-### Online-Only Features
-- Submitting Not Riding or Quit Riding requests
-- Receiving new notifications
-- Updating profile information
-- Browsing/registering for new tours
-- Real-time check-in status updates
-
-### Sync Strategy
-- App caches tour data, ride information, and notifications locally using SQLite
-- When online, app fetches latest data every 5 minutes (configurable)
-- When offline, app shows cached data with "Offline" indicator
-- When connectivity restored, app syncs local changes to backend
-- Conflict resolution: Server data takes precedence for read-only data
+When the device loses connectivity, the app displays a simple **"You are offline"** status banner to inform the rider. No data is cached locally — all data is fetched live from the tour-data-api backend.
 
 ## Backend Integration
 
@@ -409,7 +391,7 @@ The tour-data-api may need to be extended to support:
 - Multi-language support (future enhancement)
 
 ### Reliability
-- Graceful degradation when offline
+- Offline status banner shown when device connectivity is lost
 - Automatic retry on network failures
 - Error recovery without data loss
 - Session persistence across app restarts

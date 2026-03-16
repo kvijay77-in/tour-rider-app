@@ -15,7 +15,7 @@ This is an evolving document and hence latest info must be referred to at all ti
 - [State Management](#state-management)
 - [Authentication](#authentication)
 - [Backend Integration](#backend-integration)
-- [Offline Architecture](#offline-architecture)
+- [Offline Status](#offline-status)
 - [Navigation Structure](#navigation-structure)
 - [Styling Strategy](#styling-strategy)
 - [Logging](#logging)
@@ -34,17 +34,13 @@ This is an evolving document and hence latest info must be referred to at all ti
 
 4. **Amplify for authentication only** — AWS Amplify Auth SDK is used for Cognito authentication and JWT token management. Data access is via the RESTful tour-data-api, not Amplify Data/AppSync.
 
-5. **Shared Cognito User Pool** — Use the same AWS Cognito User Pool as the tour-data-api backend and tour-mgmt-app. Riders and administrators/staff are users in the same pool, differentiated by user attributes and group membership.
+6. **Security by default** — No hardcoded credentials, no inline sensitive data, JWT-based authentication for all API calls.
 
-6. **SQLite for offline support** — Use SQLite for local caching to support limited offline functionality. Tour data, ride information, and notifications are cached locally.
+7. **Reactive UI** — Use React Context and Hooks for state management. No class components. Minimize re-renders through proper state structuring and memoization.
 
-7. **Security by default** — No hardcoded credentials, no inline sensitive data, JWT-based authentication for all API calls.
+8. **Modular and reusable** — Components should be small, focused, and reusable. Business logic should be isolated in the services layer, not embedded in UI components.
 
-8. **Reactive UI** — Use React Context and Hooks for state management. No class components. Minimize re-renders through proper state structuring and memoization.
-
-9. **Modular and reusable** — Components should be small, focused, and reusable. Business logic should be isolated in the services layer, not embedded in UI components.
-
-10. **Rider-centric design** — Unlike the tour-mgmt-app which is staff-facing, this app is rider-facing. UI should be simple, intuitive, and optimized for non-technical users.
+9. **Rider-centric design** — Unlike the tour-mgmt-app which is staff-facing, this app is rider-facing. UI should be simple, intuitive, and optimized for non-technical users.
 
 ---
 
@@ -60,8 +56,7 @@ The Tour Rider App follows the **exact same technology stack** as the tour-mgmt-
 | **Navigation** | React Navigation | 7.x | Screen navigation (native stack + bottom tabs) |
 | **Authentication** | AWS Amplify Auth | 6.x | Cognito integration, JWT management |
 | **HTTP Client** | fetch (built-in) | N/A | API calls to tour-data-api |
-| **Local Database** | expo-sqlite | 16.x | SQLite for offline caching |
-| **Connectivity** | @react-native-community/netinfo | 12.x | Network state detection |
+| **Connectivity** | @react-native-community/netinfo | 12.x | Network state detection (offline banner) |
 | **Secure Storage** | expo-secure-store | 15.x | Sensitive data storage (tokens) |
 | **Icons** | @expo/vector-icons | 15.x | UI icons |
 | **SVG** | react-native-svg | 15.x | Custom SVG rendering |
@@ -75,7 +70,7 @@ While the technology stack is identical, there are functional differences:
 | **Primary Users** | Administrators, pit stop crew, hotel staff | Riders (tour participants) |
 | **Main Features** | Check-in QR scanning, Dashboard (all riders), Ride management | Tour registration, Personal check-in status, Self-service (Not Riding, Quit Riding) |
 | **Camera Usage** | QR code scanning for check-ins | Profile picture upload (no QR scanning required) |
-| **Offline Priority** | High (pit stops in remote areas) | Medium (view cached data, but self-service requires connectivity) |
+| **Offline Priority** | High (pit stops in remote areas) | None (offline banner shown; no cached data) |
 | **Data Scope** | All riders, all tours, full admin access | Single rider's data, enrolled tours only |
 | **RBAC** | 5 roles (Administrator, Super User, Pit Stop Crew, Hotel Staff, Guest) | 2 user types (General Rider, Registered Rider) |
 
@@ -84,7 +79,6 @@ While the technology stack is identical, there are functional differences:
 - **Same stack as tour-mgmt-app**: Ensures consistency, shared learnings, and potential for code sharing between apps
 - **Expo managed workflow**: Simplifies build and deployment. No need to eject for native modules
 - **fetch over axios**: Built into React Native, reduces bundle size
-- **SQLite**: Needed for offline caching of tour data and notifications
 - **React Context over Redux**: Application state is straightforward (user profile, active tour, enrollment status)
 
 ---
@@ -115,8 +109,8 @@ While the technology stack is identical, there are functional differences:
 │  ┌──────────┴─────────────┴─────────────┴───────────────┐ │
 │  │                 Services Layer                        │ │
 │  │  ┌──────────┐  ┌──────────┐  ┌──────────┐           │ │
-│  │  │ API      │  │ Database │  │  Sync    │           │ │
-│  │  │ Client   │  │ (SQLite) │  │ Service  │           │ │
+│  │  │ API      │  │           │           │ │
+│  │  │ Client   │  │           │           │ │
 │  │  └────┬─────┘  └──────────┘  └────┬─────┘           │ │
 │  └───────┼────────────────────────────┼─────────────────┘ │
 └──────────┼────────────────────────────┼───────────────────┘
@@ -135,12 +129,12 @@ While the technology stack is identical, there are functional differences:
 | **Screens** | `src/screens/` | Page-level components, layout, screen-specific logic |
 | **Components** | `src/components/` | Reusable UI components, presentational logic |
 | **Context** | `src/context/` | Global state management (auth, rider, tour) |
-| **Services** | `src/services/` | Business logic, API calls, database, sync |
+| **Services** | `src/services/` | Business logic, API calls |
 | **Types** | `src/types/` | TypeScript type definitions and interfaces |
 | **Constants** | `src/constants/` | Application-wide constants (colors, status codes) |
 | **Hooks** | `src/hooks/` | Custom React hooks for reusable stateful logic |
 | **Utils** | `src/utils/` | Pure utility functions (formatting, validation) |
-| **Config** | `src/config/` | Configuration (Amplify, database) |
+| **Config** | `src/config/` | Configuration (Amplify) |
 
 ---
 
@@ -218,6 +212,7 @@ The app uses React Context for global state:
 | **AuthContext** | Authentication state | User info, JWT tokens, login/logout |
 | **RiderContext** | Rider profile state | Profile data, statistics, preferences |
 | **TourContext** | Tour enrollment state | Active tour, enrollment status, tour details |
+| **OfflineContext** | Network connectivity state | `isOffline` — drives the offline status banner |
 
 **Provider Order** (in `App.tsx`):
 ```
@@ -334,58 +329,21 @@ All communication with the tour-data-api is through the service layer at `src/se
 - **Error standardization**: Backend errors mapped to consistent frontend error types
 - **Logging**: Structured, level-gated logging via the app logger (see [Logging](#logging))
 
-### Data Flow: API → SQLite → UI
+### Data Flow: API → UI
 
-For offline support, tour data is cached locally:
-1. API client fetches data from tour-data-api
-2. Data is written to SQLite tables
-3. UI components read from SQLite
-4. Periodic background sync updates cache when online
-
-This ensures riders can view tour information, check-in status, and notifications even when offline.
+API client fetches data from tour-data-api and the UI components render it directly. There is no local caching layer.
 
 ---
 
-## Offline Architecture
+## Offline Status
 
-### Design Principles
+The app does not support offline data caching. When the device loses connectivity, an **`OfflineBanner`** component is displayed at the top of the screen informing the rider that the app is offline. All features require an active internet connection.
 
-1. **SQLite for caching** — Tour data, ride schedules, check-ins, and notifications are cached locally
-2. **Read-only offline mode** — Riders can view cached data but cannot submit self-service actions (Not Riding, Quit Riding) when offline
-3. **Sync on connectivity** — When online, app fetches latest data and updates cache
-4. **Offline indicator** — UI clearly shows when app is offline
+### Implementation
 
-### SQLite Schema Overview
-
-| Table | Purpose | Data Source |
-|-------|---------|-------------|
-| `rider_profile` | Cached rider profile | API cache |
-| `tours` | Tours rider is enrolled in | API cache |
-| `rides` | Ride schedules for enrolled tours | API cache |
-| `check_ins` | Rider's check-in history | API cache |
-| `notifications` | Tour notifications | API cache |
-
-### Sync Service
-
-- **Inbound sync**: Polls tour-data-api every 5 minutes (when app is active and online)
-- **Background sync**: Updates cache when app comes online after being offline
-- **Manual refresh**: Pull-to-refresh gesture on screens
-
-### Offline Capabilities
-
-**Available Offline:**
-- View rider profile
-- View enrolled tours
-- View ride schedules
-- View check-in history
-- View cached notifications
-
-**Requires Online:**
-- Update profile
-- Register for new tours
-- Submit Not Riding / Quit Riding
-- Receive new notifications
-- Real-time check-in updates
+- **`OfflineContext`** uses `@react-native-community/netinfo` to detect connectivity changes (event-driven).
+- **`OfflineBanner`** reads `isOffline` from `OfflineContext` and renders a banner when `true`.
+- `OfflineProvider` wraps the entire app in `App.tsx` so the banner is visible on any screen.
 
 ---
 
@@ -504,7 +462,7 @@ The active log level is set via the `EXPO_PUBLIC_LOG_LEVEL` environment variable
 
 ### Mobile (iOS and Android)
 
-- **Primary platform** — full feature set including offline support, profile picture upload, notifications
+- **Primary platform** — full feature set including profile picture upload, notifications
 - **Portrait orientation** by default (configured in `app.json`)
 - **Camera permission** required for profile picture (camera or photo library)
 - **Notification permission** required for push notifications
@@ -513,14 +471,12 @@ The active log level is set via the `EXPO_PUBLIC_LOG_LEVEL` environment variable
 ### Web
 
 - **Simplified version** — Dashboard and profile views primarily
-- **Limited features** — Reduced offline capability (browser storage instead of SQLite)
 - **Built with react-native-web** — same codebase, automatic web rendering
 - **Responsive layout** — adapts to browser window size
 
 ### Platform-Specific Notes
 
-- `expo-sqlite` works across iOS, Android, and Web
-- `@react-native-community/netinfo` provides connectivity events on all platforms
+- `@react-native-community/netinfo` provides connectivity events on all platforms (used for offline banner)
 - `expo-secure-store` is mobile-only; web uses browser secure storage
 - Camera access for profile pictures uses `expo-image-picker` (works on all platforms)
 
