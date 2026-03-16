@@ -55,7 +55,7 @@ This page provides a guide to all project documentation.
 - [AWS Amplify Gen 2 Documentation](https://docs.amplify.aws/)
 - [AWS Cognito Documentation](https://docs.aws.amazon.com/cognito/)
 - [tour-data-api Repository](https://github.com/kvijay77-in/tour-data-api) — Backend API
-- [poc-app Repository](https://github.com/kvijay77-in/poc-app) — Reference app (Check-In App)
+- [tour-mgmt-app Repository](https://github.com/kvijay77-in/tour-mgmt-app) — Reference app (Check-In App)
 
 ---
 

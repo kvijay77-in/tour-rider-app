@@ -6,7 +6,7 @@ This document describes the folder organization and code structure for the Tour 
 
 ## Overview
 
-The Tour Rider App follows the same project structure as the poc-app (Check-In App) to maintain consistency and enable knowledge sharing across both applications.
+The Tour Rider App follows the same project structure as the tour-mgmt-app (Check-In App) to maintain consistency and enable knowledge sharing across both applications.
 
 ```
 tour-rider-app/
@@ -117,7 +117,7 @@ tour-rider-app/
 ├── package.json                # Dependencies and scripts
 ├── README.md                   # Project README
 ├── tsconfig.json               # TypeScript configuration
-├── poc-app-main.zip           # Reference app (for development)
+├── tour-mgmt-app-main.zip           # Reference app (for development)
 └── tour-data-api-main.zip     # Backend API reference (for development)
 ```
 
@@ -127,7 +127,7 @@ tour-rider-app/
 Static assets like images, icons, and fonts. Organized by type.
 
 ### `/docs`
-All project documentation following the format defined in poc-app and tour-data-api.
+All project documentation following the format defined in tour-mgmt-app and tour-data-api.
 
 ### `/src/components`
 Reusable UI components organized by scope:
@@ -147,7 +147,7 @@ Configuration files for AWS Amplify, database, and other services. Environment-s
 
 ### `/src/constants`
 Application-wide constants:
-- **colors.ts**: Color palette (follow poc-app color system)
+- **colors.ts**: Color palette (follow tour-mgmt-app color system)
 - **stages.ts**: Stage definitions (Start, PS1, PS2, Finish)
 - Keep constants immutable and well-typed
 
@@ -219,7 +219,7 @@ TypeScript type definitions and interfaces:
 
 ### `/src/utils`
 Pure utility functions:
-- **logger.ts**: Centralized logging (follow poc-app logger pattern)
+- **logger.ts**: Centralized logging (follow tour-mgmt-app logger pattern)
 - **dateFormatter.ts**: Date/time formatting
 - **validation.ts**: Input validation functions
 - **permissions.ts**: Permission checks
@@ -271,7 +271,7 @@ import type { Tour } from '../types/tour';
 2. **Single Responsibility**: Each file/function should have one clear purpose
 3. **DRY (Don't Repeat Yourself)**: Extract reusable logic into hooks, utilities, or components
 4. **Type Safety**: Leverage TypeScript for all code
-5. **Consistency**: Follow the patterns established in poc-app
+5. **Consistency**: Follow the patterns established in tour-mgmt-app
 
 ## Testing Structure (Future)
 
@@ -294,7 +294,7 @@ Test files should be named `{name}.test.ts` or `{name}.test.tsx`.
 
 - [Solution Design](SolutionDesign.md) — Architecture and design decisions
 - [Development Guide](development-guide.md) — Setup and development workflows
-- [poc-app Project Structure](../../poc-app-main/docs/project-structure.md) — Reference structure
+- [tour-mgmt-app Project Structure](../../tour-mgmt-app-main/docs/project-structure.md) — Reference structure
 
 ---
 

@@ -100,7 +100,7 @@ Contact the tour-data-api team or AWS administrator to obtain:
 - Cognito Identity Pool ID
 - tour-data-api Base URL
 
-These should be the **same credentials** used by the poc-app (Check-In App).
+These should be the **same credentials** used by the tour-mgmt-app (Check-In App).
 
 ---
 
@@ -210,7 +210,7 @@ TypeScript is configured for strict type checking. The Metro bundler will show t
 
 ### Code Formatting
 
-Follow the ESLint configuration from poc-app for consistent formatting.
+Follow the ESLint configuration from tour-mgmt-app for consistent formatting.
 
 ---
 
@@ -273,7 +273,7 @@ After setting up your development environment:
 
 1. Review [Requirements.md](Requirements.md) to understand features
 2. Study [SolutionDesign.md](SolutionDesign.md) for architecture
-3. Examine the poc-app reference implementation
+3. Examine the tour-mgmt-app reference implementation
 4. Start implementing features following the project structure
 
 ---
@@ -283,7 +283,7 @@ After setting up your development environment:
 - [Requirements](Requirements.md) — Feature specifications
 - [Solution Design](SolutionDesign.md) — Architecture and design
 - [Project Structure](project-structure.md) — Folder organization
-- [poc-app Development Guide](../../poc-app-main/docs/development-guide.md) — Reference guide
+- [tour-mgmt-app Development Guide](../../tour-mgmt-app-main/docs/development-guide.md) — Reference guide
 
 ---
 

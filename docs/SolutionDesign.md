@@ -30,11 +30,11 @@ This is an evolving document and hence latest info must be referred to at all ti
 
 2. **No direct AWS resource access** — Any direct access to AWS resources (DynamoDB, S3, etc.) from the Mobile App or Web client must not be permitted. Such access must always be through the tour-data-api backend (API Gateway → Lambda → DynamoDB).
 
-3. **Follow poc-app patterns** — This app must follow the same architecture patterns, authentication mechanism, and technology stack as the poc-app (Check-In App) for consistency.
+3. **Follow tour-mgmt-app patterns** — This app must follow the same architecture patterns, authentication mechanism, and technology stack as the tour-mgmt-app (Check-In App) for consistency.
 
 4. **Amplify for authentication only** — AWS Amplify Auth SDK is used for Cognito authentication and JWT token management. Data access is via the RESTful tour-data-api, not Amplify Data/AppSync.
 
-5. **Shared Cognito User Pool** — Use the same AWS Cognito User Pool as the tour-data-api backend and poc-app. Riders and administrators/staff are users in the same pool, differentiated by user attributes and group membership.
+5. **Shared Cognito User Pool** — Use the same AWS Cognito User Pool as the tour-data-api backend and tour-mgmt-app. Riders and administrators/staff are users in the same pool, differentiated by user attributes and group membership.
 
 6. **SQLite for offline support** — Use SQLite for local caching to support limited offline functionality. Tour data, ride information, and notifications are cached locally.
 
@@ -44,13 +44,13 @@ This is an evolving document and hence latest info must be referred to at all ti
 
 9. **Modular and reusable** — Components should be small, focused, and reusable. Business logic should be isolated in the services layer, not embedded in UI components.
 
-10. **Rider-centric design** — Unlike the poc-app which is staff-facing, this app is rider-facing. UI should be simple, intuitive, and optimized for non-technical users.
+10. **Rider-centric design** — Unlike the tour-mgmt-app which is staff-facing, this app is rider-facing. UI should be simple, intuitive, and optimized for non-technical users.
 
 ---
 
 ## Technology Stack
 
-The Tour Rider App follows the **exact same technology stack** as the poc-app (Check-In App) to ensure consistency, shared knowledge, and potential code reuse.
+The Tour Rider App follows the **exact same technology stack** as the tour-mgmt-app (Check-In App) to ensure consistency, shared knowledge, and potential code reuse.
 
 | Layer | Technology | Version | Purpose |
 |-------|-----------|---------|---------|
@@ -66,11 +66,11 @@ The Tour Rider App follows the **exact same technology stack** as the poc-app (C
 | **Icons** | @expo/vector-icons | 15.x | UI icons |
 | **SVG** | react-native-svg | 15.x | Custom SVG rendering |
 
-### Key Differences from poc-app
+### Key Differences from tour-mgmt-app
 
 While the technology stack is identical, there are functional differences:
 
-| Aspect | poc-app (Check-In App) | tour-rider-app (Tour Rider App) |
+| Aspect | tour-mgmt-app (Check-In App) | tour-rider-app (Tour Rider App) |
 |--------|------------------------|----------------------------------|
 | **Primary Users** | Administrators, pit stop crew, hotel staff | Riders (tour participants) |
 | **Main Features** | Check-in QR scanning, Dashboard (all riders), Ride management | Tour registration, Personal check-in status, Self-service (Not Riding, Quit Riding) |
@@ -81,7 +81,7 @@ While the technology stack is identical, there are functional differences:
 
 ### Why These Choices
 
-- **Same stack as poc-app**: Ensures consistency, shared learnings, and potential for code sharing between apps
+- **Same stack as tour-mgmt-app**: Ensures consistency, shared learnings, and potential for code sharing between apps
 - **Expo managed workflow**: Simplifies build and deployment. No need to eject for native modules
 - **fetch over axios**: Built into React Native, reduces bundle size
 - **SQLite**: Needed for offline caching of tour data and notifications
@@ -274,7 +274,7 @@ State that can be computed from other state should not be stored separately. Exa
 
 ### Cognito Integration
 
-The app uses the **same Cognito User Pool** as the poc-app and tour-data-api backend. Configuration is provided via environment variables:
+The app uses the **same Cognito User Pool** as the tour-mgmt-app and tour-data-api backend. Configuration is provided via environment variables:
 
 ```typescript
 // src/config/amplify.ts
@@ -531,7 +531,7 @@ The active log level is set via the `EXPO_PUBLIC_LOG_LEVEL` environment variable
 - [Requirements](Requirements.md) — Detailed feature specifications and business rules
 - [Development Guide](development-guide.md) — Environment setup, running the app, testing
 - [Project Structure](project-structure.md) — Folder organization
-- [poc-app Solution Design](../../poc-app-main/docs/SolutionDesign.md) — Reference for shared patterns
+- [tour-mgmt-app Solution Design](../../tour-mgmt-app-main/docs/SolutionDesign.md) — Reference for shared patterns
 
 ---
 

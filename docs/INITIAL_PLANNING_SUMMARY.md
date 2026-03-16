@@ -32,8 +32,8 @@ Created detailed functional requirements covering:
 **File**: `docs/SolutionDesign.md` (538 lines)
 
 Documented architecture and technical decisions:
-- Design principles (common codebase, no direct AWS access, follow poc-app patterns)
-- Technology stack (exact same as poc-app: React Native, Expo, TypeScript, Amplify Auth)
+- Design principles (common codebase, no direct AWS access, follow tour-mgmt-app patterns)
+- Technology stack (exact same as tour-mgmt-app: React Native, Expo, TypeScript, Amplify Auth)
 - Application architecture (layer responsibilities, data flow)
 - Component architecture (screens, reusable components, guidelines)
 - State management (Context providers: Auth, Rider, Tour)
@@ -100,7 +100,7 @@ Comprehensive project overview:
 
 AI assistant guidelines covering:
 - Primary instructions (follow docs, requirements, design)
-- Reference applications (poc-app, tour-data-api)
+- Reference applications (tour-mgmt-app, tour-data-api)
 - Technology stack and design considerations
 - Backend integration rules
 - Library and package usage
@@ -127,7 +127,7 @@ Template for environment variables:
 ## Documentation Format Compliance
 
 All documentation follows the **exact format** used in:
-- **poc-app** (Check-In App) - for structure, style, and content patterns
+- **tour-mgmt-app** (Check-In App) - for structure, style, and content patterns
 - **tour-data-api** - for backend integration guidance
 
 ### Key Format Elements Followed:
@@ -147,7 +147,7 @@ All documentation follows the **exact format** used in:
 
 ### 1. Technology Stack
 
-**Decision**: Use the exact same stack as poc-app (Check-In App)
+**Decision**: Use the exact same stack as tour-mgmt-app (Check-In App)
 
 **Reasoning**:
 - Ensures consistency across applications
@@ -184,7 +184,7 @@ All documentation follows the **exact format** used in:
 **Decision**: Two user types (General Rider, Registered Rider) instead of RBAC roles
 
 **Reasoning**:
-- Simpler than poc-app's 5-role RBAC system
+- Simpler than tour-mgmt-app's 5-role RBAC system
 - User type based on tour enrollment status
 - Clear distinction between enrolled and non-enrolled users
 - Easier to implement and maintain
@@ -197,11 +197,11 @@ All documentation follows the **exact format** used in:
 - Riders need to view tour info in areas with limited connectivity
 - Self-service actions (Not Riding, Quit Riding) are critical and should require confirmation from backend
 - Simpler conflict resolution (server is source of truth)
-- Reduces complexity compared to poc-app's full offline check-in capability
+- Reduces complexity compared to tour-mgmt-app's full offline check-in capability
 
 ### 5. Authentication
 
-**Decision**: Share Cognito User Pool with poc-app and tour-data-api
+**Decision**: Share Cognito User Pool with tour-mgmt-app and tour-data-api
 
 **Reasoning**:
 - Single user identity across all applications
@@ -263,15 +263,15 @@ The following features will require new tour-data-api endpoints:
 ### Phase 1: Project Setup (Immediate)
 
 1. **Initialize React Native/Expo Project**
-   - Run `npx create-expo-app` or copy structure from poc-app
-   - Install dependencies (match versions from poc-app)
+   - Run `npx create-expo-app` or copy structure from tour-mgmt-app
+   - Install dependencies (match versions from tour-mgmt-app)
    - Configure TypeScript
    - Set up ESLint
    - Create folder structure as per `docs/project-structure.md`
 
 2. **Configure AWS Amplify**
-   - Set up Amplify Auth (copy from poc-app)
-   - Configure Cognito user pool (same as poc-app)
+   - Set up Amplify Auth (copy from tour-mgmt-app)
+   - Configure Cognito user pool (same as tour-mgmt-app)
    - Create `.env` file from `.env.example`
    - Test authentication flow
 
@@ -372,7 +372,7 @@ The following features will require new tour-data-api endpoints:
 
 ### Reference Code
 
-Developers should heavily reference **poc-app** for:
+Developers should heavily reference **tour-mgmt-app** for:
 - Authentication implementation
 - API service layer pattern
 - Logger utility
@@ -403,11 +403,11 @@ As development progresses, the following documents should be updated:
 
 ## Conclusion
 
-The initial development planning for the Tour Rider App is **complete**. All necessary documentation has been created following the format and structure of poc-app and tour-data-api.
+The initial development planning for the Tour Rider App is **complete**. All necessary documentation has been created following the format and structure of tour-mgmt-app and tour-data-api.
 
 The app is well-designed to:
 - Provide riders with a simple, intuitive interface for tour participation
-- Follow the exact same technology stack as poc-app for consistency
+- Follow the exact same technology stack as tour-mgmt-app for consistency
 - Integrate seamlessly with tour-data-api backend
 - Support offline viewing of tour data
 - Enable self-service features for rider independence
