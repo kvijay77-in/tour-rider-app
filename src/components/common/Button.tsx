@@ -47,13 +47,13 @@ export function Button({
   const containerStyle: ViewStyle[] = [
     styles.container,
     styles[variant],
-    isDisabled && styles.disabled,
+    ...(isDisabled ? [styles.disabled] : []),
   ];
 
   const labelStyle: TextStyle[] = [
     styles.label,
     variant === 'secondary' ? styles.labelSecondary : styles.labelLight,
-    isDisabled && styles.labelDisabled,
+    ...(isDisabled ? [styles.labelDisabled] : []),
   ];
 
   return (
