@@ -11,7 +11,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 
 import { useAuth } from './AuthContext';
-import { getTours, getTourDetails, getTourRider } from '../services/api/tourApi';
+import { getTours, getTourDetails, getTourRiderByProfile } from '../services/api/tourApi';
 import { logger } from '../utils/logger';
 import type { Tour, TourRider } from '../types/tour';
 import { TourRiderStatus, TourStatus } from '../types/tour';
@@ -81,8 +81,8 @@ export function TourProvider({ children }: TourProviderProps) {
   const isEnrolled = enrollment !== null && ENROLLED_STATUSES.includes(enrollment.status);
 
   const loadActiveTour = useCallback(async (): Promise<void> => {
-    if (!user) {
-      logger.debug(TAG, 'No authenticated user — skipping tour load');
+    if (!user?.profileId) {
+      logger.debug(TAG, 'No authenticated user or profileId — skipping tour load');
       return;
     }
 
@@ -98,10 +98,10 @@ export function TourProvider({ children }: TourProviderProps) {
         return;
       }
 
-      // Check each active tour for rider enrollment
+      // Check each active tour for rider enrollment using profileId
       for (const tour of toursResponse.data.items) {
         try {
-          const riderResponse = await getTourRider(tour.tourId, user.userId);
+          const riderResponse = await getTourRiderByProfile(tour.tourId, user.profileId);
           if (riderResponse.success && riderResponse.data) {
             // Fetch full tour details
             const detailsResponse = await getTourDetails(tour.tourId);
@@ -131,7 +131,7 @@ export function TourProvider({ children }: TourProviderProps) {
     } finally {
       setIsLoading(false);
     }
-  }, [user]);
+  }, [user?.profileId]);
 
   const setActiveTour = useCallback((tour: Tour | null, tourEnrollment: TourRider | null): void => {
     setActiveTourState(tour);
@@ -145,13 +145,13 @@ export function TourProvider({ children }: TourProviderProps) {
 
   // Load active tour when user authenticates
   useEffect(() => {
-    if (user) {
+    if (user?.profileId) {
       loadActiveTour();
     } else {
       setActiveTourState(null);
       setEnrollment(null);
     }
-  }, [user, loadActiveTour]);
+  }, [user?.profileId, loadActiveTour]);
 
   const value: TourContextValue = {
     activeTour,

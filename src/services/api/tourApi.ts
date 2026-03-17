@@ -31,7 +31,7 @@ export async function getTourDetails(
 }
 
 /**
- * Get rider's enrollment details for a specific tour.
+ * Get rider's enrollment details for a specific tour by riderId.
  */
 export async function getTourRider(
   tourId: string,
@@ -40,5 +40,21 @@ export async function getTourRider(
   logger.debug(TAG, `Fetching tour rider ${riderId} for tour ${tourId}`);
   return apiClient.get<TourRider>(
     `/v1/tours/${encodeURIComponent(tourId)}/riders/${encodeURIComponent(riderId)}`,
+  );
+}
+
+/**
+ * Get rider's enrollment details for a specific tour by profileId.
+ * Uses a query parameter to look up enrollment by the rider's profile ID
+ * instead of the tour-specific riderId (which the app may not know yet).
+ */
+export async function getTourRiderByProfile(
+  tourId: string,
+  profileId: string,
+): Promise<ApiResponse<TourRider>> {
+  logger.debug(TAG, `Fetching tour enrollment for profile ${profileId} in tour ${tourId}`);
+  return apiClient.get<TourRider>(
+    `/v1/tours/${encodeURIComponent(tourId)}/riders`,
+    { params: { profileId } },
   );
 }
