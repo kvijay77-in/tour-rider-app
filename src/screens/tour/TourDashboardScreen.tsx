@@ -25,6 +25,7 @@ import { TourInfoBanner } from '../../components/tour/TourInfoBanner';
 import { useTour } from '../../hooks/useTour';
 import { getTodaysRide } from '../../services/api/rideApi';
 import { submitNotRiding, submitQuitRiding } from '../../services/api/checkInApi';
+import { computeTourDay } from '../../utils/dateFormatter';
 import { logger } from '../../utils/logger';
 import type { Ride } from '../../types/ride';
 
@@ -143,14 +144,6 @@ export function TourDashboardScreen() {
     );
   };
 
-  const computeCurrentDay = (): number => {
-    if (!activeTour) return 1;
-    const start = new Date(activeTour.startDate);
-    const now = new Date();
-    const diffMs = now.getTime() - start.getTime();
-    return Math.max(1, Math.floor(diffMs / (1000 * 60 * 60 * 24)) + 1);
-  };
-
   if (!activeTour) {
     return (
       <SafeAreaView style={styles.safeArea}>
@@ -182,7 +175,7 @@ export function TourDashboardScreen() {
       >
         <TourInfoBanner
           tour={activeTour}
-          currentDay={computeCurrentDay()}
+          currentDay={computeTourDay(activeTour.startDate)}
           totalDays={activeTour.rideCount ?? 1}
         />
 

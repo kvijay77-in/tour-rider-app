@@ -23,6 +23,7 @@ import { Card } from '../../components/common/Card';
 import { Button } from '../../components/common/Button';
 import { TourInfoBanner } from '../../components/tour/TourInfoBanner';
 import { getTodaysRide } from '../../services/api/rideApi';
+import { computeTourDay } from '../../utils/dateFormatter';
 import { logger } from '../../utils/logger';
 import type { Ride } from '../../types/ride';
 
@@ -68,15 +69,6 @@ export function HomeScreen({ navigation }: { navigation: { navigate: (screen: st
     setRefreshing(false);
   };
 
-  const computeCurrentDay = (): number => {
-    if (!activeTour) return 1;
-    const start = new Date(activeTour.startDate);
-    const now = new Date();
-    const diffMs = now.getTime() - start.getTime();
-    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-    return Math.max(1, diffDays + 1);
-  };
-
   if (tourLoading && !refreshing) {
     return (
       <SafeAreaView style={styles.safeArea}>
@@ -88,9 +80,6 @@ export function HomeScreen({ navigation }: { navigation: { navigate: (screen: st
 
   // Enrolled rider — tour dashboard view
   if (isEnrolled && activeTour) {
-    const currentDay = computeCurrentDay();
-    const totalDays = activeTour.rideCount ?? 1;
-
     return (
       <SafeAreaView style={styles.safeArea}>
         <OfflineBanner />
@@ -102,8 +91,8 @@ export function HomeScreen({ navigation }: { navigation: { navigate: (screen: st
         >
           <TourInfoBanner
             tour={activeTour}
-            currentDay={currentDay}
-            totalDays={totalDays}
+            currentDay={computeTourDay(activeTour.startDate)}
+            totalDays={activeTour.rideCount ?? 1}
           />
 
           {/* Today's ride summary */}

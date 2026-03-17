@@ -48,6 +48,22 @@ export function formatTime(isoDateTime: string): string {
 }
 
 /**
+ * Calculate the current day number of a tour (1-based).
+ * Uses UTC dates to avoid timezone issues.
+ * @param startDate - Tour start date (ISO 8601)
+ * @returns Current day number (minimum 1)
+ */
+export function computeTourDay(startDate: string): number {
+  const start = new Date(startDate);
+  const now = new Date();
+  // Use UTC to avoid timezone discrepancies
+  const startUtc = Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate());
+  const nowUtc = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  const diffDays = Math.floor((nowUtc - startUtc) / (1000 * 60 * 60 * 24));
+  return Math.max(1, diffDays + 1);
+}
+
+/**
  * Get a relative time description (e.g., '5 minutes ago', 'just now').
  * @param isoDateTime - ISO 8601 datetime string
  * @returns Relative time string
