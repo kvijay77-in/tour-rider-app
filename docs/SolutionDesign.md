@@ -269,7 +269,13 @@ State that can be computed from other state should not be stored separately. Exa
 
 ### Cognito Integration
 
-The app uses the **same Cognito User Pool** as the tour-mgmt-app and tour-data-api backend. Configuration is provided via environment variables:
+The app uses a **dedicated Cognito User Pool** separate from the tour-mgmt-app (Check-In App). This provides:
+- **User isolation**: Riders and staff are in separate user pools for clear separation of concerns
+- **Independent security controls**: Password policies, MFA settings, and session management can be tailored for riders
+- **Simplified access control**: No need for group-based filtering — all users in this pool are riders
+- **Independent scaling**: Rider sign-ups and staff management don't interfere with each other
+
+Configuration is provided via environment variables:
 
 ```typescript
 // src/config/amplify.ts
@@ -286,21 +292,18 @@ Amplify.configure({
 
 > **Note**: All environment variables must use the `EXPO_PUBLIC_` prefix. This is an Expo requirement — Metro only bundles variables with this prefix.
 
+> **Important**: The Cognito User Pool for this app is **separate** from the one used by tour-mgmt-app. The tour-data-api backend must be configured to accept JWT tokens from both user pools. Coordinate with the backend team to ensure the API Gateway authorizer trusts this app's user pool.
+
 ### User Types Differentiation
 
-Riders and administrators use the same Cognito User Pool. Differentiation is achieved through:
+All users in this app's Cognito User Pool are riders. Differentiation between General Riders and Registered Riders is determined by tour enrollment status (stored in tour-data-api), not by Cognito groups.
 
-1. **Cognito Groups**:
-   - Riders are assigned to a `Riders` group
-   - Administrators/staff are assigned to role-specific groups (`Administrators`, `PitStopCrew`, etc.)
+1. **Custom Attributes** (in the dedicated Rider User Pool):
+   - `custom:profileId` attribute: links to RiderProfile table in tour-data-api
 
-2. **Custom Attributes**:
-   - `custom:userType` attribute: `rider` vs `staff`
-   - `custom:profileId` attribute: links to RiderProfile table for riders
-
-3. **App-Level Filtering**:
-   - Tour Rider App only allows login for users in the `Riders` group
-   - Check-In App only allows login for users in staff groups
+2. **App-Level Differentiation**:
+   - **General Rider**: User exists in Cognito but has no active tour enrollment in tour-data-api
+   - **Registered Rider**: User has an approved tour enrollment in tour-data-api
 
 ---
 

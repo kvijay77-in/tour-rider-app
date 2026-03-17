@@ -359,7 +359,7 @@ The tour-data-api may need to be extended to support:
 - **Profile data**: Stored in tour-data-api `RiderProfile` table (shared across tours)
 - **Tour enrollment**: Stored in tour-data-api `TourRider-{tourId}` table
 - **Check-ins**: Stored in tour-data-api `CheckIn-{tourId}` table
-- **User authentication**: Managed by AWS Cognito (same user pool as Check-In App)
+- **User authentication**: Managed by AWS Cognito (dedicated user pool for riders, separate from Check-In App)
 - **Notifications**: Stored in tour-data-api (new table required: `Notification-{tourId}`)
 - **Profile pictures**: Stored in S3 via tour-data-api upload endpoint
 
