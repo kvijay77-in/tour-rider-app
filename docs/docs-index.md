@@ -32,12 +32,12 @@ This page provides a guide to all project documentation.
 - **Rider profile management**: [Requirements → Rider Profile Management](Requirements.md#rider-profile-management)
 - **Authentication flow**: [Requirements → Authentication & Authorization](Requirements.md#authentication--authorization)
 - **Tour features**: [Requirements → Tour Features](Requirements.md#tour-features)
-- **Self-service features**: [Requirements -> Self-Service Features](Requirements.md#self-service-features)
+- **Self-service features**: [Requirements → Self-Service Features](Requirements.md#self-service-features)
 
 ### For Backend Integration
-- **API endpoints**: [Requirements -> Backend Integration](Requirements.md#backend-integration)
-- **Service layer design**: [Solution Design -> Backend Integration](SolutionDesign.md#backend-integration)
-- **Data flow**: [Solution Design -> Backend Integration](SolutionDesign.md#backend-integration)
+- **API endpoints**: [Requirements → Backend Integration](Requirements.md#backend-integration)
+- **Service layer design**: [Solution Design → Backend Integration](SolutionDesign.md#backend-integration)
+- **Data flow**: [Solution Design → Backend Integration](SolutionDesign.md#backend-integration)
 
 ### For Architecture
 - **Design principles**: [Solution Design → Design Principles](SolutionDesign.md#design-principles)

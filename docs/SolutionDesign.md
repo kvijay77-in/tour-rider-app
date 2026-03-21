@@ -16,7 +16,8 @@ This is an evolving document and hence latest info must be referred to at all ti
 - [Authentication](#authentication)
 - [Backend Integration](#backend-integration)
 - [Offline Status](#offline-status)
-- [Navigation Structure](#navigation-structure)- [Styling Strategy](#styling-strategy)
+- [Navigation Structure](#navigation-structure)
+- [Styling Strategy](#styling-strategy)
 - [Logging](#logging)
 - [Platform Considerations](#platform-considerations)
 
