@@ -94,13 +94,14 @@ EXPO_PUBLIC_LOG_LEVEL=DEBUG
 
 ### 3. Obtain AWS Credentials
 
-Contact the tour-data-api team or AWS administrator to obtain:
-- Cognito User Pool ID
-- Cognito Client ID
-- Cognito Identity Pool ID
-- tour-data-api Base URL
+The Tour Rider App uses a **dedicated Cognito User Pool** (separate from tour-mgmt-app):
 
-These should be the **same credentials** used by the tour-mgmt-app (Check-In App).
+- **Cognito User Pool ID** — Deploy the Cognito stack first (see [Deployment Guide](deployment-guide.md))
+- **Cognito Client ID** — Created by the same Cognito stack
+- **Cognito Identity Pool ID** — Optional, leave empty if not needed
+- **tour-data-api Base URL** — Obtain from the tour-data-api team or AWS administrator
+
+> **Note**: Do NOT use the tour-mgmt-app Cognito credentials. This app has its own dedicated user pool for riders.
 
 ---
 
@@ -282,7 +283,7 @@ After setting up your development environment:
 - [Requirements](Requirements.md) — Feature specifications
 - [Solution Design](SolutionDesign.md) — Architecture and design
 - [Project Structure](project-structure.md) — Folder organization
-- [tour-mgmt-app Development Guide](../../tour-mgmt-app-main/docs/development-guide.md) — Reference guide
+- [Deployment Guide](deployment-guide.md) — AWS resource deployment
 
 ---
 

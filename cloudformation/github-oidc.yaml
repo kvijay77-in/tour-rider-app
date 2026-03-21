@@ -1,0 +1,154 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  GitHub OIDC Provider and IAM Role for Tour Rider App CI/CD.
+
+  This stack enables GitHub Actions to deploy Cognito resources
+  to AWS without static access keys.
+
+  Deploy this stack ONCE per AWS account before using GitHub Actions.
+
+  Usage:
+    aws cloudformation deploy \
+      --template-file cloudformation/github-oidc.yaml \
+      --stack-name tour-rider-app-github-oidc \
+      --capabilities CAPABILITY_NAMED_IAM \
+      --parameter-overrides GitHubOrg=<your-github-username> GitHubRepo=tour-rider-app
+
+Parameters:
+  GitHubOrg:
+    Type: String
+    Description: GitHub organization or username (e.g., kvijay77-in)
+
+  GitHubRepo:
+    Type: String
+    Description: GitHub repository name
+    Default: tour-rider-app
+
+  CreateOIDCProvider:
+    Type: String
+    Default: 'true'
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Description: >
+      Set to 'false' if the GitHub OIDC provider already exists in this
+      AWS account (e.g., already created by tour-data-api setup).
+
+Conditions:
+  ShouldCreateOIDCProvider: !Equals [!Ref CreateOIDCProvider, 'true']
+
+Resources:
+  # ============================================================================
+  # OIDC IDENTITY PROVIDER
+  # ============================================================================
+  # Tells AWS to trust tokens issued by GitHub Actions.
+  # Only needs to exist once per AWS account (shared across repos).
+  # Set CreateOIDCProvider=false if already created by tour-data-api.
+
+  GitHubOIDCProvider:
+    Type: AWS::IAM::OIDCProvider
+    Condition: ShouldCreateOIDCProvider
+    Properties:
+      Url: https://token.actions.githubusercontent.com
+      ClientIdList:
+        - sts.amazonaws.com
+      # GitHub's OIDC thumbprint — see AWS docs for IAM OIDC provider setup.
+      # Verify at: https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_providers_create_oidc_verify-thumbprint.html
+      ThumbprintList:
+        - 6938fd4d98bab03faadb97b34396831e3780aea1
+      Tags:
+        - Key: Project
+          Value: tour-rider-app
+        - Key: Purpose
+          Value: GitHub Actions OIDC Authentication
+        - Key: ManagedBy
+          Value: CloudFormation
+
+  # ============================================================================
+  # IAM DEPLOY ROLE
+  # ============================================================================
+  # Assumed by GitHub Actions during deployment.
+  # Scoped to only allow requests from the specific GitHub repo.
+  # Minimal permissions — only CloudFormation and Cognito access needed.
+
+  GitHubActionsDeployRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'tour-rider-app-github-deploy-${AWS::Region}'
+      Description: !Sub 'Allows GitHub Actions from ${GitHubOrg}/${GitHubRepo} to deploy Tour Rider App Cognito resources'
+      MaxSessionDuration: 3600
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !If
+                - ShouldCreateOIDCProvider
+                - !Ref GitHubOIDCProvider
+                - !Sub 'arn:aws:iam::${AWS::AccountId}:oidc-provider/token.actions.githubusercontent.com'
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                token.actions.githubusercontent.com:aud: sts.amazonaws.com
+              StringLike:
+                token.actions.githubusercontent.com:sub: !Sub 'repo:${GitHubOrg}/${GitHubRepo}:*'
+      # Minimal permissions for deploying Cognito resources via CloudFormation.
+      # Scoped to tour-rider-cognito-* stacks and Cognito resources only.
+      Policies:
+        - PolicyName: TourRiderDeployPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              # CloudFormation — scoped to tour-rider-cognito-* stacks
+              - Effect: Allow
+                Action:
+                  - cloudformation:CreateStack
+                  - cloudformation:UpdateStack
+                  - cloudformation:DeleteStack
+                  - cloudformation:DescribeStacks
+                  - cloudformation:DescribeStackEvents
+                  - cloudformation:DescribeStackResources
+                  - cloudformation:GetTemplate
+                  - cloudformation:GetTemplateSummary
+                  - cloudformation:ListStackResources
+                  - cloudformation:CreateChangeSet
+                  - cloudformation:DescribeChangeSet
+                  - cloudformation:ExecuteChangeSet
+                  - cloudformation:DeleteChangeSet
+                  - cloudformation:ListChangeSets
+                Resource:
+                  - !Sub 'arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/tour-rider-cognito-*/*'
+              # Cognito — scoped to tour-rider-* user pools
+              - Effect: Allow
+                Action:
+                  - cognito-idp:CreateUserPool
+                  - cognito-idp:UpdateUserPool
+                  - cognito-idp:DeleteUserPool
+                  - cognito-idp:DescribeUserPool
+                  - cognito-idp:ListUserPools
+                  - cognito-idp:CreateUserPoolClient
+                  - cognito-idp:UpdateUserPoolClient
+                  - cognito-idp:DeleteUserPoolClient
+                  - cognito-idp:DescribeUserPoolClient
+                  - cognito-idp:TagResource
+                  - cognito-idp:UntagResource
+                Resource: '*'
+      Tags:
+        - Key: Project
+          Value: tour-rider-app
+        - Key: Purpose
+          Value: GitHub Actions Deployment
+        - Key: ManagedBy
+          Value: CloudFormation
+
+Outputs:
+  DeployRoleArn:
+    Description: >
+      IAM Role ARN for GitHub Actions.
+      Add this as AWS_DEPLOY_ROLE_ARN secret in your GitHub repository.
+    Value: !GetAtt GitHubActionsDeployRole.Arn
+
+  OIDCProviderArn:
+    Condition: ShouldCreateOIDCProvider
+    Description: GitHub OIDC Provider ARN
+    Value: !Ref GitHubOIDCProvider

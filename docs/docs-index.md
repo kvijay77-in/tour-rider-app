@@ -11,6 +11,7 @@ This page provides a guide to all project documentation.
 | [Requirements](Requirements.md) | Detailed functional requirements, use cases, feature specifications, and business rules |
 | [Solution Design](SolutionDesign.md) | Architecture, design principles, component structure, technical decisions |
 | [Development Guide](development-guide.md) | Environment setup, running the app, testing, code quality, troubleshooting |
+| [Deployment Guide](deployment-guide.md) | AWS Cognito resource deployment, GitHub Actions workflow, CLI deployment |
 | [Project Structure](project-structure.md) | Project folder organization, file structure, and code organization |
 
 ## Quick Navigation
@@ -24,6 +25,7 @@ This page provides a guide to all project documentation.
 ### For Developers
 - **Environment setup**: [Development Guide → Prerequisites](development-guide.md#prerequisites)
 - **Running the app**: [Development Guide → Running the App](development-guide.md#running-the-app)
+- **Deploying AWS resources**: [Deployment Guide](deployment-guide.md)
 - **Linting and formatting**: [Development Guide → Code Quality](development-guide.md#code-quality)
 - **Useful commands**: [Development Guide → Useful Commands](development-guide.md#useful-commands)
 - **Troubleshooting**: [Development Guide → Troubleshooting](development-guide.md#troubleshooting)
