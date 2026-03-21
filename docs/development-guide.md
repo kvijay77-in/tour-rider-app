@@ -160,7 +160,6 @@ Follow the guidelines in:
 ### 3. Test Your Changes
 
 - Test on at least one mobile platform (iOS or Android)
-- Verify offline functionality works
 - Test with different user types (General Rider, Registered Rider)
 
 ### 4. Lint Your Code

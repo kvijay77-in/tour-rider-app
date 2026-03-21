@@ -19,7 +19,6 @@ Detailed functional requirements, use cases, and feature specifications for the 
   - [Not Riding](#not-riding)
   - [Quit Riding](#quit-riding)
 - [General Rider Features](#general-rider-features)
-- [Offline Capability](#offline-capability)
 - [Backend Integration](#backend-integration)
 - [Non-Functional Requirements](#non-functional-requirements)
 
@@ -38,7 +37,7 @@ The app supports two types of users, collectively referred to as **riders**:
 ### General Riders
 - Users who have registered in the app but are not currently enrolled in any active tour
 - Can view general tour information and access non-tour-specific features
-- Can browse available tours and submit registration requests
+- Can manage their rider profile
 - Have limited access to tour-specific features
 
 ### Registered Riders
@@ -116,26 +115,21 @@ The app supports two types of users, collectively referred to as **riders**:
 
 ### Tour Registration
 
-#### Browsing Tours
-- General riders can browse available tours
-- Tour list shows:
-  - Tour name and organizer
-  - Tour dates (start date, end date)
-  - Tour status (PLANNED, ACTIVE, COMPLETED)
-  - Tour location/region
-  - Number of rides
-  - Registration status (Open/Closed)
+Tour registration follows the organizer's chosen model. Two models are supported:
 
-#### Registration Request
-- Rider selects a tour and submits registration request
-- Required information for registration:
-  - Rider profile details (auto-populated from RiderProfile)
-  - Rider ID assigned by organizer (optional, may be assigned later)
-  - Cycling experience level (Beginner, Intermediate, Advanced)
-  - Medical conditions/allergies (optional but recommended)
-  - Special requirements (dietary, accommodation preferences)
-- Registration request sent to tour-data-api
-- Rider receives confirmation that request is pending approval
+#### Model 1: Pre-Registration (Primary)
+
+In this model, participation is by pre-registration. Only approved riders can be registered or are registered by the tour organizer. Pre-registration represents an "interest to participate in a tour". Based on organizer-defined criteria, the tour organizer reviews and approves entries.
+
+- Riders who are signed up or provided access to the app by the organizer (or via subscription) can use non-tour features in the app (profile management, etc.)
+- Tour organizer manages rider enrollment via the Check-In App (tour-mgmt-app)
+- Upon approval, riders become "Registered Riders" for that tour
+
+#### Model 2: Browse and Register (Future — Not Enabled)
+
+> **Note**: This model requires additional workflow support in tour-mgmt-app and is **not enabled** in the current version.
+
+In this model, riders can browse available tours and submit registration requests directly through the app. This requires the tour-mgmt-app to implement a registration approval workflow, which is not currently available.
 
 #### Registration Approval Process
 - Tour organizer reviews registration via Check-In App or admin portal
@@ -185,7 +179,7 @@ Riders can view their check-in status for the current ride in real-time.
   - **Green**: Checked in at stage
   - **Gray**: Not yet checked in
   - **Orange**: Currently at this stage (last check-in)
-  - **Red**: Quit Riding status
+  - **Red**: Quit Riding status (ended current ride midway)
   - **Blue**: Not Riding for today
 
 #### Check-In Details
@@ -262,35 +256,33 @@ Registered riders can manage their participation status for the current ride usi
 
 ### Quit Riding
 
-**Business Rule**: A rider who decides to quit the tour permanently (e.g., injury, personal reasons, cannot continue) can mark themselves as "Quit Riding". This ends their participation in the entire tour.
+**Business Rule**: A rider who starts a ride but decides to stop midway (e.g., injury, mechanical issue, fatigue) can mark themselves as "Quit Riding" for the current ride. This ends their participation in that ride only — the rider can participate in the next ride.
 
 #### Quit Riding Process
 1. Rider navigates to Tour Dashboard
-2. Selects "Quit Riding" option
-3. App shows strong confirmation dialog:
-   - "Are you sure you want to quit the tour?"
-   - "This will end your participation in [Tour Name]. You cannot undo this action."
-   - "You will need to contact the tour organizer to re-join."
+2. Selects "Quit Riding" option for today's ride
+3. App shows confirmation dialog:
+   - "Are you sure you want to quit the current ride?"
+   - "You will not be able to check in at any remaining stages for this ride."
 4. Rider must confirm twice (prevent accidental activation)
-5. Optional: Rider can provide reason for quitting
+5. Optional: Rider can provide reason for quitting the ride
 6. App sends Quit Riding check-in to tour-data-api
-7. Rider's status updated to "Quit Riding" for entire tour
-8. Rider can no longer access tour-specific features
-9. Tour organizers notified immediately
+7. Rider's status updated to "Quit Riding" for the current ride
+8. Dashboard updated to reflect Quit Riding status
+9. Tour organizers notified for support vehicle dispatch if needed
 
 #### Quit Riding Rules
-- Can be set at any time during the tour
-- Ends participation for the entire tour, not just the current ride
-- Once set, rider cannot check in at any future stages or rides
+- Can be set during an active ride (after the ride has started)
+- Ends participation for the current ride only, not the entire tour
+- Once set, rider cannot check in at remaining stages for that ride
+- Does not affect future rides (rider can participate normally in the next ride)
+- Rider's status automatically resets for the next ride
 - Rider remains in tour data for historical/statistical purposes
-- Rider status shows as "Quit Riding" in Check-In App dashboard
-- Cannot be self-reversed (requires organizer intervention)
 
-#### Post-Quit Access
-- Rider can still view historical data (past check-ins, ride history)
-- Rider cannot access current ride information or check-in features
-- Dashboard shows "Quit Riding - [Tour Name]" message
-- Option to contact tour organizer displayed
+#### Quit Riding Display
+- Tour Dashboard shows "Quit Riding - [Ride Name]" status
+- Check-in progress shows red "QR" indicator for remaining stages
+- Historical view shows Quit Riding days in rider's history
 
 #### Quit Riding Location
 - If rider quits between stages (not at a pit stop), they can specify their current location
@@ -318,12 +310,6 @@ Features available to all riders, regardless of tour enrollment status:
 - View past tours rider has participated in
 - Tour completion status
 - Statistics for each completed tour
-
-## Offline Capability
-
-The app does not support offline mode. All features require an active internet connection.
-
-When the device loses connectivity, the app displays a simple **"You are offline"** status banner to inform the rider. No data is cached locally — all data is fetched live from the tour-data-api backend.
 
 ## Backend Integration
 
@@ -359,7 +345,7 @@ The tour-data-api may need to be extended to support:
 - **Profile data**: Stored in tour-data-api `RiderProfile` table (shared across tours)
 - **Tour enrollment**: Stored in tour-data-api `TourRider-{tourId}` table
 - **Check-ins**: Stored in tour-data-api `CheckIn-{tourId}` table
-- **User authentication**: Managed by AWS Cognito (same user pool as Check-In App)
+- **User authentication**: Managed by AWS Cognito (dedicated user pool for riders, separate from Check-In App)
 - **Notifications**: Stored in tour-data-api (new table required: `Notification-{tourId}`)
 - **Profile pictures**: Stored in S3 via tour-data-api upload endpoint
 
@@ -391,7 +377,6 @@ The tour-data-api may need to be extended to support:
 - Multi-language support (future enhancement)
 
 ### Reliability
-- Offline status banner shown when device connectivity is lost
 - Automatic retry on network failures
 - Error recovery without data loss
 - Session persistence across app restarts
