@@ -17,7 +17,6 @@ import {
 } from 'react-native';
 
 import { COLORS } from '../../constants';
-import { OfflineBanner } from '../../components/common/OfflineBanner';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
 import { Card } from '../../components/common/Card';
 import { Button } from '../../components/common/Button';
@@ -147,7 +146,6 @@ export function TourDashboardScreen() {
   if (!activeTour) {
     return (
       <SafeAreaView style={styles.safeArea}>
-        <OfflineBanner />
         <View style={styles.centered}>
           <Text style={styles.infoText}>No active tour enrollment.</Text>
         </View>
@@ -158,7 +156,6 @@ export function TourDashboardScreen() {
   if (isLoading && !refreshing) {
     return (
       <SafeAreaView style={styles.safeArea}>
-        <OfflineBanner />
         <LoadingSpinner message="Loading dashboard..." />
       </SafeAreaView>
     );
@@ -166,7 +163,6 @@ export function TourDashboardScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <OfflineBanner />
       <ScrollView
         contentContainerStyle={styles.container}
         refreshControl={

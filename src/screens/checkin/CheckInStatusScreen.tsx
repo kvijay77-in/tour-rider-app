@@ -13,7 +13,6 @@ import {
 } from 'react-native';
 
 import { COLORS } from '../../constants';
-import { OfflineBanner } from '../../components/common/OfflineBanner';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
 import { Card } from '../../components/common/Card';
 import { StageIndicator } from '../../components/checkin/StageIndicator';
@@ -99,7 +98,6 @@ export function CheckInStatusScreen() {
   if (isLoading && !refreshing) {
     return (
       <SafeAreaView style={styles.safeArea}>
-        <OfflineBanner />
         <LoadingSpinner message="Loading check-in status..." />
       </SafeAreaView>
     );
@@ -108,7 +106,6 @@ export function CheckInStatusScreen() {
   if (!activeTour || !enrollment) {
     return (
       <SafeAreaView style={styles.safeArea}>
-        <OfflineBanner />
         <View style={styles.centered}>
           <Text style={styles.infoText}>No active tour enrollment.</Text>
         </View>
@@ -118,7 +115,6 @@ export function CheckInStatusScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <OfflineBanner />
       <View style={styles.header}>
         <Text style={styles.title}>Check-In Status</Text>
       </View>

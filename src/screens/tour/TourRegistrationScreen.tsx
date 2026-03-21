@@ -16,7 +16,6 @@ import {
 } from 'react-native';
 
 import { COLORS } from '../../constants';
-import { OfflineBanner } from '../../components/common/OfflineBanner';
 import { Button } from '../../components/common/Button';
 import { useAuth } from '../../hooks/useAuth';
 import { submitTourRegistration } from '../../services/api/tourRegistrationApi';
@@ -79,7 +78,6 @@ export function TourRegistrationScreen({ route, navigation }: {
   if (success) {
     return (
       <SafeAreaView style={styles.safeArea}>
-        <OfflineBanner />
         <View style={styles.centered}>
           <Text style={styles.successTitle}>Registration Submitted!</Text>
           <Text style={styles.successText}>
@@ -93,7 +91,6 @@ export function TourRegistrationScreen({ route, navigation }: {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <OfflineBanner />
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}

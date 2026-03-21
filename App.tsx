@@ -15,7 +15,6 @@ import { StatusBar } from 'expo-status-bar';
 
 import { configureAmplify } from './src/config/amplify';
 import { AuthProvider } from './src/context/AuthContext';
-import { OfflineProvider } from './src/context/OfflineContext';
 import { RiderProvider } from './src/context/RiderContext';
 import { TourProvider } from './src/context/TourContext';
 import { AppNavigator } from './src/navigation/AppNavigator';
@@ -26,16 +25,14 @@ configureAmplify();
 export default function App() {
   return (
     <SafeAreaProvider>
-      <OfflineProvider>
-        <AuthProvider>
-          <RiderProvider>
-            <TourProvider>
-              <StatusBar style="auto" />
-              <AppNavigator />
-            </TourProvider>
-          </RiderProvider>
-        </AuthProvider>
-      </OfflineProvider>
+      <AuthProvider>
+        <RiderProvider>
+          <TourProvider>
+            <StatusBar style="auto" />
+            <AppNavigator />
+          </TourProvider>
+        </RiderProvider>
+      </AuthProvider>
     </SafeAreaProvider>
   );
 }

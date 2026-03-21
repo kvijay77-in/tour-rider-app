@@ -13,7 +13,6 @@ import {
 } from 'react-native';
 
 import { COLORS } from '../../constants';
-import { OfflineBanner } from '../../components/common/OfflineBanner';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
 import { TourCard } from '../../components/tour/TourCard';
 import { getTours } from '../../services/api/tourApi';
@@ -59,7 +58,6 @@ export function TourListScreen({ navigation }: { navigation: { navigate: (screen
   if (isLoading && !refreshing) {
     return (
       <SafeAreaView style={styles.safeArea}>
-        <OfflineBanner />
         <LoadingSpinner message="Loading tours..." />
       </SafeAreaView>
     );
@@ -67,7 +65,6 @@ export function TourListScreen({ navigation }: { navigation: { navigate: (screen
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <OfflineBanner />
       <View style={styles.header}>
         <Text style={styles.title}>Available Tours</Text>
       </View>

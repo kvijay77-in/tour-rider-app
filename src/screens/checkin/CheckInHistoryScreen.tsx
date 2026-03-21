@@ -14,7 +14,6 @@ import {
 } from 'react-native';
 
 import { COLORS } from '../../constants';
-import { OfflineBanner } from '../../components/common/OfflineBanner';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
 import { Card } from '../../components/common/Card';
 import { StatusBadge } from '../../components/common/StatusBadge';
@@ -79,7 +78,6 @@ export function CheckInHistoryScreen({ navigation }: {
   if (isLoading && !refreshing) {
     return (
       <SafeAreaView style={styles.safeArea}>
-        <OfflineBanner />
         <LoadingSpinner message="Loading ride history..." />
       </SafeAreaView>
     );
@@ -88,7 +86,6 @@ export function CheckInHistoryScreen({ navigation }: {
   if (!activeTour) {
     return (
       <SafeAreaView style={styles.safeArea}>
-        <OfflineBanner />
         <View style={styles.centered}>
           <Text style={styles.infoText}>No active tour enrollment.</Text>
         </View>
@@ -98,7 +95,6 @@ export function CheckInHistoryScreen({ navigation }: {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <OfflineBanner />
       <View style={styles.header}>
         <Text style={styles.title}>Ride History</Text>
       </View>

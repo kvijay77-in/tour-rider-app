@@ -14,7 +14,6 @@ import {
 } from 'react-native';
 
 import { COLORS } from '../../constants';
-import { OfflineBanner } from '../../components/common/OfflineBanner';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
 import { useTour } from '../../hooks/useTour';
 import { getTourNotifications, markNotificationRead } from '../../services/api/notificationApi';
@@ -86,7 +85,6 @@ export function NotificationsScreen() {
   if (isLoading && !refreshing) {
     return (
       <SafeAreaView style={styles.safeArea}>
-        <OfflineBanner />
         <LoadingSpinner message="Loading notifications..." />
       </SafeAreaView>
     );
@@ -95,7 +93,6 @@ export function NotificationsScreen() {
   if (!activeTour) {
     return (
       <SafeAreaView style={styles.safeArea}>
-        <OfflineBanner />
         <View style={styles.centered}>
           <Text style={styles.infoText}>No active tour enrollment.</Text>
         </View>
@@ -105,7 +102,6 @@ export function NotificationsScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <OfflineBanner />
       <View style={styles.header}>
         <Text style={styles.title}>Notifications</Text>
       </View>

@@ -12,7 +12,6 @@ import {
 } from 'react-native';
 
 import { COLORS } from '../../constants';
-import { OfflineBanner } from '../../components/common/OfflineBanner';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
 import { Card } from '../../components/common/Card';
 import { Button } from '../../components/common/Button';
@@ -73,7 +72,6 @@ export function TourDetailsScreen({ route, navigation }: {
   if (isLoading) {
     return (
       <SafeAreaView style={styles.safeArea}>
-        <OfflineBanner />
         <LoadingSpinner message="Loading tour details..." />
       </SafeAreaView>
     );
@@ -82,7 +80,6 @@ export function TourDetailsScreen({ route, navigation }: {
   if (error || !tour) {
     return (
       <SafeAreaView style={styles.safeArea}>
-        <OfflineBanner />
         <View style={styles.centered}>
           <Text style={styles.errorText}>{error ?? 'Tour not found.'}</Text>
           <Button title="Go Back" onPress={() => navigation.goBack()} variant="secondary" />
@@ -97,7 +94,6 @@ export function TourDetailsScreen({ route, navigation }: {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <OfflineBanner />
       <ScrollView contentContainerStyle={styles.container}>
         <View style={styles.header}>
           <Text style={styles.tourName}>{tour.name}</Text>

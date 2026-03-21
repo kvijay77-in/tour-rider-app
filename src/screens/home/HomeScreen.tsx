@@ -17,7 +17,6 @@ import {
 
 import { COLORS } from '../../constants';
 import { useTour } from '../../hooks/useTour';
-import { OfflineBanner } from '../../components/common/OfflineBanner';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
 import { Card } from '../../components/common/Card';
 import { Button } from '../../components/common/Button';
@@ -72,7 +71,6 @@ export function HomeScreen({ navigation }: { navigation: { navigate: (screen: st
   if (tourLoading && !refreshing) {
     return (
       <SafeAreaView style={styles.safeArea}>
-        <OfflineBanner />
         <LoadingSpinner message="Loading tour data..." />
       </SafeAreaView>
     );
@@ -82,7 +80,6 @@ export function HomeScreen({ navigation }: { navigation: { navigate: (screen: st
   if (isEnrolled && activeTour) {
     return (
       <SafeAreaView style={styles.safeArea}>
-        <OfflineBanner />
         <ScrollView
           contentContainerStyle={styles.container}
           refreshControl={
@@ -143,7 +140,6 @@ export function HomeScreen({ navigation }: { navigation: { navigate: (screen: st
   // Unenrolled rider — browse tours
   return (
     <SafeAreaView style={styles.safeArea}>
-      <OfflineBanner />
       <ScrollView
         contentContainerStyle={styles.centeredContainer}
         refreshControl={

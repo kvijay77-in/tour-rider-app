@@ -15,7 +15,6 @@ import {
 } from 'react-native';
 
 import { COLORS } from '../../constants';
-import { OfflineBanner } from '../../components/common/OfflineBanner';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
 import { Button } from '../../components/common/Button';
 import { ProfilePicture } from '../../components/profile/ProfilePicture';
@@ -87,7 +86,6 @@ export function ProfileScreen() {
   if (isLoading && !profile) {
     return (
       <SafeAreaView style={styles.safeArea}>
-        <OfflineBanner />
         <LoadingSpinner message="Loading profile..." />
       </SafeAreaView>
     );
@@ -95,7 +93,6 @@ export function ProfileScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <OfflineBanner />
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
