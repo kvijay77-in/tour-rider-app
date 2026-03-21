@@ -34,10 +34,12 @@ export function HomeScreen({ navigation }: { navigation: { navigate: (screen: st
   const [todaysRide, setTodaysRide] = useState<Ride | null>(null);
   const [rideLoading, setRideLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const fetchTodaysRide = useCallback(async () => {
     if (!activeTour) return;
     setRideLoading(true);
+    setError(null);
     try {
       const response = await getTodaysRide(activeTour.tourId);
       if (response.success && response.data) {
@@ -48,6 +50,7 @@ export function HomeScreen({ navigation }: { navigation: { navigate: (screen: st
     } catch (err) {
       logger.error(TAG, 'Error fetching today\'s ride', err);
       setTodaysRide(null);
+      setError('Unable to load today\'s ride.');
     } finally {
       setRideLoading(false);
     }
@@ -111,6 +114,12 @@ export function HomeScreen({ navigation }: { navigation: { navigate: (screen: st
               <Text style={styles.infoText}>No ride scheduled for today.</Text>
             )}
           </Card>
+
+          {error ? (
+            <View style={styles.errorContainer}>
+              <Text style={styles.errorText}>{error}</Text>
+            </View>
+          ) : null}
 
           {/* Quick actions */}
           <Card style={styles.sectionCard}>
@@ -207,6 +216,17 @@ const styles = StyleSheet.create({
   },
   actionButton: {
     flex: 1,
+  },
+  errorContainer: {
+    backgroundColor: COLORS.danger,
+    padding: 12,
+    borderRadius: 8,
+    marginTop: 16,
+  },
+  errorText: {
+    color: COLORS.white,
+    fontSize: 14,
+    textAlign: 'center',
   },
   welcomeTitle: {
     fontSize: 24,

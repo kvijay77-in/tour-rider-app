@@ -35,7 +35,7 @@ export interface ButtonProps {
 // Component
 // ---------------------------------------------------------------------------
 
-export function Button({
+function ButtonInner({
   title,
   onPress,
   variant = 'primary',
@@ -76,6 +76,8 @@ export function Button({
     </TouchableOpacity>
   );
 }
+
+export const Button = React.memo(ButtonInner);
 
 // ---------------------------------------------------------------------------
 // Styles
@@ -118,3 +120,4 @@ const styles = StyleSheet.create({
 });
 
 export default Button;
+

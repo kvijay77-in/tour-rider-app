@@ -37,9 +37,11 @@ export function TourDashboardScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const fetchTodaysRide = useCallback(async () => {
     if (!activeTour) return;
+    setError(null);
     try {
       const response = await getTodaysRide(activeTour.tourId);
       if (response.success && response.data) {
@@ -50,6 +52,7 @@ export function TourDashboardScreen() {
     } catch (err) {
       logger.error(TAG, 'Error fetching today\'s ride', err);
       setTodaysRide(null);
+      setError('Unable to load today\'s ride.');
     } finally {
       setIsLoading(false);
     }
@@ -176,6 +179,12 @@ export function TourDashboardScreen() {
           totalDays={activeTour.rideCount ?? 1}
         />
 
+        {error ? (
+          <View style={styles.errorContainer}>
+            <Text style={styles.errorText}>{error}</Text>
+          </View>
+        ) : null}
+
         {/* Today's ride summary */}
         <Card style={styles.sectionCard}>
           <Text style={styles.sectionTitle}>Today&apos;s Ride</Text>
@@ -277,6 +286,17 @@ const styles = StyleSheet.create({
   },
   actionButton: {
     flex: 1,
+  },
+  errorContainer: {
+    backgroundColor: COLORS.danger,
+    padding: 12,
+    borderRadius: 8,
+    marginTop: 16,
+  },
+  errorText: {
+    color: COLORS.white,
+    fontSize: 14,
+    textAlign: 'center',
   },
 });
 

@@ -53,7 +53,7 @@ function getDotColor(stageStatus: 'checked' | 'current' | 'upcoming', overallSta
 // Component
 // ---------------------------------------------------------------------------
 
-export function StageIndicator({ stages, checkIns, checkInStatus }: StageIndicatorProps) {
+function StageIndicatorInner({ stages, checkIns, checkInStatus }: StageIndicatorProps) {
   const checkedStageIds = new Set(checkIns.map((c) => c.stageId));
 
   // Determine per-stage visual status
@@ -97,6 +97,8 @@ export function StageIndicator({ stages, checkIns, checkInStatus }: StageIndicat
   );
 }
 
+export const StageIndicator = React.memo(StageIndicatorInner);
+
 // ---------------------------------------------------------------------------
 // Styles
 // ---------------------------------------------------------------------------
@@ -135,3 +137,4 @@ const styles = StyleSheet.create({
 });
 
 export default StageIndicator;
+

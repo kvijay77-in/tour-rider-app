@@ -21,9 +21,11 @@ export interface CardProps {
 // Component
 // ---------------------------------------------------------------------------
 
-export function Card({ children, style }: CardProps) {
+function CardInner({ children, style }: CardProps) {
   return <View style={[styles.card, style]}>{children}</View>;
 }
+
+export const Card = React.memo(CardInner);
 
 // ---------------------------------------------------------------------------
 // Styles
@@ -45,3 +47,4 @@ const styles = StyleSheet.create({
 });
 
 export default Card;
+

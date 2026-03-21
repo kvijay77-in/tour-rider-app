@@ -2,11 +2,12 @@
  * Profile screen — view/edit rider profile and sign out.
  */
 
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
   TextInput,
+  Alert,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -39,7 +40,7 @@ export function ProfileScreen() {
   const [emergencyName, setEmergencyName] = useState(profile?.emergencyContactName ?? '');
   const [emergencyPhone, setEmergencyPhone] = useState(profile?.emergencyContactPhone ?? '');
 
-  const handleEdit = () => {
+  const handleEdit = useCallback(() => {
     // Sync local state with current profile before editing
     setFirstName(profile?.firstName ?? '');
     setLastName(profile?.lastName ?? '');
@@ -48,13 +49,13 @@ export function ProfileScreen() {
     setEmergencyName(profile?.emergencyContactName ?? '');
     setEmergencyPhone(profile?.emergencyContactPhone ?? '');
     setIsEditing(true);
-  };
+  }, [profile]);
 
-  const handleCancel = () => {
+  const handleCancel = useCallback(() => {
     setIsEditing(false);
-  };
+  }, []);
 
-  const handleSave = async () => {
+  const handleSave = useCallback(async () => {
     setIsSaving(true);
     try {
       await updateProfile({
@@ -69,19 +70,20 @@ export function ProfileScreen() {
       logger.info(TAG, 'Profile updated');
     } catch (err) {
       logger.error(TAG, 'Error updating profile', err);
+      Alert.alert('Error', 'Failed to save profile. Please try again.');
     } finally {
       setIsSaving(false);
     }
-  };
+  }, [firstName, lastName, phone, address, emergencyName, emergencyPhone, updateProfile]);
 
-  const handleLogout = async () => {
+  const handleLogout = useCallback(async () => {
     try {
       await logout();
       logger.info(TAG, 'User logged out');
     } catch (err) {
       logger.error(TAG, 'Error logging out', err);
     }
-  };
+  }, [logout]);
 
   if (isLoading && !profile) {
     return (

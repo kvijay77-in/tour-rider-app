@@ -26,7 +26,7 @@ export interface StatusBadgeProps {
 
 export function StatusBadge({ status, color, textColor = COLORS.white }: StatusBadgeProps) {
   return (
-    <View style={[styles.badge, { backgroundColor: color }]} accessibilityRole="text">
+    <View style={[styles.badge, { backgroundColor: color }]} accessibilityRole="none" accessibilityLabel={`Status: ${status}`}>
       <Text style={[styles.text, { color: textColor }]}>{status}</Text>
     </View>
   );

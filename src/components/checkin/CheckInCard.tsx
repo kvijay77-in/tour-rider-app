@@ -38,7 +38,7 @@ const STATUS_DISPLAY: Record<CheckInStatus, { label: string; color: string }> = 
 // Component
 // ---------------------------------------------------------------------------
 
-export function CheckInCard({ checkIn, stageName }: CheckInCardProps) {
+function CheckInCardInner({ checkIn, stageName }: CheckInCardProps) {
   const status = deriveCheckInStatus(checkIn);
   const display = STATUS_DISPLAY[status];
 
@@ -61,6 +61,8 @@ export function CheckInCard({ checkIn, stageName }: CheckInCardProps) {
     </Card>
   );
 }
+
+export const CheckInCard = React.memo(CheckInCardInner);
 
 // ---------------------------------------------------------------------------
 // Styles
@@ -96,3 +98,4 @@ const styles = StyleSheet.create({
 });
 
 export default CheckInCard;
+

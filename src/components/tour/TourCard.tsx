@@ -39,7 +39,7 @@ const STATUS_BADGE_MAP: Record<TourStatus, { label: string; color: string }> = {
 // Component
 // ---------------------------------------------------------------------------
 
-export function TourCard({ tour, onPress }: TourCardProps) {
+function TourCardInner({ tour, onPress }: TourCardProps) {
   const badge = STATUS_BADGE_MAP[tour.status];
 
   return (
@@ -65,6 +65,8 @@ export function TourCard({ tour, onPress }: TourCardProps) {
     </TouchableOpacity>
   );
 }
+
+export const TourCard = React.memo(TourCardInner);
 
 // ---------------------------------------------------------------------------
 // Styles
@@ -99,3 +101,4 @@ const styles = StyleSheet.create({
 });
 
 export default TourCard;
+
