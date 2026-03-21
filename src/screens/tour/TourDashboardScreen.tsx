@@ -10,11 +10,11 @@ import {
   View,
   Text,
   Alert,
-  SafeAreaView,
   ScrollView,
   RefreshControl,
   StyleSheet,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { COLORS } from '../../constants';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';

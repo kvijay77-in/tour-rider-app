@@ -7,13 +7,13 @@ import {
   View,
   Text,
   TextInput,
-  SafeAreaView,
   ScrollView,
   TouchableOpacity,
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { COLORS } from '../../constants';
 import { Button } from '../../components/common/Button';

@@ -8,12 +8,12 @@ import {
   Text,
   TextInput,
   Alert,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { COLORS } from '../../constants';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
