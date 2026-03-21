@@ -54,7 +54,9 @@ Resources:
           AttributeDataType: String
           Mutable: true
           Required: true
-        # Links to RiderProfile table in tour-data-api
+        # Custom attribute: Cognito auto-adds the 'custom:' prefix.
+        # Accessible as 'custom:profileId' in JWT tokens and SDK.
+        # Links to RiderProfile table in tour-data-api.
         - Name: profileId
           AttributeDataType: String
           Mutable: true
