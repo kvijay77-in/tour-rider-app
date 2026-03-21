@@ -105,6 +105,7 @@ The app supports two registration models (based on tour organizer's preference):
 ## Getting Started
 
 - **Developers**: See the [Development Guide](docs/development-guide.md) for environment setup, running the app, and development workflows.
+- **Deployment**: See the [Deployment Guide](docs/deployment-guide.md) for deploying the dedicated Cognito User Pool.
 - **Requirements**: See [Requirements](docs/Requirements.md) for detailed feature specifications.
 - **Architecture**: See [Solution Design](docs/SolutionDesign.md) for technical design decisions.
 
@@ -184,7 +185,8 @@ For detailed project organization and folder structure, see [docs/project-struct
 | [Documentation Index](docs/docs-index.md) | Complete guide to all project documentation |
 | [Requirements](docs/Requirements.md) | Detailed functional requirements, use cases, and feature specifications |
 | [Solution Design](docs/SolutionDesign.md) | Architecture, design principles, component structure, technical decisions |
-| [Development Guide](docs/development-guide.md) | Environment setup, running the app, testing, troubleshooting (to be created) |
+| [Development Guide](docs/development-guide.md) | Environment setup, running the app, testing, troubleshooting |
+| [Deployment Guide](docs/deployment-guide.md) | AWS Cognito resource deployment and GitHub Actions workflow |
 | [Project Structure](docs/project-structure.md) | Project folder organization and code structure |
 
 ## Related Projects
