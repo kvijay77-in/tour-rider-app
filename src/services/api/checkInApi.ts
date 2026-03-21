@@ -48,16 +48,18 @@ export async function submitNotRiding(
 
 /**
  * Submit a Quit Riding self-service check-in.
+ * Quit Riding ends the current ride midway — the rider started but decides to stop.
  */
 export async function submitQuitRiding(
   tourId: string,
   data: QuitRidingRequest,
 ): Promise<ApiResponse<CheckIn>> {
-  logger.info(TAG, `Submitting Quit Riding for rider ${data.riderId} in tour ${tourId}`);
+  logger.info(TAG, `Submitting Quit Riding for rider ${data.riderId} in tour ${tourId}, ride ${data.rideId}`);
   return apiClient.post<CheckIn>(
     `/v1/tours/${encodeURIComponent(tourId)}/checkins`,
     {
       riderId: data.riderId,
+      rideId: data.rideId,
       stageNumber: 1,
       method: 'SELF_SERVICE',
       isNotRiding: false,

@@ -66,10 +66,14 @@ export interface NotRidingRequest {
 }
 
 /**
- * Quit Riding request body
+ * Quit Riding request body.
+ * Quit Riding ends the current ride midway — the rider started the ride but
+ * decides to stop (e.g., injury, mechanical issue). Applies to the current
+ * ride only; the rider can participate in the next ride.
  */
 export interface QuitRidingRequest {
   riderId: string;
+  rideId: string;
   reason?: string;
   location?: {
     latitude: number;

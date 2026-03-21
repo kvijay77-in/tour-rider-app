@@ -99,11 +99,11 @@ export function TourDashboardScreen() {
   };
 
   const handleQuitRiding = () => {
-    if (!activeTour || !enrollment) return;
+    if (!activeTour || !enrollment || !todaysRide) return;
 
     Alert.alert(
       'Quit Riding',
-      'Are you sure you want to quit this tour? This action is irreversible — you will not be able to check in at any future stages or rides.',
+      'Are you sure you want to quit the current ride? You will not be able to check in at any remaining stages for this ride.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -113,20 +113,21 @@ export function TourDashboardScreen() {
             // Double confirmation
             Alert.alert(
               'Final Confirmation',
-              'This cannot be undone. Do you really want to quit the tour?',
+              'This cannot be undone for this ride. Do you really want to quit riding?',
               [
                 { text: 'Cancel', style: 'cancel' },
                 {
-                  text: 'Quit Tour',
+                  text: 'Quit Ride',
                   style: 'destructive',
                   onPress: async () => {
                     setActionLoading(true);
                     try {
                       await submitQuitRiding(activeTour.tourId, {
                         riderId: enrollment.riderId,
+                        rideId: todaysRide.rideId,
                       });
                       logger.info(TAG, 'Quit Riding submitted');
-                      await loadActiveTour();
+                      await fetchTodaysRide();
                     } catch (err) {
                       logger.error(TAG, 'Error submitting Quit Riding', err);
                       Alert.alert('Error', 'Failed to submit Quit Riding. Please try again.');
@@ -217,7 +218,7 @@ export function TourDashboardScreen() {
                 title="Quit Riding"
                 onPress={handleQuitRiding}
                 variant="danger"
-                disabled={actionLoading}
+                disabled={actionLoading || !todaysRide}
                 loading={actionLoading}
               />
             </View>

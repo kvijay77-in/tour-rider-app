@@ -48,7 +48,6 @@ tour-rider-app/
 │   │   └── index.ts           # Exports
 │   ├── context/                # React Context providers
 │   │   ├── AuthContext.tsx    # Authentication state
-│   │   ├── OfflineContext.tsx # Network connectivity state (offline banner)
 │   │   ├── RiderContext.tsx   # Rider profile state
 │   │   └── TourContext.tsx    # Tour enrollment state
 │   ├── hooks/                  # Custom React hooks
@@ -147,7 +146,6 @@ Application-wide constants:
 ### `/src/context`
 React Context providers for global state management:
 - **AuthContext**: Authentication state, login/logout
-- **OfflineContext**: Network connectivity detection, drives offline banner
 - **RiderContext**: Rider profile, statistics
 - **TourContext**: Active tour, enrollment status
 

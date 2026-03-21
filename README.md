@@ -6,13 +6,12 @@ Mobile and web application for cycling tour riders to manage their tour particip
 
 The Tour Rider App is designed for cyclists participating in non-competitive cycling tours. It provides riders with:
 
-- **Tour Registration**: Browse available tours and submit registration requests
+- **Tour Registration**: Pre-registration for tours managed by tour organizers
 - **Tour Dashboard**: Real-time view of current tour status and personal progress
 - **Daily Check-In Status**: Track check-ins at each stage (Start, Pit Stops, Finish)
 - **Tour Notifications**: Receive announcements, ride updates, and alerts from organizers
-- **Self-Service Features**: Mark yourself as "Not Riding" or "Quit Riding" when needed
+- **Self-Service Features**: Mark yourself as "Not Riding" or "Quit Riding" for the current ride
 - **Profile Management**: Maintain rider profile and emergency contact information
-- **Offline Support**: View cached tour data and check-in history when connectivity is limited
 
 ## Architecture
 
@@ -20,7 +19,6 @@ The Tour Rider App is designed for cyclists participating in non-competitive cyc
 - **Language**: TypeScript
 - **Backend**: [tour-data-api](https://github.com/kvijay77-in/tour-data-api) — AWS SAM, Lambda, API Gateway HTTP API, DynamoDB
 - **Authentication**: AWS Cognito via AWS Amplify Auth SDK (dedicated user pool for riders)
-- **Local Storage**: SQLite (via `expo-sqlite`) for offline caching
 - **Navigation**: React Navigation (native stack + bottom tabs)
 - **State Management**: React Context + Hooks
 
@@ -36,40 +34,21 @@ Mobile/Web App (Rider)
 [tour-data-api]               --> API Gateway HTTP API --> Lambda --> DynamoDB
 ```
 
-### Offline Architecture
-
-The app uses **SQLite for local caching** to support limited offline functionality:
-
-```
-              read                     periodic sync
-  Tour       ------>   SQLite    <----->    Backend API
-  Dashboard            (cache)              (tour-data)
-  (UI)
-
-              read
-  Check-In   ------>
-  Status
-  (UI)
-```
-
-- **Read-only offline**: View cached tour data, ride schedules, check-in history
-- **Online required**: Submit self-service actions (Not Riding, Quit Riding), receive new notifications
-- **Background sync**: Updates cache every 5 minutes when app is online and active
-
 ## Key Features
 
 ### User Types
 
 | User Type | Description | Access |
 |-----------|-------------|--------|
-| **General Rider** | Registered in app but not enrolled in a tour | Browse tours, submit registration requests, manage profile |
+| **General Rider** | Registered in app but not enrolled in a tour | Manage profile, view non-tour features |
 | **Registered Rider** | Approved to participate in a specific tour | Full tour features: dashboard, check-in status, notifications, self-service |
 
-### Tour Management
-- Browse available tours with details (dates, location, ride count)
-- Submit tour registration requests
-- View registration approval status
-- Access enrolled tour dashboard
+### Tour Registration
+
+The app supports two registration models (based on tour organizer's preference):
+
+1. **Pre-Registration** (primary model): Riders express interest; tour organizer reviews and approves. Only approved riders are enrolled. Other signed-up users can use non-tour features.
+2. **Browse and Register** (future): Riders browse available tours and submit registration requests. This model requires additional workflow in tour-mgmt-app and is not enabled currently.
 
 ### Tour Dashboard (Registered Riders)
 - Current tour information (day number, tour status)
@@ -93,15 +72,17 @@ The app uses **SQLite for local caching** to support limited offline functionali
 
 #### Not Riding
 - Mark yourself as "Not Riding" for the current ride
-- Used when transported via support vehicle or unable to ride that day
+- Used when unable to ride that day (illness, rest day, transported via support vehicle)
+- Must be set before any check-ins for the ride
 - Applies to current ride only (can ride tomorrow)
 - Cannot check in at any stages once set
 
 #### Quit Riding
-- End participation in the entire tour
-- Used when unable to continue tour due to injury, personal reasons, etc.
-- Requires double confirmation (irreversible via app)
-- Organizer must intervene to re-enroll rider
+- End the current ride midway after starting
+- Used when the rider starts a ride but decides to stop (injury, mechanical issue, fatigue)
+- Applies to the current ride only (can participate in the next ride)
+- Rider can optionally provide reason and location for support vehicle dispatch
+- Requires double confirmation
 
 ### Profile Management
 - Create and maintain rider profile
@@ -117,9 +98,7 @@ The app uses **SQLite for local caching** to support limited offline functionali
 | Language | TypeScript | Type safety |
 | Authentication | AWS Amplify Auth + Cognito | JWT-based authentication |
 | API Client | fetch (built-in) | HTTP calls to tour-data-api |
-| Local Database | expo-sqlite | Offline caching |
 | Navigation | React Navigation 7 | Screen navigation |
-| Connectivity | @react-native-community/netinfo | Network state detection |
 | Icons | @expo/vector-icons | UI icons |
 | SVG | react-native-svg | Custom SVG components |
 
@@ -171,7 +150,7 @@ For detailed project organization and folder structure, see [docs/project-struct
 **Quick Overview:**
 - `src/screens/` — Screen components (auth, home, tour, check-in, profile, notifications)
 - `src/components/` — Reusable UI components
-- `src/services/` — Business logic, API integration, database, sync
+- `src/services/` — Business logic, API integration
 - `src/context/` — React Context providers (Auth, Rider, Tour)
 - `src/types/` — TypeScript type definitions
 - `src/constants/` — Application constants (colors, stages)
@@ -195,7 +174,6 @@ For detailed project organization and folder structure, see [docs/project-struct
 - **No direct AWS access** — all data access through tour-data-api (API Gateway -> Lambda -> DynamoDB)
 - **No hardcoded credentials** — API URLs and Cognito config via environment variables
 - **Secure token storage** — JWT tokens managed by Amplify SDK, sensitive data via `expo-secure-store`
-- **Sandboxed local data** — SQLite stored in app sandbox (OS-level protection)
 - **HTTPS only** — all API communication encrypted in transit
 - **Dedicated rider user pool** — Dedicated Cognito User Pool for riders, separate from staff (Check-In App)
 

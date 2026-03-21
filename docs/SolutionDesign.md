@@ -16,8 +16,7 @@ This is an evolving document and hence latest info must be referred to at all ti
 - [Authentication](#authentication)
 - [Backend Integration](#backend-integration)
 - [Offline Status](#offline-status)
-- [Navigation Structure](#navigation-structure)
-- [Styling Strategy](#styling-strategy)
+- [Navigation Structure](#navigation-structure)- [Styling Strategy](#styling-strategy)
 - [Logging](#logging)
 - [Platform Considerations](#platform-considerations)
 
@@ -56,7 +55,6 @@ The Tour Rider App follows the **exact same technology stack** as the tour-mgmt-
 | **Navigation** | React Navigation | 7.x | Screen navigation (native stack + bottom tabs) |
 | **Authentication** | AWS Amplify Auth | 6.x | Cognito integration, JWT management |
 | **HTTP Client** | fetch (built-in) | N/A | API calls to tour-data-api |
-| **Connectivity** | @react-native-community/netinfo | 12.x | Network state detection (offline banner) |
 | **Secure Storage** | expo-secure-store | 15.x | Sensitive data storage (tokens) |
 | **Icons** | @expo/vector-icons | 15.x | UI icons |
 | **SVG** | react-native-svg | 15.x | Custom SVG rendering |
@@ -68,9 +66,9 @@ While the technology stack is identical, there are functional differences:
 | Aspect | tour-mgmt-app (Check-In App) | tour-rider-app (Tour Rider App) |
 |--------|------------------------|----------------------------------|
 | **Primary Users** | Administrators, pit stop crew, hotel staff | Riders (tour participants) |
-| **Main Features** | Check-in QR scanning, Dashboard (all riders), Ride management | Tour registration, Personal check-in status, Self-service (Not Riding, Quit Riding) |
+| **Main Features** | Check-in QR scanning, Dashboard (all riders), Ride management | Tour registration, Personal check-in status, Self-service (Not Riding, Quit Riding for current ride) |
 | **Camera Usage** | QR code scanning for check-ins | Profile picture upload (no QR scanning required) |
-| **Offline Priority** | High (pit stops in remote areas) | None (offline banner shown; no cached data) |
+| **Offline Priority** | High (pit stops in remote areas) | None (all features require online connectivity) |
 | **Data Scope** | All riders, all tours, full admin access | Single rider's data, enrolled tours only |
 | **RBAC** | 5 roles (Administrator, Super User, Pit Stop Crew, Hotel Staff, Guest) | 2 user types (General Rider, Registered Rider) |
 
@@ -212,7 +210,6 @@ The app uses React Context for global state:
 | **AuthContext** | Authentication state | User info, JWT tokens, login/logout |
 | **RiderContext** | Rider profile state | Profile data, statistics, preferences |
 | **TourContext** | Tour enrollment state | Active tour, enrollment status, tour details |
-| **OfflineContext** | Network connectivity state | `isOffline` — drives the offline status banner |
 
 **Provider Order** (in `App.tsx`):
 ```
@@ -320,7 +317,7 @@ All communication with the tour-data-api is through the service layer at `src/se
 | `tourApi.ts` | `GET /v1/tours`, `GET /v1/tours/{tourId}` | Tour listing and details |
 | `tourRegistrationApi.ts` | `POST /v1/tours/{tourId}/riders` | Tour registration requests |
 | `rideApi.ts` | `GET /v1/tours/{tourId}/rides/today`, GET rides | Ride information |
-| `checkInApi.ts` | `GET /v1/tours/{tourId}/rides/{rideId}/checkins`, POST | Check-in viewing and creation (Not Riding, Quit Riding) |
+| `checkInApi.ts` | `GET /v1/tours/{tourId}/rides/{rideId}/checkins`, POST | Check-in viewing and self-service (Not Riding, Quit Riding for current ride) |
 | `notificationApi.ts` | `GET /v1/tours/{tourId}/notifications` | Notifications (requires backend extension) |
 
 ### API Client Features
@@ -340,13 +337,7 @@ API client fetches data from tour-data-api and the UI components render it direc
 
 ## Offline Status
 
-The app does not support offline data caching. When the device loses connectivity, an **`OfflineBanner`** component is displayed at the top of the screen informing the rider that the app is offline. All features require an active internet connection.
-
-### Implementation
-
-- **`OfflineContext`** uses `@react-native-community/netinfo` to detect connectivity changes (event-driven).
-- **`OfflineBanner`** reads `isOffline` from `OfflineContext` and renders a banner when `true`.
-- `OfflineProvider` wraps the entire app in `App.tsx` so the banner is visible on any screen.
+The app does not support offline mode. All features require an active internet connection. There is no local data caching.
 
 ---
 
@@ -479,7 +470,6 @@ The active log level is set via the `EXPO_PUBLIC_LOG_LEVEL` environment variable
 
 ### Platform-Specific Notes
 
-- `@react-native-community/netinfo` provides connectivity events on all platforms (used for offline banner)
 - `expo-secure-store` is mobile-only; web uses browser secure storage
 - Camera access for profile pictures uses `expo-image-picker` (works on all platforms)
 

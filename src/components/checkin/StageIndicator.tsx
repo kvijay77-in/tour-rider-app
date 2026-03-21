@@ -5,7 +5,7 @@
  *  - Green  = checked in
  *  - Gray   = not checked in
  *  - Orange = current (next expected stage)
- *  - Red    = quit riding
+ *  - Red    = quit riding (ended the ride midway)
  *  - Blue   = not riding
  */
 
