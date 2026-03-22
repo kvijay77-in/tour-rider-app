@@ -14,6 +14,12 @@ This page provides a guide to all project documentation.
 | [Deployment Guide](deployment-guide.md) | AWS Cognito resource deployment, GitHub Actions workflow, CLI deployment |
 | [Project Structure](project-structure.md) | Project folder organization, file structure, and code organization |
 
+### Design Proposals
+
+| Document | Description |
+|----------|-------------|
+| [Sign-Up Approach](design-signup-approach.md) | Design proposal for invitation-based sign-up, bot protection, and multi-organizer support |
+
 ## Quick Navigation
 
 ### Getting Started (New Developer)
