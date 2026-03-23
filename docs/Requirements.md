@@ -78,13 +78,21 @@ The app supports two types of users, collectively referred to as **riders**:
 
 ## Authentication & Authorization
 
+> **Important**: All AWS resources — including Cognito User Pools — must be part of the tour organizer's subscription. Nothing is shared across organizers. Each organizer has their own Cognito User Pool for their riders, provisioned as part of their subscription setup.
+
 ### Sign-Up Flow
-1. Rider provides email, password, and basic profile information
-2. App validates input and creates account via AWS Cognito
-3. Verification code sent to email
-4. Rider verifies email to activate account
-5. Profile data stored in tour-data-api RiderProfile table
-6. Rider can now log in and access the app
+1. Rider receives an invitation code from a tour organizer
+2. Rider enters the invitation code in the app
+3. App validates the code via tour-data-api and retrieves the organizer's Cognito pool configuration
+4. App dynamically configures authentication with the organizer's Cognito User Pool
+5. Rider provides email, password, and basic profile information
+6. App validates input and creates account in the organizer's Cognito User Pool
+7. Verification code sent to email
+8. Rider verifies email to activate account
+9. Profile data stored in tour-data-api RiderProfile table (within organizer scope)
+10. Rider can now log in and access the app
+
+> See [Sign-Up Approach Design](design-signup-approach.md) for detailed design including invitation-based sign-up, bot protection, and multi-organizer support.
 
 ### Login Flow
 1. Rider enters email and password
@@ -342,10 +350,12 @@ The tour-data-api may need to be extended to support:
 
 ### Data Storage Rules
 
-- **Profile data**: Stored in tour-data-api `RiderProfile` table (shared across tours)
+> **Principle**: All AWS resources must be part of the organizer's subscription. Nothing is shared across organizers.
+
+- **User authentication**: Managed by AWS Cognito — each tour organizer has their own dedicated Cognito User Pool for riders, provisioned as part of their subscription. Riders in different organizer pools are completely isolated.
+- **Profile data**: Stored in tour-data-api `RiderProfile` table (within organizer scope)
 - **Tour enrollment**: Stored in tour-data-api `TourRider-{tourId}` table
 - **Check-ins**: Stored in tour-data-api `CheckIn-{tourId}` table
-- **User authentication**: Managed by AWS Cognito (dedicated user pool for riders, separate from Check-In App)
 - **Notifications**: Stored in tour-data-api (new table required: `Notification-{tourId}`)
 - **Profile pictures**: Stored in S3 via tour-data-api upload endpoint
 
