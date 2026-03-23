@@ -321,7 +321,7 @@ The current architecture uses a single shared Cognito User Pool (`tour-rider-{en
 
 > **Note**: The Pre Sign-Up Lambda trigger provides server-side enforcement. Even if someone bypasses the app and calls Cognito directly, the Lambda rejects sign-ups without a valid invitation code. Each organizer's Cognito pool has its own Pre Sign-Up Lambda trigger.
 
-> **Important**: Since each organizer has their own Cognito User Pool, the app cannot use static environment variables (`EXPO_PUBLIC_AWS_USER_POOL_ID`, `EXPO_PUBLIC_AWS_USER_POOL_WEB_CLIENT_ID`) for Cognito configuration. Instead, Amplify Auth must be configured dynamically at runtime after the invitation code is validated and the organizer's pool details are retrieved. The app must store the active organizer's Cognito pool configuration locally (via secure storage) so that returning users can log in without re-entering an invitation code.
+> **Important**: Since each organizer has their own Cognito User Pool, the app cannot use static environment variables (`EXPO_PUBLIC_AWS_USER_POOL_ID`, `EXPO_PUBLIC_AWS_USER_POOL_WEB_CLIENT_ID`) for Cognito configuration. Instead, Amplify Auth must be configured dynamically at runtime after the invitation code is validated and the organizer's pool details are retrieved. The app must store the active organizer's Cognito pool configuration locally so that returning users can log in without re-entering an invitation code. (See Open Question #9 regarding storage mechanism.)
 
 ### Login Flow Changes
 
