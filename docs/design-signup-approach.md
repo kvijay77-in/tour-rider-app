@@ -4,7 +4,7 @@
 
 > **Status**: Design Proposal — No development to be taken up  
 > **Related Issue**: Sign Up approach  
-> **Last Updated**: 2026-03-23
+> **Last Updated**: 2026-03-26
 
 ## Table of Contents
 
@@ -50,15 +50,15 @@ The current sign-up approach uses traditional Cognito self-registration, which i
 | **Organizer Association** | None — riders exist independently of any organizer |
 | **Bot Protection** | None beyond email verification |
 | **Custom Attributes** | `custom:profileId` links to RiderProfile table |
-| **Profile Storage** | `RiderProfile` table in tour-data-api (shared, not organizer-scoped) |
+| **Profile Storage** | `RiderProfile` table in tour-data-api (within organizer's data scope — all data is organizer-isolated) |
 | **AWS Resource Ownership** | Single shared Cognito pool — **violates** organizer subscription isolation |
 
 ### Why Traditional Self-Registration Fails
 
 - A rider creating an account has no organizer context → the app cannot determine which organizer's tours to show, which subscription limits apply, or what organizer-specific branding to display.
-- Without gating, anyone can create accounts, flooding the Cognito user pool and the RiderProfile table.
+- Without gating, anyone can create accounts, flooding the organizer's Cognito user pool and data tables.
 - The Pre-Registration model (Model 1 in Requirements.md) assumes the organizer controls who can access the app, but the current sign-up flow does not enforce this.
-- **All AWS resources (including Cognito) must be part of the organizer's subscription**. A single shared rider pool violates this principle — each organizer must have their own Cognito User Pool provisioned as part of their subscription. Nothing is shared across organizers.
+- **All AWS resources and data must be part of the organizer's subscription** — including Cognito User Pools, DynamoDB tables (RiderProfile, Invitation, TourRider, CheckIn, etc.), S3 buckets, and API infrastructure. Nothing is shared across organizers at any level. A single shared rider pool or shared data table violates this principle.
 
 ---
 
@@ -67,7 +67,7 @@ The current sign-up approach uses traditional Cognito self-registration, which i
 1. **Organizer-initiated access**: Only riders invited or authorized by a tour organizer should be able to sign up.
 2. **Bot protection**: Automated or bulk sign-ups must be blocked.
 3. **Subscription awareness**: Sign-up must respect the organizer's subscription limits (e.g., max riders).
-4. **Per-organizer AWS resources**: All AWS resources — including Cognito User Pools — must be part of the organizer's subscription. Nothing is shared across organizers. Each organizer has their own Cognito User Pool for their riders.
+4. **Per-organizer AWS resources and data**: All AWS resources and data must be part of the organizer's subscription. Nothing is shared across organizers at any level. This includes Cognito User Pools, DynamoDB tables (RiderProfile, Invitation, TourRider, CheckIn, Notification, etc.), S3 buckets, Lambda functions, and API infrastructure. Each organizer has a completely isolated environment.
 5. **No direct AWS resource access**: All validation must go through tour-data-api (Design Principle #2).
 6. **Mobile and web support**: Solution must work on iOS, Android, and web.
 7. **Future-proof**: Must not preclude multi-organizer support.
@@ -110,7 +110,8 @@ Tour Organizer (Check-In App)         tour-data-api              Rider (Tour Rid
         │                                      │      context (orgId,      │
         │                                      │      orgName, tourId,     │
         │                                      │      cognitoPoolId,       │
-        │                                      │      cognitoClientId)     │
+        │                                      │      cognitoClientId,     │
+        │                                      │      apiBaseUrl)          │
         │                                      │──────────────────────────>│
         │                                      │                           │
         │                                      │   7. App dynamically      │
@@ -137,7 +138,7 @@ Tour Organizer (Check-In App)         tour-data-api              Rider (Tour Rid
         │                                      │      count incremented)   │
 ```
 
-> **Key difference from a shared-pool model**: Step 6 returns the organizer's specific Cognito User Pool ID and Client ID. Step 7 dynamically configures Amplify Auth to use that organizer's pool. The rider's Cognito account is created inside the organizer's own pool (step 9), not a shared pool. This ensures all AWS resources remain part of the organizer's subscription.
+> **Key difference from a shared model**: Step 6 returns the organizer's specific Cognito User Pool ID, Client ID, and API base URL. Step 7 dynamically configures Amplify Auth to use that organizer's pool. The rider's Cognito account is created inside the organizer's own pool (step 9), and the RiderProfile (step 10) is stored in the organizer's own data infrastructure. All AWS resources and data remain completely within the organizer's subscription — nothing is shared across organizers.
 
 #### Invitation Types
 
@@ -166,7 +167,7 @@ Invitation {
 }
 ```
 
-> **Note**: The invitation itself does not store Cognito pool details. When the invitation is validated, the tour-data-api looks up the organizer's subscription to resolve the Cognito User Pool ID and Client ID. This keeps invitation data decoupled from infrastructure details.
+> **Note**: The invitation data is stored within the organizer's own DynamoDB infrastructure (part of their subscription). The invitation itself does not store Cognito pool details or API URLs. When the invitation is validated, the system resolves the organizer's Cognito User Pool ID, Client ID, and API base URL from the organizer's subscription configuration. This keeps invitation data decoupled from infrastructure details while maintaining complete per-organizer data isolation.
 
 #### Advantages
 
@@ -299,13 +300,27 @@ Step 3: Email Verification (unchanged from current)
 
 ### Backend API Endpoints Required (tour-data-api)
 
-| Endpoint | Method | Purpose |
-|----------|--------|---------|
-| `POST /v1/invitations` | POST | Organizer creates invitation (from Check-In App) |
-| `GET /v1/invitations?organizerId={id}` | GET | List organizer's invitations (from Check-In App) |
-| `POST /v1/invitations/validate` | POST | Validate invitation code (from Rider App, pre-sign-up) |
-| `PUT /v1/invitations/{invitationId}` | PUT | Revoke or update invitation (from Check-In App) |
-| `POST /v1/invitations/{invitationId}/redeem` | POST | Mark invitation as used after successful sign-up (from Rider App) |
+Since all resources and data are per-organizer, the invitation CRUD endpoints operate within the organizer's own tour-data-api instance. The invitation validation endpoint, however, must be accessible before the rider knows their organizer — see [Invitation Code Discovery](#invitation-code-discovery) below.
+
+| Endpoint | Method | Purpose | Scope |
+|----------|--------|---------|-------|
+| `POST /v1/invitations` | POST | Organizer creates invitation (from Check-In App) | Per-organizer API |
+| `GET /v1/invitations?organizerId={id}` | GET | List organizer's invitations (from Check-In App) | Per-organizer API |
+| `POST /v1/invitations/validate` | POST | Validate invitation code (from Rider App, pre-sign-up) | See discovery note below |
+| `PUT /v1/invitations/{invitationId}` | PUT | Revoke or update invitation (from Check-In App) | Per-organizer API |
+| `POST /v1/invitations/{invitationId}/redeem` | POST | Mark invitation as used after successful sign-up (from Rider App) | Per-organizer API |
+
+#### Invitation Code Discovery
+
+Since all resources are per-organizer with no sharing, the rider app faces a bootstrapping challenge: the rider enters an invitation code but does not yet know which organizer (or which organizer's API endpoint) the code belongs to. The following approaches solve this:
+
+1. **Invitation link with organizer context (Recommended)**: The organizer shares a link (not just a code) that encodes the organizer's API base URL. For example: `https://app.example.com/invite?code=TOUR2026-XYZ&api=https://org-cycling.api.example.com`. The app extracts the organizer's API URL from the link and validates the code against that organizer's API. This avoids any shared infrastructure for code lookup.
+
+2. **Invitation code encodes organizer prefix**: The code format includes an organizer-specific prefix (e.g., `CYCLING-TOUR2026-XYZ`). The app uses a static mapping or naming convention to resolve the prefix to the organizer's API endpoint.
+
+3. **Platform-level discovery service**: A lightweight, platform-managed service that maps invitation codes to organizer API endpoints. This is a routing concern (not data sharing) — the service stores only the mapping of code prefix → organizer API URL, with no access to organizer data.
+
+> **Design decision**: Option 1 (invitation link with organizer context) is recommended as it requires no shared infrastructure and works naturally with deep links. The invitation code alone is used only as a fallback for manual entry scenarios. See Open Question #10.
 
 ### Cognito Configuration Changes
 
@@ -321,7 +336,7 @@ The current architecture uses a single shared Cognito User Pool (`tour-rider-{en
 
 > **Note**: The Pre Sign-Up Lambda trigger provides server-side enforcement. Even if someone bypasses the app and calls Cognito directly, the Lambda rejects sign-ups without a valid invitation code. Each organizer's Cognito pool has its own Pre Sign-Up Lambda trigger.
 
-> **Important**: Since each organizer has their own Cognito User Pool, the app cannot use static environment variables (`EXPO_PUBLIC_AWS_USER_POOL_ID`, `EXPO_PUBLIC_AWS_USER_POOL_WEB_CLIENT_ID`) for Cognito configuration. Instead, Amplify Auth must be configured dynamically at runtime after the invitation code is validated and the organizer's pool details are retrieved. The app must store the active organizer's Cognito pool configuration locally so that returning users can log in without re-entering an invitation code. (See Open Question #9 regarding storage mechanism.)
+> **Important**: Since each organizer has their own Cognito User Pool and API infrastructure, the app cannot use static environment variables (`EXPO_PUBLIC_AWS_USER_POOL_ID`, `EXPO_PUBLIC_AWS_USER_POOL_WEB_CLIENT_ID`, `EXPO_PUBLIC_TOUR_DATA_API_BASE_URL`) for Cognito or API configuration. Instead, both Amplify Auth and the API client must be configured dynamically at runtime after the invitation code is validated and the organizer's details are retrieved. The app must store the active organizer's full context (Cognito pool, API base URL) locally so that returning users can log in without re-entering an invitation code. (See Open Question #9 regarding storage mechanism.)
 
 ### Login Flow Changes
 
@@ -349,14 +364,14 @@ Rider opens app
   → Proceed to login or sign-up
 ```
 
-For riders who have previously signed up, the app stores the organizer context (organizerId, organizerName, cognitoPoolId, cognitoClientId) locally. On subsequent app launches, the saved context is used to configure Amplify, and the rider goes directly to the login screen.
+For riders who have previously signed up, the app stores the organizer context (organizerId, organizerName, cognitoPoolId, cognitoClientId, apiBaseUrl) locally. On subsequent app launches, the saved context is used to configure Amplify Auth and the API client, and the rider goes directly to the login screen.
 
 ### Data Model Changes (tour-data-api)
 
-New DynamoDB table: `Invitation`
+New DynamoDB table within each organizer's infrastructure: `Invitation`
 
 ```
-Table: Invitation
+Table: Invitation (per-organizer — within organizer's subscription)
   PK: invitationId (string)
   GSI1: organizerId-status-index (organizerId + status)
   GSI2: code-index (code) — for code lookup during validation
@@ -366,6 +381,8 @@ Attributes:
   type, maxUses, currentUses, expiresAt, status,
   createdAt, createdBy, redeemedBy (list of cognitoSubs)
 ```
+
+> **Note**: Like all data, the Invitation table is within the organizer's own DynamoDB infrastructure. There is no shared/central invitation table across organizers.
 
 ---
 
@@ -451,42 +468,44 @@ Regardless of which sign-up approach is chosen, the following protections should
 
 ### Concept
 
-A single rider (identified by email) can register with multiple tour organizers. Since each organizer has their own Cognito User Pool, the rider has **separate Cognito accounts** in each organizer's pool. Each organizer's data is fully isolated — a rider's participation in Organizer A's tours is invisible to Organizer B, and all AWS resources (Cognito, DynamoDB, S3) remain within the organizer's subscription.
+A single rider (identified by email) can register with multiple tour organizers. Since each organizer has their own Cognito User Pool and complete data infrastructure (DynamoDB, S3, API Gateway, Lambda), the rider has **separate Cognito accounts and separate profiles** in each organizer's environment. Each organizer's data is fully isolated — a rider's participation in Organizer A's tours is invisible to Organizer B, and all AWS resources and data (Cognito, DynamoDB, S3, API) remain entirely within the organizer's subscription. Nothing is shared across organizers at any level.
 
 ### Data Model
 
 #### Current Model (Single Organizer)
 
 ```
-Organizer's Cognito User Pool
-  └── Rider (email, sub, custom:profileId)
-
-RiderProfile (single record per rider, within organizer scope)
-  └── profileId, email, name, phone, emergencyContact, ...
-
-TourRider-{tourId} (enrollment per tour)
-  └── riderId, profileId, status, ...
+Organizer's AWS Infrastructure (all within organizer's subscription):
+  ├── Cognito User Pool
+  │     └── Rider (email, sub, custom:profileId)
+  ├── DynamoDB Tables
+  │     ├── RiderProfile (per rider, within organizer scope)
+  │     │     └── profileId, email, name, phone, emergencyContact, ...
+  │     ├── Invitation (sign-up invitations)
+  │     ├── TourRider-{tourId} (enrollment per tour)
+  │     │     └── riderId, profileId, status, ...
+  │     └── CheckIn-{tourId} (check-ins per tour)
+  ├── API Gateway + Lambda (organizer's tour-data-api instance)
+  └── S3 Bucket (profile pictures, tour assets)
 ```
 
 #### Proposed Model (Multi-Organizer)
 
 ```
-Organizer A's Cognito User Pool          Organizer B's Cognito User Pool
-  └── Rider (email, sub-A)                 └── Rider (email, sub-B)
-        │                                        │
-        ▼                                        ▼
-Organizer A's RiderProfile                Organizer B's RiderProfile
-  PK: profileId-A                           PK: profileId-B
-  ┌────────────────────────────┐            ┌────────────────────────────┐
-  │  name, phone, emergency    │            │  name, phone, emergency    │
-  │  contact, photo, ...       │            │  contact, photo, ...       │
-  └────────────────────────────┘            └────────────────────────────┘
-        │                                        │
-        ▼                                        ▼
-Organizer A's Tour tables                 Organizer B's Tour tables
-  TourRider-{tourId}                        TourRider-{tourId}
-  CheckIn-{tourId}                          CheckIn-{tourId}
+Organizer A's Complete Infrastructure     Organizer B's Complete Infrastructure
+(all within Org A's subscription)         (all within Org B's subscription)
+  ├── Cognito User Pool                     ├── Cognito User Pool
+  │     └── Rider (email, sub-A)            │     └── Rider (email, sub-B)
+  ├── DynamoDB Tables                       ├── DynamoDB Tables
+  │     ├── RiderProfile                    │     ├── RiderProfile
+  │     │     └── profileId-A               │     │     └── profileId-B
+  │     ├── Invitation                      │     ├── Invitation
+  │     ├── TourRider-{tourId}              │     ├── TourRider-{tourId}
+  │     └── CheckIn-{tourId}                │     └── CheckIn-{tourId}
+  ├── API Gateway + Lambda                  ├── API Gateway + Lambda
+  └── S3 Bucket                             └── S3 Bucket
 
+       ← No data or resources shared between organizers →
 
 App Local Storage (on rider's device)
   ┌───────────────────────────────────────────────────────────┐
@@ -496,11 +515,13 @@ App Local Storage (on rider's device)
   │  │  organizerName: Cycling Adventures                  │  │
   │  │  cognitoPoolId: us-east-1_XXXX                      │  │
   │  │  cognitoClientId: abc123                            │  │
+  │  │  apiBaseUrl: https://org-cycling.api.example.com    │  │
   │  ├─────────────────────────────────────────────────────┤  │
   │  │  organizerId: org-marathon                          │  │
   │  │  organizerName: Marathon Events Co                  │  │
   │  │  cognitoPoolId: us-east-1_YYYY                      │  │
   │  │  cognitoClientId: def456                            │  │
+  │  │  apiBaseUrl: https://org-marathon.api.example.com   │  │
   │  └─────────────────────────────────────────────────────┘  │
   └───────────────────────────────────────────────────────────┘
 ```
@@ -510,9 +531,10 @@ App Local Storage (on rider's device)
 | Decision | Rationale |
 |----------|-----------|
 | **Separate Cognito account per organizer** | Each organizer's Cognito pool is part of their subscription. Rider has an independent account in each pool. This ensures complete AWS resource isolation per organizer. |
-| **Separate RiderProfile per organizer** | Rider may want different profile data per organizer (e.g., different emergency contact, different photo). All profile data stays within the organizer's AWS resources. |
-| **No shared OrganizerRider mapping table** | With per-organizer pools, there is no central table linking a rider across organizers. The app manages multi-organizer context locally on the device. |
-| **Local organizer context storage** | The app stores a list of organizer contexts (id, name, Cognito pool details) on the rider's device. This enables organizer switching without a shared backend table. |
+| **Separate RiderProfile per organizer** | Rider may want different profile data per organizer (e.g., different emergency contact, different photo). All profile data stays within the organizer's own DynamoDB tables — no data shared across organizers. |
+| **Complete per-organizer infrastructure** | Each organizer has their own Cognito pool, DynamoDB tables, API Gateway, Lambda, and S3. Nothing is shared across organizers at any level — not resources, not data, not infrastructure. |
+| **No shared OrganizerRider mapping table** | With fully isolated per-organizer infrastructure, there is no central/shared table linking a rider across organizers. The app manages multi-organizer context locally on the device. |
+| **Local organizer context storage** | The app stores a list of organizer contexts (id, name, Cognito pool details, API base URL) on the rider's device. This enables organizer switching without any shared backend. |
 | **Same email, different pools** | A rider uses the same email address across organizer pools. Each pool is independent — same email does not create conflicts. Rider may choose different passwords per pool. |
 | **Tour data unchanged** | `TourRider-{tourId}` and `CheckIn-{tourId}` tables are already tour-scoped and within the organizer's infrastructure. No changes needed. |
 
@@ -549,25 +571,25 @@ App Local Storage (on rider's device)
 
 #### Adding a New Organizer
 
-- Rider uses a new invitation code from a different organizer.
-- Flow: Enter invitation code → validate → get new organizer's Cognito pool details → sign up in new organizer's pool → create RiderProfile in new organizer's scope.
+- Rider uses a new invitation link/code from a different organizer.
+- Flow: Enter invitation code → validate → get new organizer's full context (Cognito pool details + API base URL) → sign up in new organizer's pool → create RiderProfile in new organizer's data infrastructure.
 - The new organizer context is saved locally alongside existing ones.
-- This is a full sign-up in the new organizer's Cognito pool (separate account).
+- This is a full sign-up in the new organizer's completely isolated environment (separate Cognito account, separate profile, separate data).
 
 ### Sign-Up Integration with Multi-Organizer
 
-The invitation-based sign-up (Option 1) with per-organizer Cognito pools naturally supports multi-organizer:
+The invitation-based sign-up (Option 1) with per-organizer infrastructure naturally supports multi-organizer:
 
 | Scenario | Behavior |
 |----------|----------|
-| **New rider, first organizer** | Enter invitation code → get organizer's Cognito pool → sign up (create account in organizer's pool) → create RiderProfile in organizer scope |
-| **Existing rider, new organizer** | Enter invitation code → get new organizer's Cognito pool → **full sign-up in new organizer's pool** (separate Cognito account) → create RiderProfile in new organizer scope → save new organizer context locally |
+| **New rider, first organizer** | Enter invitation code → get organizer's full context (Cognito pool + API URL) → sign up (create account in organizer's pool) → create RiderProfile in organizer's data infrastructure |
+| **Existing rider, new organizer** | Enter invitation code → get new organizer's full context → **full sign-up in new organizer's infrastructure** (separate Cognito account, separate RiderProfile) → save new organizer context locally |
 | **Existing rider, same organizer** | Already has an account in that organizer's pool → login directly, no invitation needed |
 
 #### Account Flow for Multi-Organizer
 
 ```
-Rider enters invitation code
+Rider enters invitation code/link
         │
         ▼
   Code valid?
@@ -575,11 +597,12 @@ Rider enters invitation code
   └── Yes → Get organizer context
               (orgId, orgName,
                cognitoPoolId,
-               cognitoClientId)
+               cognitoClientId,
+               apiBaseUrl)
         │
         ▼
-  Configure Amplify with
-  organizer's Cognito pool
+  Configure Amplify + API client
+  with organizer's infrastructure
         │
         ▼
   "Already have an account
@@ -587,14 +610,15 @@ Rider enters invitation code
   ├── Yes → Login to organizer's pool
   └── No → Sign Up in organizer's pool
               (create new Cognito account
-               + RiderProfile)
+               + RiderProfile in organizer's
+               data infrastructure)
         │
         ▼
   Save organizer context locally
   (added to list of saved organizers)
 ```
 
-> **Note**: Unlike a shared-pool model where adding a new organizer is a "join" action, the per-organizer pool model requires a full sign-up in each new organizer's Cognito pool. The rider effectively creates a new account per organizer, but the app manages this seamlessly by maintaining a local list of organizer contexts.
+> **Note**: The per-organizer infrastructure model requires a full sign-up in each new organizer's environment. The rider effectively creates a new account and profile per organizer, but the app manages this seamlessly by maintaining a local list of organizer contexts. All data remains completely isolated within each organizer's subscription — no data is shared or visible across organizers.
 
 ---
 
@@ -606,11 +630,12 @@ Rider enters invitation code
 |-----------|--------|-------|
 | **Rider App — SignUpScreen** | Add invitation code step before registration form | UI change |
 | **Rider App — AuthContext** | Support dynamic Amplify Auth configuration (per-organizer Cognito pool) | Significant logic change |
-| **Rider App — Local Storage** | Store organizer context (orgId, name, cognitoPoolId, cognitoClientId) for returning users | New storage pattern |
-| **Rider App — LoginScreen** | Load saved organizer context to configure Amplify before login | Logic change |
+| **Rider App — Local Storage** | Store organizer context (orgId, name, cognitoPoolId, cognitoClientId, apiBaseUrl) for returning users | New storage pattern |
+| **Rider App — LoginScreen** | Load saved organizer context to configure Amplify and API client before login | Logic change |
 | **Rider App — Amplify Config** | Change from static env-var config to dynamic runtime configuration | Architecture change |
-| **tour-data-api** | New Invitation table + CRUD endpoints | New backend feature |
-| **tour-data-api** | Invitation validation endpoint returns organizer's Cognito pool details | New backend endpoint |
+| **Rider App — API Client** | Support dynamic API base URL per organizer (not static env var) | Architecture change |
+| **tour-data-api** | New Invitation table + CRUD endpoints (per-organizer infrastructure) | New backend feature |
+| **tour-data-api** | Invitation validation endpoint returns organizer's full context (Cognito pool + API URL) | New backend endpoint |
 | **tour-mgmt-app** | New invitation management screen for organizers | New feature in Check-In App |
 | **Cognito** | Per-organizer pool provisioning (part of organizer subscription setup) | Infrastructure change |
 | **Cognito** | Add Pre Sign-Up Lambda trigger on each organizer's pool | Infrastructure per organizer |
@@ -622,7 +647,7 @@ Rider enters invitation code
 |-----------|--------|
 | **TourRider tables** | Already tour-scoped and within organizer infrastructure, unaffected |
 | **CheckIn tables** | Already tour-scoped and within organizer infrastructure, unaffected |
-| **API Client (apiClient.ts)** | No changes — invitation validation is a standard API call; JWT injection unchanged |
+| **RiderProfile table** | Already within organizer's data infrastructure, unaffected |
 | **Password reset** | Unchanged (operates within the organizer's Cognito pool) |
 
 ---
@@ -635,17 +660,19 @@ Rider enters invitation code
 
 3. **Invitation expiry default**: What should the default expiry be? 7 days? 30 days? Configurable per organizer?
 
-4. **Profile data sharing across organizers**: In multi-organizer mode, should the app offer to pre-fill profile data when signing up with a new organizer (copying from a previously saved organizer context), or must the rider enter it fresh each time?
+4. **Profile data pre-fill across organizers**: In multi-organizer mode, should the app offer to pre-fill profile data when signing up with a new organizer (copying from a previously saved local organizer context), or must the rider enter it fresh each time? Note: no data is shared server-side — this would be a client-side convenience only, copying locally stored profile data.
 
 5. **Subscription limit enforcement**: Should invitation generation be blocked when the organizer's subscription rider limit is reached, or should it just warn the organizer?
 
-6. **Pre Sign-Up Lambda ownership**: Should the Pre Sign-Up Lambda be a template provisioned per organizer (as part of subscription setup), or a shared Lambda that validates across organizer pools?
+6. **Pre Sign-Up Lambda provisioning**: The Pre Sign-Up Lambda must be provisioned per organizer (as part of their subscription setup) since all resources are per-organizer. Should it be a standard template deployed per organizer?
 
-7. **Cognito pool provisioning**: How is an organizer's Cognito User Pool created? As part of the subscription provisioning flow in tour-data-api? Via a separate admin tool? This must be automated and not manual.
+7. **Cognito pool provisioning**: How is an organizer's complete infrastructure (Cognito User Pool, DynamoDB tables, API Gateway, Lambda, S3) provisioned? As part of the subscription provisioning flow? Via a separate admin tool? This must be automated and not manual.
 
 8. **Password consistency across organizers**: Should the app encourage riders to use the same password across organizer pools (for convenience), or leave it entirely to the rider? Note: the app cannot enforce password consistency across independent Cognito pools.
 
-9. **Saved organizer context security**: Organizer Cognito pool details (pool ID, client ID) stored locally on the device are not secrets, but should they be stored in secure storage (expo-secure-store) or regular async storage?
+9. **Saved organizer context security**: Organizer context details (pool ID, client ID, API base URL) stored locally on the device are not secrets, but should they be stored in secure storage (expo-secure-store) or regular async storage?
+
+10. **Invitation code discovery without shared infrastructure**: Since all resources are per-organizer, how does the app validate an invitation code entered manually (without a link that includes the organizer's API URL)? Options include: (a) the invitation code format encodes an organizer prefix that maps to an API URL, (b) a platform-level discovery/routing service (minimal shared infrastructure for code-to-URL mapping only), or (c) manual code entry is not supported — only invitation links with embedded organizer context are accepted.
 
 ---
 

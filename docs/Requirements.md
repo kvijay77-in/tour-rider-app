@@ -74,11 +74,11 @@ The app supports two types of users, collectively referred to as **riders**:
 - Riders can view their complete profile after login
 - Riders can edit profile details (except email, which is the primary identifier)
 - Profile changes sync to tour-data-api backend
-- Profile data persists across tours in the RiderProfile table
+- Profile data persists across tours within the organizer's data infrastructure
 
 ## Authentication & Authorization
 
-> **Important**: All AWS resources — including Cognito User Pools — must be part of the tour organizer's subscription. Nothing is shared across organizers. Each organizer has their own Cognito User Pool for their riders, provisioned as part of their subscription setup.
+> **Important**: All AWS resources and data must be part of the tour organizer's subscription. Nothing is shared across organizers at any level. Each organizer has their own Cognito User Pool, DynamoDB tables, S3 buckets, API infrastructure, and Lambda functions — all provisioned as part of their subscription setup. Rider profiles, invitation data, tour data, and check-in data are completely isolated per organizer.
 
 ### Sign-Up Flow
 1. Rider receives an invitation code from a tour organizer
@@ -350,14 +350,15 @@ The tour-data-api may need to be extended to support:
 
 ### Data Storage Rules
 
-> **Principle**: All AWS resources must be part of the organizer's subscription. Nothing is shared across organizers.
+> **Principle**: All AWS resources and data must be part of the organizer's subscription. Nothing is shared across organizers at any level. Each organizer has a completely isolated environment.
 
 - **User authentication**: Managed by AWS Cognito — each tour organizer has their own dedicated Cognito User Pool for riders, provisioned as part of their subscription. Riders in different organizer pools are completely isolated.
-- **Profile data**: Stored in tour-data-api `RiderProfile` table (within organizer scope)
-- **Tour enrollment**: Stored in tour-data-api `TourRider-{tourId}` table
-- **Check-ins**: Stored in tour-data-api `CheckIn-{tourId}` table
-- **Notifications**: Stored in tour-data-api (new table required: `Notification-{tourId}`)
-- **Profile pictures**: Stored in S3 via tour-data-api upload endpoint
+- **Profile data**: Stored in the organizer's `RiderProfile` DynamoDB table (within organizer's data infrastructure)
+- **Tour enrollment**: Stored in the organizer's `TourRider-{tourId}` DynamoDB table
+- **Check-ins**: Stored in the organizer's `CheckIn-{tourId}` DynamoDB table
+- **Notifications**: Stored in the organizer's infrastructure (table: `Notification-{tourId}`)
+- **Profile pictures**: Stored in the organizer's S3 bucket via tour-data-api upload endpoint
+- **Invitations**: Stored in the organizer's `Invitation` DynamoDB table
 
 ## Non-Functional Requirements
 
