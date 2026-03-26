@@ -321,7 +321,7 @@ Features available to all riders, regardless of tour enrollment status:
 
 ## Backend Integration
 
-All rider data must be stored in the tour-data-api backend. This app is a **consumer** of the tour-data-api.
+Each tour organizer has their own dedicated tour-data-api deployment (API Gateway, Lambda, DynamoDB, S3) as part of their subscription. The entire backend ecosystem is subscription-specific — there is no shared or central tour-data-api instance. This app connects to the organizer's own tour-data-api instance, with the API base URL resolved dynamically from the organizer context.
 
 ### API Endpoints Used
 

@@ -316,7 +316,7 @@ All users in an organizer's Cognito User Pool are that organizer's riders. Diffe
 
 ### API Service Layer
 
-All communication with the tour-data-api is through the service layer at `src/services/api/`:
+Each tour organizer has their own dedicated tour-data-api deployment as part of their subscription — there is no shared or central backend. The app communicates with the active organizer's tour-data-api instance through the service layer at `src/services/api/`:
 
 | File | Endpoints | Description |
 |------|-----------|-------------|
@@ -339,7 +339,7 @@ All communication with the tour-data-api is through the service layer at `src/se
 
 ### Data Flow: API → UI
 
-API client fetches data from tour-data-api and the UI components render it directly. There is no local caching layer.
+API client fetches data from the organizer's tour-data-api instance and the UI components render it directly. There is no local caching layer.
 
 ---
 
