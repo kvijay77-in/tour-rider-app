@@ -320,7 +320,7 @@ Since all resources are per-organizer with no sharing, the rider app faces a boo
 
 3. **Platform-level discovery service**: A lightweight, platform-managed service that maps invitation codes to organizer API endpoints. This is a routing concern (not data sharing) — the service stores only the mapping of code prefix → organizer API URL, with no access to organizer data.
 
-> **Design decision**: Option 1 (invitation link with organizer context) is recommended as it requires no shared infrastructure and works naturally with deep links. The invitation code alone is used only as a fallback for manual entry scenarios. See Open Question #10.
+> **Design decision**: Approach (a) — invitation link with organizer context — is recommended as it requires no shared infrastructure and works naturally with deep links. The invitation code alone is used only as a fallback for manual entry scenarios. See Open Question #10 below for the full discussion of discovery approaches.
 
 ### Cognito Configuration Changes
 
