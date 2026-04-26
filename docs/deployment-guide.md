@@ -20,7 +20,26 @@ This guide covers deploying the AWS resources (Cognito User Pool) required by th
 
 ## Overview
 
-The Tour Rider App uses a **dedicated Cognito User Pool** for riders, separate from the tour-mgmt-app (Check-In App) staff pool. This provides:
+The Tour Rider App deployment process varies based on the subscription mode:
+
+**Single Subscription Mode** (recommended for individual tour operators):
+- App is tied to a specific subscription at build time
+- No invitation codes required
+- Dedicated AWS resources per organizer
+- See [Subscription Packaging Guide](subscription-packaging-guide.md) for detailed configuration
+
+**Multi Subscription Mode** (for SaaS platforms):
+- App supports multiple organizers via invitation URLs
+- Dynamic configuration per organizer
+- Requires additional infrastructure for invitation management
+
+This guide primarily covers **AWS resource deployment** (Cognito User Pool). For subscription-specific app builds, see the [Subscription Packaging Guide](subscription-packaging-guide.md).
+
+---
+
+## Subscription Mode Considerations
+
+The Tour Rider App uses a **dedicated Cognito User Pool** for each organizer's riders, separate from the tour-mgmt-app (Check-In App) staff pool. This provides:
 
 - **User isolation** — Riders and staff in separate pools
 - **Independent security controls** — Password policies and MFA tailored for riders
@@ -253,6 +272,7 @@ aws cloudformation delete-stack --stack-name tour-rider-cognito-dev
 ---
 
 For more information, see:
+- [Subscription Packaging Guide](subscription-packaging-guide.md) — Build app for specific subscription
 - [Development Guide](development-guide.md) — Local development setup
 - [Solution Design](SolutionDesign.md) — Architecture and authentication design
 - [Requirements](Requirements.md) — Functional requirements

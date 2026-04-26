@@ -2,7 +2,7 @@
  * Base API client for tour-data-api backend communication.
  *
  * Responsibilities:
- * - Base URL configuration from environment variables
+ * - Base URL configuration (static in single-subscription mode, dynamic in multi-subscription mode)
  * - JWT token injection from Amplify Auth session
  * - Automatic token refresh on 401 responses
  * - Standardised error handling matching backend error format
@@ -14,6 +14,7 @@
 
 import { ApiResponse } from '../../types/api';
 import { logger } from '../../utils/logger';
+import { subscriptionConfig, isSingleSubscriptionMode } from '../../config/subscription.config';
 
 const TAG = 'ApiClient';
 
@@ -21,10 +22,18 @@ const TAG = 'ApiClient';
 // Configuration
 // ---------------------------------------------------------------------------
 
-let _apiBaseUrl = process.env.EXPO_PUBLIC_TOUR_DATA_API_BASE_URL || '';
+/**
+ * Initialize API base URL based on subscription mode.
+ * - Single-subscription mode: use pre-configured API URL from subscription config
+ * - Multi-subscription mode: use environment variable (for dev/test) or set dynamically
+ */
+let _apiBaseUrl = isSingleSubscriptionMode()
+  ? subscriptionConfig.organizer?.apiBaseUrl ?? ''
+  : (process.env.EXPO_PUBLIC_TOUR_DATA_API_BASE_URL || '');
 
 /**
  * Set the API base URL at runtime.
+ * Used in multi-subscription mode after invitation validation.
  */
 export function setApiBaseUrl(url: string): void {
   _apiBaseUrl = url.replace(/\/+$/, '');

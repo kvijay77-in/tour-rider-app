@@ -4,9 +4,12 @@
  * Provides login, sign-up, sign-out, and session state to the entire app.
  * Wires the JWT access token into apiClient for authenticated API calls.
  *
- * This is a DEDICATED Cognito user pool for riders — no group/role checking needed.
+ * Supports two subscription modes:
+ * - Single-subscription mode: Users directly sign up/login without invitation code
+ * - Multi-subscription mode: Users must provide invitation code to identify organizer
  *
  * See docs/SolutionDesign.md § Authentication.
+ * See docs/design-signup-approach.md for multi-organizer support details.
  */
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
@@ -23,6 +26,11 @@ import {
 
 import { setAuthTokenProvider, setAuthInvalidatedCallback } from '../services/api/apiClient';
 import { logger } from '../utils/logger';
+import {
+  subscriptionConfig,
+  isSingleSubscriptionMode,
+  type OrganizerConfig
+} from '../config/subscription.config';
 
 const TAG = 'AuthContext';
 
@@ -44,6 +52,8 @@ export interface AuthUser {
 interface AuthContextValue {
   /** The authenticated rider, or null if not logged in */
   user: AuthUser | null;
+  /** Organizer information (pre-configured in single-subscription mode, or dynamically set in multi mode) */
+  organizer: OrganizerConfig | null;
   /** True while checking for an existing session at startup */
   isLoading: boolean;
   /** True when a login, sign-up, or sign-out operation is in progress */
@@ -70,6 +80,8 @@ interface AuthContextValue {
     code: string,
     newPassword: string,
   ) => Promise<void>;
+  /** Set organizer configuration dynamically (multi-subscription mode) */
+  setOrganizerConfig: (config: OrganizerConfig) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -78,6 +90,7 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue>({
   user: null,
+  organizer: null,
   isLoading: true,
   isAuthenticating: false,
   error: null,
@@ -87,6 +100,7 @@ const AuthContext = createContext<AuthContextValue>({
   logout: async () => {},
   requestPasswordReset: async () => {},
   confirmPasswordReset: async () => {},
+  setOrganizerConfig: () => {},
 });
 
 export function useAuth(): AuthContextValue {
@@ -125,6 +139,10 @@ interface AuthProviderProps {
 
 export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<AuthUser | null>(null);
+  const [organizer, setOrganizer] = useState<OrganizerConfig | null>(
+    // Initialize with pre-configured organizer in single-subscription mode
+    isSingleSubscriptionMode() ? subscriptionConfig.organizer ?? null : null
+  );
   const [isLoading, setIsLoading] = useState(true);
   const [isAuthenticating, setIsAuthenticating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -148,6 +166,16 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setError('Your session has expired. Please sign in again.');
     });
   }, []);
+
+  // Log organizer info at startup
+  useEffect(() => {
+    if (organizer) {
+      logger.info(
+        TAG,
+        `Running with organizer: ${organizer.organizerName} (${organizer.organizerId})`,
+      );
+    }
+  }, [organizer]);
 
   // Check for existing session on mount — validate against Cognito
   useEffect(() => {
@@ -175,6 +203,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
         setIsLoading(false);
       }
     })();
+  }, []);
+
+  const setOrganizerConfig = useCallback((config: OrganizerConfig) => {
+    setOrganizer(config);
+    logger.info(TAG, `Organizer config updated: ${config.organizerName}`);
   }, []);
 
   const login = useCallback(async (email: string, password: string): Promise<void> => {
@@ -302,6 +335,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   const value: AuthContextValue = {
     user,
+    organizer,
     isLoading,
     isAuthenticating,
     error,
@@ -311,6 +345,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     logout,
     requestPasswordReset,
     confirmPasswordReset: handleConfirmPasswordReset,
+    setOrganizerConfig,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -250,7 +250,7 @@ State that can be computed from other state should not be stored separately. Exa
    - App creates Cognito account via `Amplify.Auth.signUp()`
    - Verification code sent to email
    - User verifies email
-   - Profile created in tour-data-api RiderProfile table
+   - Profile created in organizer's RiderProfile table (within organizer's data infrastructure)
 5. On login:
    - User authenticates via `Amplify.Auth.signIn()` → Cognito returns JWT tokens
    - `AuthContext` stores auth state
@@ -267,37 +267,44 @@ State that can be computed from other state should not be stored separately. Exa
 
 ### Cognito Integration
 
-The app uses a **dedicated Cognito User Pool** separate from the tour-mgmt-app (Check-In App). This provides:
-- **User isolation**: Riders and staff are in separate user pools for clear separation of concerns
-- **Independent security controls**: Password policies, MFA settings, and session management can be tailored for riders
-- **Simplified access control**: No need for group-based filtering — all users in this pool are riders
-- **Independent scaling**: Rider sign-ups and staff management don't interfere with each other
+Each tour organizer has their own **dedicated Cognito User Pool** for riders, provisioned as part of their subscription. All AWS resources and data — including Cognito, DynamoDB tables, S3 buckets, API infrastructure, and Lambda functions — must be part of the organizer's subscription. Nothing is shared across organizers at any level. This provides:
+- **Complete resource isolation**: Each organizer's riders are in their own pool, with their own DynamoDB tables, S3 buckets, and API endpoints. No data or resources are shared across organizers at any level.
+- **Subscription-scoped resources**: Cognito costs, user limits, and security settings are per-organizer subscription.
+- **Independent security controls**: Password policies, MFA settings, and session management can be tailored per organizer.
+- **Simplified access control**: No need for group-based filtering — all users in an organizer's pool are that organizer's riders.
 
-Configuration is provided via environment variables:
+Configuration is **dynamic** — resolved at runtime after the rider provides an invitation code or the app loads a saved organizer context:
 
 ```typescript
-// src/config/amplify.ts
-Amplify.configure({
-  Auth: {
-    Cognito: {
-      userPoolId: process.env.EXPO_PUBLIC_AWS_USER_POOL_ID,
-      userPoolClientId: process.env.EXPO_PUBLIC_AWS_USER_POOL_WEB_CLIENT_ID,
-      identityPoolId: process.env.EXPO_PUBLIC_AWS_IDENTITY_POOL_ID,
+// src/config/amplify.ts — dynamic configuration
+// Cognito pool details are resolved per organizer, not from static env vars.
+// On first use: invitation code validation returns pool details.
+// On subsequent use: saved organizer context provides pool details.
+
+const configureAmplifyForOrganizer = (cognitoPoolId: string, cognitoClientId: string) => {
+  Amplify.configure({
+    Auth: {
+      Cognito: {
+        userPoolId: cognitoPoolId,
+        userPoolClientId: cognitoClientId,
+      },
     },
-  },
-});
+  });
+};
 ```
 
-> **Note**: All environment variables must use the `EXPO_PUBLIC_` prefix. This is an Expo requirement — Metro only bundles variables with this prefix.
+> **Note**: Static environment variables (`EXPO_PUBLIC_AWS_USER_POOL_ID`, `EXPO_PUBLIC_AWS_USER_POOL_WEB_CLIENT_ID`, `EXPO_PUBLIC_TOUR_DATA_API_BASE_URL`) are no longer sufficient for production configuration since all details vary per organizer. These env vars may still be used for development/testing with a specific organizer's infrastructure, but the production app must support dynamic configuration.
 
-> **Important**: The Cognito User Pool for this app is **separate** from the one used by tour-mgmt-app. The tour-data-api backend must be configured to accept JWT tokens from both user pools. Coordinate with the backend team to ensure the API Gateway authorizer trusts this app's user pool.
+> **Important**: Each organizer has their own complete infrastructure (Cognito User Pool, DynamoDB tables, API Gateway, Lambda, S3) provisioned as part of their subscription. Nothing is shared across organizers. The tour-data-api API Gateway authorizer for each organizer trusts only that organizer's Cognito pool.
+
+> See [Sign-Up Approach Design](design-signup-approach.md) for the full design including invitation-based sign-up flow and multi-organizer support.
 
 ### User Types Differentiation
 
-All users in this app's Cognito User Pool are riders. Differentiation between General Riders and Registered Riders is determined by tour enrollment status (stored in tour-data-api), not by Cognito groups.
+All users in an organizer's Cognito User Pool are that organizer's riders. Differentiation between General Riders and Registered Riders is determined by tour enrollment status (stored in tour-data-api), not by Cognito groups.
 
-1. **Custom Attributes** (in the dedicated Rider User Pool):
-   - `custom:profileId` attribute: links to RiderProfile table in tour-data-api
+1. **Custom Attributes** (in each organizer's Rider User Pool):
+   - `custom:profileId` attribute: links to the organizer's RiderProfile table
 
 2. **App-Level Differentiation**:
    - **General Rider**: User exists in Cognito but has no active tour enrollment in tour-data-api
@@ -309,7 +316,7 @@ All users in this app's Cognito User Pool are riders. Differentiation between Ge
 
 ### API Service Layer
 
-All communication with the tour-data-api is through the service layer at `src/services/api/`:
+Each tour organizer has their own dedicated tour-data-api deployment as part of their subscription — there is no shared or central backend. The app communicates with the active organizer's tour-data-api instance through the service layer at `src/services/api/`:
 
 | File | Endpoints | Description |
 |------|-----------|-------------|
@@ -323,7 +330,7 @@ All communication with the tour-data-api is through the service layer at `src/se
 
 ### API Client Features
 
-- **Base URL**: Configured from environment variable (`EXPO_PUBLIC_TOUR_DATA_API_BASE_URL`)
+- **Base URL**: Configured dynamically per organizer (from saved organizer context). Static `EXPO_PUBLIC_TOUR_DATA_API_BASE_URL` used for dev/test only.
 - **Authentication**: JWT token injected from Amplify Auth session
 - **Auto-retry**: Exponential backoff for network failures (3 retries)
 - **Token refresh**: Automatic on 401 responses (retry once)
@@ -332,7 +339,7 @@ All communication with the tour-data-api is through the service layer at `src/se
 
 ### Data Flow: API → UI
 
-API client fetches data from tour-data-api and the UI components render it directly. There is no local caching layer.
+API client fetches data from the organizer's tour-data-api instance and the UI components render it directly. There is no local caching layer.
 
 ---
 
