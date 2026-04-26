@@ -80,7 +80,42 @@ The app supports two types of users, collectively referred to as **riders**:
 
 > **Important**: All AWS resources and data must be part of the tour organizer's subscription. Nothing is shared across organizers at any level. Each organizer has their own Cognito User Pool, DynamoDB tables, S3 buckets, API infrastructure, and Lambda functions — all provisioned as part of their subscription setup. Rider profiles, invitation data, tour data, and check-in data are completely isolated per organizer.
 
-### Sign-Up Flow
+### App Packaging Modes
+
+The app supports two packaging modes to accommodate different deployment scenarios:
+
+#### Single Subscription Mode (Default for Individual Operators)
+
+In this mode, the app is tied to a specific organizer's subscription at build time:
+
+**Sign-Up Flow:**
+1. Rider opens the app (no invitation code needed)
+2. Rider directly accesses sign-up screen
+3. Rider provides email, password, and basic profile information
+4. App creates account in the pre-configured organizer's Cognito User Pool
+5. Verification code sent to email
+6. Rider verifies email to activate account
+7. Profile data stored in tour-data-api RiderProfile table (within organizer scope)
+8. Rider can now log in and access the app
+
+**Login Flow:**
+1. Rider enters email and password
+2. App authenticates via AWS Amplify Auth SDK → pre-configured Cognito User Pool
+3. Cognito returns JWT tokens (ID token, Access token, Refresh token)
+4. App stores tokens securely via expo-secure-store
+5. JWT token included in all API requests to the organizer's tour-data-api instance
+6. Rider navigated to appropriate home screen based on tour enrollment status
+
+**Configuration:**
+- Organizer details (Cognito pool, API URL) embedded at build time
+- Set via `EXPO_PUBLIC_SUBSCRIPTION_MODE=single` environment variable
+- See [Subscription Packaging Guide](subscription-packaging-guide.md) for setup
+
+#### Multi Subscription Mode (For SaaS Platforms)
+
+In this mode, the app supports multiple organizers via invitation-based sign-up:
+
+**Sign-Up Flow:**
 1. Rider receives an invitation code from a tour organizer
 2. Rider enters the invitation code in the app
 3. App validates the code via tour-data-api and retrieves the organizer's Cognito pool configuration
@@ -92,15 +127,12 @@ The app supports two types of users, collectively referred to as **riders**:
 9. Profile data stored in tour-data-api RiderProfile table (within organizer scope)
 10. Rider can now log in and access the app
 
-> See [Sign-Up Approach Design](design-signup-approach.md) for detailed design including invitation-based sign-up, bot protection, and multi-organizer support.
+**Configuration:**
+- Set via `EXPO_PUBLIC_SUBSCRIPTION_MODE=multi` environment variable
+- Requires invitation code validation implementation
+- See [Sign-Up Approach Design](design-signup-approach.md) for detailed design
 
-### Login Flow
-1. Rider enters email and password
-2. App authenticates via AWS Amplify Auth SDK → Cognito
-3. Cognito returns JWT tokens (ID token, Access token, Refresh token)
-4. App stores tokens securely via expo-secure-store
-5. JWT token included in all API requests to tour-data-api
-6. Rider navigated to appropriate home screen based on tour enrollment status
+> **Note**: Single subscription mode is the recommended approach for individual tour operators who want a dedicated app for their riders. Multi subscription mode is designed for SaaS platforms that serve multiple organizers with a single app deployment.
 
 ### Password Reset
 - Rider can initiate password reset from login screen
