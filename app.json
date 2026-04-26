@@ -13,13 +13,15 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.tourrider.app"
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
-      }
+      },
+      "package": "com.tourrider.app"
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -32,6 +34,15 @@
           "cameraPermission": "The app accesses your camera to let you take a profile picture."
         }
       ]
-    ]
+    ],
+    "extra": {
+      "_comment": "For single-subscription mode builds, customize these values for the specific organizer:",
+      "organizerBranding": {
+        "appName": "Tour Rider",
+        "appSlug": "tour-rider-app",
+        "iosBundleId": "com.tourrider.app",
+        "androidPackage": "com.tourrider.app"
+      }
+    }
   }
 }
