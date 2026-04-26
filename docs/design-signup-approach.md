@@ -3,8 +3,10 @@
 [← Back to Documentation Index](docs-index.md)
 
 > **Status**: Design Proposal — No development to be taken up  
-> **Related Issue**: Sign Up approach  
-> **Last Updated**: 2026-03-26
+> **Related Issue**: Sign Up approach (#5)  
+> **Last Updated**: 2026-04-26
+
+> **Scope note (per issue #8)**: The app supports two packaging modes — **Single Subscription Mode** (default, app tied to one organizer at build time; see [Subscription Packaging Guide](subscription-packaging-guide.md)) and **Multi Subscription Mode** (SaaS, one app serving many organizers). This document is the detailed design for the **Multi Subscription Mode** sign-up flow, where the rider's organizer is not known until runtime and must be discovered via an invitation. In Single Subscription Mode, the organizer's Cognito pool and tour-data-api endpoint are embedded at build time, so invitation-based discovery is not needed; account creation in that mode is handled per the flow described in [Requirements.md → App Packaging Modes](Requirements.md#app-packaging-modes). The two modes are complementary — both honor the per-organizer isolation principle that nothing is shared across organizer subscriptions at any level.
 
 ## Table of Contents
 

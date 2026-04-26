@@ -12,13 +12,14 @@ This page provides a guide to all project documentation.
 | [Solution Design](SolutionDesign.md) | Architecture, design principles, component structure, technical decisions |
 | [Development Guide](development-guide.md) | Environment setup, running the app, testing, code quality, troubleshooting |
 | [Deployment Guide](deployment-guide.md) | AWS Cognito resource deployment, GitHub Actions workflow, CLI deployment |
+| [Subscription Packaging Guide](subscription-packaging-guide.md) | Configuring and building the app for single subscription mode (default) or multi subscription mode (SaaS) |
 | [Project Structure](project-structure.md) | Project folder organization, file structure, and code organization |
 
 ### Design Proposals
 
 | Document | Description |
 |----------|-------------|
-| [Sign-Up Approach](design-signup-approach.md) | Design proposal for invitation-based sign-up, bot protection, and multi-organizer support |
+| [Sign-Up Approach](design-signup-approach.md) | Design proposal for invitation-based sign-up (multi subscription / SaaS mode), bot protection, and multi-organizer support |
 
 ## Quick Navigation
 
