@@ -83,5 +83,7 @@ google-services.json
 # Android Profiling
 *.hprof
 
-# Temp
-/Temp
+# My exclusions
+temp
+Temp
+*.zip
