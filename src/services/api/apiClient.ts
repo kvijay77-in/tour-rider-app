@@ -43,6 +43,7 @@ export function setApiBaseUrl(url: string): void {
 const DEFAULT_TIMEOUT_MS = 15_000;
 const MAX_RETRIES = 3;
 const INITIAL_RETRY_DELAY_MS = 2_000;
+const DEBUG_GET_REQUESTS_DEFAULT = process.env.EXPO_PUBLIC_API_DEBUG_GET === 'true';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -59,6 +60,13 @@ interface RequestOptions {
   timeoutMs?: number;
   /** Override default max retries */
   maxRetries?: number;
+}
+
+type RequestMethod = 'GET' | 'POST' | 'PUT' | 'DELETE';
+
+interface ApiRequestLoggingControls {
+  enabled?: boolean;
+  debugGetRequests?: boolean;
 }
 
 /** Errors thrown by the API client */
@@ -96,6 +104,9 @@ export const setAuthTokenProvider = (
  */
 let _onAuthInvalidated: (() => void) | null = null;
 
+let _requestLoggingEnabled = true;
+let _debugGetRequests = DEBUG_GET_REQUESTS_DEFAULT;
+
 /**
  * Register a callback for unrecoverable 401 errors.
  */
@@ -103,6 +114,20 @@ export const setAuthInvalidatedCallback = (
   callback: () => void,
 ): void => {
   _onAuthInvalidated = callback;
+};
+
+/**
+ * Override API request debug logging controls at runtime.
+ */
+export const setApiRequestLoggingControls = (
+  controls: ApiRequestLoggingControls,
+): void => {
+  if (typeof controls.enabled === 'boolean') {
+    _requestLoggingEnabled = controls.enabled;
+  }
+  if (typeof controls.debugGetRequests === 'boolean') {
+    _debugGetRequests = controls.debugGetRequests;
+  }
 };
 
 // ---------------------------------------------------------------------------
@@ -148,6 +173,14 @@ function isRetryable(status: number): boolean {
   return status >= 500 || status === 429;
 }
 
+function shouldDebugMethod(method: RequestMethod): boolean {
+  return _requestLoggingEnabled && (method !== 'GET' || _debugGetRequests);
+}
+
+function hasRequestBody(method: RequestMethod): boolean {
+  return method === 'POST' || method === 'PUT';
+}
+
 /**
  * Determine whether an error represents a network connectivity failure.
  */
@@ -175,7 +208,7 @@ async function delay(ms: number): Promise<void> {
 // ---------------------------------------------------------------------------
 
 async function request<T>(
-  method: 'GET' | 'POST' | 'PUT' | 'DELETE',
+  method: RequestMethod,
   path: string,
   body?: unknown,
   options: RequestOptions = {},
@@ -190,8 +223,11 @@ async function request<T>(
 
   const url = buildUrl(path, params);
   const headers = await buildHeaders(extraHeaders);
+  const debugMethod = shouldDebugMethod(method);
 
-  logger.debug(TAG, `${method} ${url}`);
+  if (debugMethod) {
+    logger.debug(TAG, `${method} ${url}`);
+  }
 
   let lastError: unknown;
 
@@ -210,14 +246,16 @@ async function request<T>(
         signal: mergedSignal,
       };
 
-      if (body !== undefined && method !== 'GET') {
+      if (body !== undefined && hasRequestBody(method)) {
         fetchOptions.body = JSON.stringify(body);
       }
 
       const response = await fetch(url, fetchOptions);
       clearTimeout(timeoutId);
 
-      logger.debug(TAG, `Response ${response.status} (attempt ${attempt})`);
+      if (debugMethod) {
+        logger.debug(TAG, `Response ${response.status} (attempt ${attempt + 1})`);
+      }
 
       // Handle 401 — attempt token refresh once
       if (response.status === 401 && attempt === 0) {
@@ -263,7 +301,7 @@ async function request<T>(
     } catch (error) {
       clearTimeout(timeoutId);
 
-      logger.warn(TAG, `Request error (attempt ${attempt})`, error);
+      logger.warn(TAG, `Request error (attempt ${attempt + 1})`, error);
 
       if (signal?.aborted) {
         throw error;
@@ -285,6 +323,9 @@ async function request<T>(
     // Exponential backoff before retry
     if (attempt < maxRetries) {
       const backoffMs = INITIAL_RETRY_DELAY_MS * Math.pow(2, attempt);
+      if (debugMethod) {
+        logger.debug(TAG, `Retry backoff ${backoffMs}ms`);
+      }
       await delay(backoffMs);
     }
   }

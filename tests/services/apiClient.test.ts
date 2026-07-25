@@ -6,10 +6,12 @@ import {
   ApiError,
   isNetworkError,
   setApiBaseUrl,
+  setApiRequestLoggingControls,
   setAuthTokenProvider,
   setAuthInvalidatedCallback,
   apiClient,
 } from '../../src/services/api/apiClient';
+import { logger } from '../../src/utils/logger';
 
 // ---------------------------------------------------------------------------
 // Mock fetch globally
@@ -30,8 +32,10 @@ jest.mock('../../src/utils/logger', () => ({
 
 beforeEach(() => {
   mockFetch.mockReset();
+  jest.clearAllMocks();
   setApiBaseUrl('https://api.example.com');
   setAuthTokenProvider(async () => 'test-jwt-token');
+  setApiRequestLoggingControls({ enabled: true, debugGetRequests: false });
 });
 
 // ---------------------------------------------------------------------------
@@ -213,6 +217,85 @@ describe('apiClient error handling', () => {
     // Clean up
     setAuthTokenProvider(async () => 'test-jwt-token');
     setAuthInvalidatedCallback(() => {});
+  });
+
+  it('times out and throws when request exceeds timeout', async () => {
+    mockFetch.mockImplementation((_url: string, options?: RequestInit) => {
+      return new Promise((_resolve, reject) => {
+        const signal = options?.signal;
+        if (!signal) {
+          return;
+        }
+
+        signal.addEventListener('abort', () => {
+          const abortError = new Error('The operation was aborted');
+          abortError.name = 'AbortError';
+          reject(abortError);
+        });
+      });
+    });
+
+    await expect(
+      apiClient.get('/v1/slow', { timeoutMs: 10, maxRetries: 0 }),
+    ).rejects.toThrow(ApiError);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// apiClient — debug gating and request logging controls
+// ---------------------------------------------------------------------------
+
+describe('apiClient debug logging controls', () => {
+  it('does not emit debug logs for GET by default', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ success: true, timestamp: '2026-01-01T00:00:00Z' }),
+    });
+
+    await apiClient.get('/v1/no-debug');
+
+    expect(logger.debug).not.toHaveBeenCalled();
+  });
+
+  it('emits debug logs for POST by default', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 201,
+      json: async () => ({ success: true, data: { id: 'new' }, timestamp: '2026-01-01T00:00:00Z' }),
+    });
+
+    await apiClient.post('/v1/resource', { name: 'Test' });
+
+    expect(logger.debug).toHaveBeenCalled();
+  });
+
+  it('can enable debug logs for GET requests', async () => {
+    setApiRequestLoggingControls({ debugGetRequests: true });
+
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ success: true, timestamp: '2026-01-01T00:00:00Z' }),
+    });
+
+    await apiClient.get('/v1/debug-get');
+
+    expect(logger.debug).toHaveBeenCalled();
+  });
+
+  it('can disable request debug logs for all methods', async () => {
+    setApiRequestLoggingControls({ enabled: false, debugGetRequests: true });
+
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 201,
+      json: async () => ({ success: true, data: { id: 'new' }, timestamp: '2026-01-01T00:00:00Z' }),
+    });
+
+    await apiClient.post('/v1/resource', { name: 'Test' });
+
+    expect(logger.debug).not.toHaveBeenCalled();
   });
 });
 

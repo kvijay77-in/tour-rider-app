@@ -90,6 +90,28 @@ describe('logger', () => {
     const output: string = logSpy.mock.calls[0][0];
     expect(output).toContain('extra-string');
   });
+
+  it('serializes circular objects safely', () => {
+    const data: { name: string; self?: unknown } = { name: 'loop' };
+    data.self = data;
+
+    logger.info('TestTag', 'circular', data);
+
+    const output: string = logSpy.mock.calls[0][0];
+    expect(output).toContain('"name":"loop"');
+    expect(output).toContain('[Circular]');
+  });
+
+  it('serializes nested errors in structured payloads', () => {
+    const error = new Error('nested failure');
+
+    logger.error('TestTag', 'structured error', { error, retryable: false });
+
+    const output: string = errorSpy.mock.calls[0][0];
+    expect(output).toContain('nested failure');
+    expect(output).toContain('"name":"Error"');
+    expect(output).toContain('"retryable":false');
+  });
 });
 
 describe('LogLevel enum', () => {

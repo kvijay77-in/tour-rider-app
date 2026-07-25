@@ -92,7 +92,8 @@ While the technology stack is identical, there are functional differences:
 │                                                          │
 │  ┌─────────────────────────────────────────────────────┐ │
 │  │              Context Providers                       │ │
-│  │  AuthContext → RiderContext → TourContext           │ │
+│  │  AuthContext (always mounted)                        │ │
+│  │  RiderContext → TourContext (authenticated only)     │ │
 │  │                                                      │ │
 │  │  ┌───────────────────────────────────────────────┐  │ │
 │  │  │            Navigation (React Navigation)       │  │ │
@@ -192,7 +193,7 @@ src/components/
 
 ### Component Guidelines
 
-1. **Functional components only** — use hooks for state and effects
+1. **Functional components only** — use hooks for state and effects. The only approved exception is the root Error Boundary, which must remain a class component unless the app adopts a dedicated boundary library.
 2. **Props over context** where possible — prefer explicit data flow
 3. **Memoize expensive renders** — use `React.memo`, `useMemo`, `useCallback` appropriately
 4. **Separate concerns** — keep styling in `StyleSheet.create()`, logic in hooks/services
@@ -212,13 +213,22 @@ The app uses React Context for global state:
 | **RiderContext** | Rider profile state | Profile data, statistics, preferences |
 | **TourContext** | Tour enrollment state | Active tour, enrollment status, tour details |
 
-**Provider Order** (in `App.tsx`):
+**Provider Order** (in `App.tsx` and navigation subtree):
 ```
-AuthContext
-  → RiderContext (depends on auth for profile loading)
-    → TourContext (depends on rider for enrollment check)
-      → Navigation
+ErrorBoundary
+  → AuthContext
+    → NavigationContainer
+      → RootNavigator
+        → AuthNavigator (unauthenticated)
+        → AppNavigator (authenticated)
+          → RiderContext (depends on auth for profile loading)
+            → TourContext (depends on rider for enrollment check)
+              → MainNavigator
 ```
+
+The app bootstrap flow wraps the full provider and navigation tree in a root `ErrorBoundary`. This prevents a blank screen on unhandled render-time failures and routes boundary diagnostics through the centralized logger.
+
+`RiderContext` and `TourContext` mount only when a user session is active. This keeps authenticated state lifecycle scoped to the authenticated subtree and avoids unnecessary provider work before login.
 
 ### Local State
 
@@ -333,9 +343,12 @@ Each tour organizer has their own dedicated tour-data-api deployment as part of 
 - **Base URL**: Configured dynamically per organizer (from saved organizer context). Static `EXPO_PUBLIC_TOUR_DATA_API_BASE_URL` used for dev/test only.
 - **Authentication**: JWT token injected from Amplify Auth session
 - **Auto-retry**: Exponential backoff for network failures (3 retries)
+- **Timeout protection**: Requests are aborted when timeout elapses (default 15s, overridable per request)
 - **Token refresh**: Automatic on 401 responses (retry once)
 - **Error standardization**: Backend errors mapped to consistent frontend error types
 - **Logging**: Structured, level-gated logging via the app logger (see [Logging](#logging))
+- **Debug gating**: GET request debug logs are disabled by default and can be enabled with `EXPO_PUBLIC_API_DEBUG_GET=true`
+- **Request logging controls**: Runtime controls can override debug logging behavior for targeted troubleshooting without changing request/response contracts
 
 ### Data Flow: API → UI
 
@@ -354,23 +367,24 @@ The app does not support offline mode. All features require an active internet c
 ### Navigation Hierarchy
 
 ```
-AppNavigator
+RootNavigator
 ├── AuthNavigator (unauthenticated)
 │   ├── LoginScreen
 │   ├── SignUpScreen
 │   └── ForgotPasswordScreen
-└── MainNavigator (authenticated)
+└── AppNavigator (authenticated subtree)
+  └── MainNavigator
     └── BottomTabNavigator
-        ├── HomeTab
-        │   ├── HomeScreen (General Rider: Tour List)
-        │   └── TourDashboardScreen (Registered Rider: Active Tour)
-        ├── CheckInTab (Registered Riders only)
-        │   ├── CheckInStatusScreen
-        │   └── CheckInHistoryScreen
-        ├── NotificationsTab (Registered Riders only)
-        │   └── NotificationsScreen
-        └── ProfileTab
-            └── ProfileScreen
+      ├── HomeTab
+      │   ├── HomeScreen (General Rider: Tour List)
+      │   └── TourDashboardScreen (Registered Rider: Active Tour)
+      ├── CheckInTab (Registered Riders only)
+      │   ├── CheckInStatusScreen
+      │   └── CheckInHistoryScreen
+      ├── NotificationsTab (Registered Riders only)
+      │   └── NotificationsScreen
+      └── ProfileTab
+        └── ProfileScreen
 ```
 
 ### Navigation Rules
@@ -428,6 +442,8 @@ Stage-specific colors (for check-in status):
 
 The app uses a centralized, structured logger (`src/utils/logger.ts`) for all diagnostic and operational output. Direct `console.log` / `console.warn` / `console.error` calls must not be used in application code.
 
+The logger is responsible for level gating, consistent message formatting, and safe serialization of structured metadata. Log payloads must never crash logging because of circular references, nested `Error` objects, or non-JSON values.
+
 ### Log Levels
 
 | Level | When to use | Console method |
@@ -444,6 +460,7 @@ import { logger } from '../utils/logger';
 
 logger.info('AuthContext', 'Session found', { username });
 logger.error('RiderApi', 'fetchProfile failed', err);
+logger.error('ErrorBoundary', 'Unhandled application error', { error, componentStack });
 ```
 
 ### Level Configuration

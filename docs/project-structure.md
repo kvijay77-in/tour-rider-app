@@ -30,6 +30,7 @@ tour-rider-app/
 │   │   ├── common/            # Shared components
 │   │   │   ├── Button.tsx
 │   │   │   ├── Card.tsx
+│   │   │   ├── ErrorBoundary.tsx
 │   │   │   ├── LoadingSpinner.tsx
 │   │   │   └── StatusBadge.tsx
 │   │   ├── tour/              # Tour-specific components
@@ -55,7 +56,8 @@ tour-rider-app/
 │   │   ├── useRider.ts        # Rider profile hook
 │   │   └── useTour.ts         # Tour data hook
 │   ├── navigation/             # Navigation configuration
-│   │   ├── AppNavigator.tsx   # Root navigator
+│   │   ├── RootNavigator.tsx  # Root auth/app subtree switch
+│   │   ├── AppNavigator.tsx   # Authenticated app subtree
 │   │   ├── AuthNavigator.tsx  # Authentication flow
 │   │   └── MainNavigator.tsx  # Main app navigation
 │   ├── screens/                # Screen components
@@ -124,6 +126,7 @@ All project documentation following the format defined in tour-mgmt-app and tour
 ### `/src/components`
 Reusable UI components organized by scope:
 - **common/**: Shared components used across multiple screens
+- **ErrorBoundary.tsx** provides the root crash fallback UI for unhandled render errors
 - **tour/**: Tour-specific components
 - **checkin/**: Check-in-specific components
 - **profile/**: Profile-specific components
@@ -162,7 +165,8 @@ Custom React hooks for reusable stateful logic:
 
 ### `/src/navigation`
 React Navigation configuration:
-- **AppNavigator.tsx**: Root navigator, handles auth flow
+- **RootNavigator.tsx**: Root navigator, handles auth flow
+- **AppNavigator.tsx**: Authenticated app subtree with rider/tour providers
 - **AuthNavigator.tsx**: Login, sign-up, password reset
 - **MainNavigator.tsx**: Bottom tab navigation for authenticated users
 

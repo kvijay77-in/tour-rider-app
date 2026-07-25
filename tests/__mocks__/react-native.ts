@@ -7,6 +7,12 @@ export const StyleSheet = {
   create: <T extends Record<string, unknown>>(styles: T): T => styles,
 };
 
+export const View = 'View';
+export const Text = 'Text';
+export const Pressable = 'Pressable';
+export const TouchableOpacity = 'TouchableOpacity';
+export const ActivityIndicator = 'ActivityIndicator';
+
 export const Platform = {
   OS: 'ios' as const,
   select: <T>(specifics: { ios?: T; android?: T; default?: T }): T | undefined =>
@@ -20,6 +26,11 @@ export class NativeEventEmitter {
 
 export default {
   StyleSheet,
+  View,
+  Text,
+  Pressable,
+  TouchableOpacity,
+  ActivityIndicator,
   Platform,
   NativeEventEmitter,
 };

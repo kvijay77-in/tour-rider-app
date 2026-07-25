@@ -43,6 +43,37 @@ function shouldLog(level: LogLevel): boolean {
   return level >= activeLevel;
 }
 
+function serializeError(error: Error): Record<string, unknown> {
+  const details: Record<string, unknown> = {
+    name: error.name,
+    message: error.message,
+  };
+
+  const errorWithMeta = error as Error & {
+    statusCode?: number;
+    errorCode?: string;
+    cause?: unknown;
+  };
+
+  if (error.stack) {
+    details.stack = error.stack;
+  }
+
+  if (errorWithMeta.statusCode !== undefined) {
+    details.statusCode = errorWithMeta.statusCode;
+  }
+
+  if (errorWithMeta.errorCode) {
+    details.errorCode = errorWithMeta.errorCode;
+  }
+
+  if (errorWithMeta.cause !== undefined) {
+    details.cause = errorWithMeta.cause;
+  }
+
+  return details;
+}
+
 /**
  * Format an error for logging — extracts class name, message and relevant properties.
  */
@@ -65,15 +96,74 @@ function formatError(err: unknown): string {
   }
 }
 
+function createJsonReplacer(): (key: string, value: unknown) => unknown {
+  const seen = new WeakSet<object>();
+
+  return (_key: string, value: unknown): unknown => {
+    if (value instanceof Error) {
+      return serializeError(value);
+    }
+
+    if (typeof value === 'bigint') {
+      return `${value}n`;
+    }
+
+    if (typeof value === 'function') {
+      return `[Function ${value.name || 'anonymous'}]`;
+    }
+
+    if (typeof value === 'symbol') {
+      return value.toString();
+    }
+
+    if (typeof value === 'undefined') {
+      return '[undefined]';
+    }
+
+    if (typeof value === 'object' && value !== null) {
+      if (seen.has(value)) {
+        return '[Circular]';
+      }
+
+      seen.add(value);
+    }
+
+    return value;
+  };
+}
+
+function serializeData(data: unknown): string {
+  if (typeof data === 'string') {
+    return data;
+  }
+
+  if (data instanceof Error) {
+    return formatError(data);
+  }
+
+  if (typeof data === 'undefined') {
+    return '[undefined]';
+  }
+
+  try {
+    const serialized = JSON.stringify(data, createJsonReplacer());
+    if (serialized !== undefined) {
+      return serialized;
+    }
+  } catch {
+    // Fall through to a best-effort string conversion.
+  }
+
+  return String(data);
+}
+
 function log(level: LogLevel, tag: string, message: string, data?: unknown): void {
   if (!shouldLog(level)) return;
 
   const prefix = `[${LEVEL_NAMES[level]}] [${tag}]`;
-  const extra = data !== undefined
-    ? (data instanceof Error ? formatError(data) : (typeof data === 'string' ? data : JSON.stringify(data)))
-    : '';
+  const extra = data !== undefined ? serializeData(data) : '';
 
-  const line = extra ? `${prefix} ${message} — ${extra}` : `${prefix} ${message}`;
+  const line = extra ? `${prefix} ${message} - ${extra}` : `${prefix} ${message}`;
 
   switch (level) {
     case LogLevel.ERROR:

@@ -3,8 +3,8 @@
  *
  * Startup sequence:
  * 1. Configure Amplify Auth (dedicated rider Cognito User Pool)
- * 2. Wrap app with context providers (Auth → Rider → Tour)
- * 3. Show AppNavigator which handles auth/main flow
+ * 2. Wrap app with root providers (Auth)
+ * 3. Show RootNavigator which switches auth/app subtrees
  *
  * See docs/SolutionDesign.md § Application Architecture.
  */
@@ -12,27 +12,27 @@
 import React from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
+import { NavigationContainer } from '@react-navigation/native';
 
+import { ErrorBoundary } from './src/components/common/ErrorBoundary';
 import { configureAmplify } from './src/config/amplify';
 import { AuthProvider } from './src/context/AuthContext';
-import { RiderProvider } from './src/context/RiderContext';
-import { TourProvider } from './src/context/TourContext';
-import { AppNavigator } from './src/navigation/AppNavigator';
+import { RootNavigator } from './src/navigation/RootNavigator';
 
 // Configure Amplify Auth on app start
 configureAmplify();
 
 export default function App() {
   return (
-    <SafeAreaProvider>
-      <AuthProvider>
-        <RiderProvider>
-          <TourProvider>
-            <StatusBar style="auto" />
-            <AppNavigator />
-          </TourProvider>
-        </RiderProvider>
-      </AuthProvider>
-    </SafeAreaProvider>
+    <ErrorBoundary>
+      <SafeAreaProvider>
+        <AuthProvider>
+          <StatusBar style="auto" />
+          <NavigationContainer>
+            <RootNavigator />
+          </NavigationContainer>
+        </AuthProvider>
+      </SafeAreaProvider>
+    </ErrorBoundary>
   );
 }
