@@ -22,6 +22,25 @@ export type MainTabParamList = {
 };
 
 /**
+ * Main drawer screens (authenticated).
+ */
+export type MainDrawerParamList = {
+  Home: { successMessage?: string } | undefined;
+  ViewProfile: undefined;
+  TrainingChallenge: undefined;
+  Tour: undefined;
+  ChangePassword: undefined;
+};
+
+/**
+ * Tour stack screens under drawer tour entry.
+ */
+export type TourStackParamList = {
+  TourRides: undefined;
+  RideDetails: { rideId: string };
+};
+
+/**
  * Home stack screens
  */
 export type HomeStackParamList = {
@@ -38,6 +57,15 @@ export type HomeStackParamList = {
 export type CheckInStackParamList = {
   CheckInStatus: undefined;
   CheckInHistory: undefined;
+};
+
+/**
+ * Authenticated app stack screens.
+ */
+export type AppStackParamList = {
+  MainTabs: { successMessage?: string } | undefined;
+  ProfileCreation: undefined;
+  ChangePassword: undefined;
 };
 
 /**

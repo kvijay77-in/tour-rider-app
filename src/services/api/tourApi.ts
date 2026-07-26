@@ -21,6 +21,14 @@ export async function getTours(
 }
 
 /**
+ * Get the active tour for the current organizer context.
+ */
+export async function getActiveTour(): Promise<ApiResponse<Tour>> {
+  logger.debug(TAG, 'Fetching active tour');
+  return apiClient.get<Tour>('/v1/tours/active');
+}
+
+/**
  * Get tour details by tour ID.
  */
 export async function getTourDetails(

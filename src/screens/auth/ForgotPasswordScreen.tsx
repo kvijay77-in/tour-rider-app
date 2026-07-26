@@ -2,8 +2,9 @@
  * Forgot-password screen — two-step (enter email → enter code + new password).
  */
 
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
+  findNodeHandle,
   View,
   Text,
   TextInput,
@@ -31,6 +32,11 @@ type Step = 'requestCode' | 'resetPassword';
 
 export function ForgotPasswordScreen({ navigation }: Props) {
   const { requestPasswordReset, confirmPasswordReset, error, isAuthenticating } = useAuth();
+  const scrollViewRef = useRef<ScrollView>(null);
+  const emailInputRef = useRef<TextInput>(null);
+  const codeInputRef = useRef<TextInput>(null);
+  const newPasswordInputRef = useRef<TextInput>(null);
+  const confirmNewPasswordInputRef = useRef<TextInput>(null);
 
   const [step, setStep] = useState<Step>('requestCode');
   const [validationError, setValidationError] = useState<string | null>(null);
@@ -39,6 +45,20 @@ export function ForgotPasswordScreen({ navigation }: Props) {
   const [code, setCode] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmNewPassword, setConfirmNewPassword] = useState('');
+
+  const scrollInputIntoView = (inputRef: React.RefObject<TextInput | null>) => {
+    const inputNode = findNodeHandle(inputRef.current);
+
+    if (!inputNode || !scrollViewRef.current) {
+      return;
+    }
+
+    scrollViewRef.current.scrollResponderScrollNativeHandleToKeyboard(
+      inputNode,
+      96,
+      true,
+    );
+  };
 
   const handleRequestCode = async () => {
     setValidationError(null);
@@ -87,10 +107,12 @@ export function ForgotPasswordScreen({ navigation }: Props) {
     <SafeAreaView style={styles.safeArea}>
       <KeyboardAvoidingView
         style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
         <ScrollView
+          ref={scrollViewRef}
           contentContainerStyle={styles.container}
+          keyboardDismissMode="on-drag"
           keyboardShouldPersistTaps="handled"
         >
           <Text style={styles.title}>
@@ -112,6 +134,7 @@ export function ForgotPasswordScreen({ navigation }: Props) {
             <View style={styles.form}>
               <Text style={styles.label}>Email</Text>
               <TextInput
+                ref={emailInputRef}
                 style={styles.input}
                 value={email}
                 onChangeText={setEmail}
@@ -123,6 +146,7 @@ export function ForgotPasswordScreen({ navigation }: Props) {
                 textContentType="emailAddress"
                 editable={!isAuthenticating}
                 accessibilityLabel="Email address"
+                onFocus={() => scrollInputIntoView(emailInputRef)}
               />
 
               <Button
@@ -136,6 +160,7 @@ export function ForgotPasswordScreen({ navigation }: Props) {
             <View style={styles.form}>
               <Text style={styles.label}>Verification Code</Text>
               <TextInput
+                ref={codeInputRef}
                 style={styles.input}
                 value={code}
                 onChangeText={setCode}
@@ -145,10 +170,12 @@ export function ForgotPasswordScreen({ navigation }: Props) {
                 autoComplete="one-time-code"
                 editable={!isAuthenticating}
                 accessibilityLabel="Verification code"
+                onFocus={() => scrollInputIntoView(codeInputRef)}
               />
 
               <Text style={styles.label}>New Password</Text>
               <TextInput
+                ref={newPasswordInputRef}
                 style={styles.input}
                 value={newPassword}
                 onChangeText={setNewPassword}
@@ -158,10 +185,12 @@ export function ForgotPasswordScreen({ navigation }: Props) {
                 textContentType="newPassword"
                 editable={!isAuthenticating}
                 accessibilityLabel="New password"
+                onFocus={() => scrollInputIntoView(newPasswordInputRef)}
               />
 
               <Text style={styles.label}>Confirm New Password</Text>
               <TextInput
+                ref={confirmNewPasswordInputRef}
                 style={styles.input}
                 value={confirmNewPassword}
                 onChangeText={setConfirmNewPassword}
@@ -171,6 +200,7 @@ export function ForgotPasswordScreen({ navigation }: Props) {
                 textContentType="newPassword"
                 editable={!isAuthenticating}
                 accessibilityLabel="Confirm new password"
+                onFocus={() => scrollInputIntoView(confirmNewPasswordInputRef)}
               />
 
               <Button

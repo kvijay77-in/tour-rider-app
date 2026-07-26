@@ -33,3 +33,16 @@ export async function getTourRides(
     { params },
   );
 }
+
+/**
+ * Get ride details by ride ID for a specific tour.
+ */
+export async function getRideDetails(
+  tourId: string,
+  rideId: string,
+): Promise<ApiResponse<Ride>> {
+  logger.debug(TAG, `Fetching ride ${rideId} for tour ${tourId}`);
+  return apiClient.get<Ride>(
+    `/v1/tours/${encodeURIComponent(tourId)}/rides/${encodeURIComponent(rideId)}`,
+  );
+}

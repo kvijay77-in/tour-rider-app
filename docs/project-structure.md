@@ -33,6 +33,9 @@ tour-rider-app/
 │   │   │   ├── ErrorBoundary.tsx
 │   │   │   ├── LoadingSpinner.tsx
 │   │   │   └── StatusBadge.tsx
+│   │   ├── home/              # Home screen components
+│   │   │   ├── ProfileSummaryCard.tsx
+│   │   │   └── HomeSectionCard.tsx
 │   │   ├── tour/              # Tour-specific components
 │   │   │   ├── TourCard.tsx
 │   │   │   └── TourInfoBanner.tsx
@@ -59,7 +62,10 @@ tour-rider-app/
 │   │   ├── RootNavigator.tsx  # Root auth/app subtree switch
 │   │   ├── AppNavigator.tsx   # Authenticated app subtree
 │   │   ├── AuthNavigator.tsx  # Authentication flow
-│   │   └── MainNavigator.tsx  # Main app navigation
+│   │   ├── MainDrawerNavigator.tsx # Main drawer navigation
+│   │   ├── TourStackNavigator.tsx  # Tour stack inside drawer
+│   │   ├── DrawerContent.tsx   # Custom drawer content and sign out
+│   │   └── MainNavigator.tsx  # Deferred bottom-tab navigation (unused)
 │   ├── screens/                # Screen components
 │   │   ├── auth/              # Authentication screens
 │   │   │   ├── LoginScreen.tsx
@@ -67,11 +73,15 @@ tour-rider-app/
 │   │   │   └── ForgotPasswordScreen.tsx
 │   │   ├── home/              # Home screens
 │   │   │   └── HomeScreen.tsx
+│   │   ├── training/          # Training challenge screens
+│   │   │   └── TrainingChallengeScreen.tsx
 │   │   ├── tour/              # Tour screens
 │   │   │   ├── TourListScreen.tsx
 │   │   │   ├── TourDetailsScreen.tsx
 │   │   │   ├── TourDashboardScreen.tsx
-│   │   │   └── TourRegistrationScreen.tsx
+│   │   │   ├── TourRegistrationScreen.tsx
+│   │   │   ├── TourScreen.tsx
+│   │   │   └── RideDetailsScreen.tsx
 │   │   ├── checkin/           # Check-in screens
 │   │   │   ├── CheckInStatusScreen.tsx
 │   │   │   └── CheckInHistoryScreen.tsx
@@ -96,6 +106,8 @@ tour-rider-app/
 │   │   ├── ride.ts            # Ride types
 │   │   ├── checkin.ts         # Check-in types
 │   │   ├── notification.ts    # Notification types
+│   │   ├── navigation.ts      # Navigation param list types
+│   │   ├── api.ts             # API envelope/pagination types
 │   │   └── index.ts           # Exports
 │   └── utils/                  # Utility functions
 │       ├── logger.ts          # Logging utility
@@ -106,6 +118,7 @@ tour-rider-app/
 ├── .gitignore                  # Git ignore rules
 ├── App.tsx                     # App entry point
 ├── app.json                    # Expo configuration
+├── babel.config.js             # Babel config (includes reanimated plugin)
 ├── eslint.config.js            # ESLint configuration
 ├── index.ts                    # Metro bundler entry
 ├── package.json                # Dependencies and scripts
@@ -168,7 +181,10 @@ React Navigation configuration:
 - **RootNavigator.tsx**: Root navigator, handles auth flow
 - **AppNavigator.tsx**: Authenticated app subtree with rider/tour providers
 - **AuthNavigator.tsx**: Login, sign-up, password reset
-- **MainNavigator.tsx**: Bottom tab navigation for authenticated users
+- **MainDrawerNavigator.tsx**: Primary authenticated drawer navigation (Home, View Profile, Training Challenge, Tour, Change Password)
+- **TourStackNavigator.tsx**: Nested stack for Tour rides list and ride details
+- **DrawerContent.tsx**: Custom drawer content with explicit Sign Out action
+- **MainNavigator.tsx**: Legacy bottom tabs (deferred and currently unused)
 
 ### `/src/screens`
 Screen-level components, one per screen. Organized by feature area.

@@ -1,3 +1,4 @@
+import 'react-native-gesture-handler';
 // Amplify v6 React Native polyfills — must be imported before any Amplify code
 import 'react-native-get-random-values';
 import 'react-native-url-polyfill/auto';

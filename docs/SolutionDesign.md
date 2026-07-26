@@ -165,6 +165,7 @@ src/screens/
 │   ├── CheckInStatusScreen.tsx   # Daily check-in progress
 │   └── CheckInHistoryScreen.tsx  # Historical check-ins
 ├── profile/
+│   ├── ProfileCreationScreen.tsx # First-time profile completion flow
 │   └── ProfileScreen.tsx         # View/edit rider profile
 └── notifications/
     └── NotificationsScreen.tsx   # Notification center
@@ -210,7 +211,7 @@ The app uses React Context for global state:
 | Context | Purpose | Key State |
 |---------|---------|-----------|
 | **AuthContext** | Authentication state | User info, JWT tokens, login/logout |
-| **RiderContext** | Rider profile state | Profile data, statistics, preferences |
+| **RiderContext** | Rider profile state | Profile data, profile-exists flag, picture upload flow |
 | **TourContext** | Tour enrollment state | Active tour, enrollment status, tour details |
 
 **Provider Order** (in `App.tsx` and navigation subtree):
@@ -236,6 +237,7 @@ Screen-specific and component-specific state uses `useState` and `useReducer` ho
 - TourListScreen: filter state, search query
 - CheckInStatusScreen: selected ride date
 - ProfileScreen: form state, edit mode
+- ProfileCreationScreen: first-time profile form state and upload state
 
 ### Derived State
 
@@ -256,17 +258,23 @@ State that can be computed from other state should not be stored separately. Exa
    - **Sign Up**: Create new rider account
    - **Login**: Authenticate with existing credentials
 4. On sign-up:
-   - User provides email, password, and profile details
+  - User provides email and password only
    - App creates Cognito account via `Amplify.Auth.signUp()`
    - Verification code sent to email
-   - User verifies email
-   - Profile created in organizer's RiderProfile table (within organizer's data infrastructure)
+  - User verifies email
+  - App auto-signs in rider with the same credentials
+  - App links Cognito `sub` to rider profile identity via `POST /v1/riders/link/{cognitoUserName}`
+  - App routes rider to profile creation flow
 5. On login:
    - User authenticates via `Amplify.Auth.signIn()` → Cognito returns JWT tokens
+  - Optional Remember Me pre-fills and stores credentials in `expo-secure-store`
+  - `AuthContext` resolves `profileId` from `GET /v1/riders/link/{cognitoUserName}`
    - `AuthContext` stores auth state
    - `RiderContext` loads rider profile
+  - If profile is missing, profile gate redirects to Profile Creation and blocks main app navigation
    - `TourContext` checks for active tour enrollment
    - Navigation routes user to appropriate home screen
+6. Authenticated users can change password via `Amplify.Auth.updatePassword()` from the Change Password screen
 
 ### Token Management
 
@@ -274,6 +282,7 @@ State that can be computed from other state should not be stored separately. Exa
 - **Token injection**: `apiClient.ts` retrieves the current token from Amplify session and includes it as `Authorization: Bearer <token>` in every API request
 - **401 handling**: If the API returns 401, the API client attempts token refresh and retries once
 - **Secure storage**: Amplify uses `expo-secure-store` for token persistence
+- **Remember Me**: Optional credential persistence in `expo-secure-store` for login convenience
 
 ### Cognito Integration
 
@@ -286,24 +295,20 @@ Each tour organizer has their own **dedicated Cognito User Pool** for riders, pr
 Configuration is **dynamic** — resolved at runtime after the rider provides an invitation code or the app loads a saved organizer context:
 
 ```typescript
-// src/config/amplify.ts — dynamic configuration
-// Cognito pool details are resolved per organizer, not from static env vars.
-// On first use: invitation code validation returns pool details.
-// On subsequent use: saved organizer context provides pool details.
+// src/config/amplify.ts — default single-subscription configuration
+// Cognito pool details are loaded from EXPO_PUBLIC env vars for the organizer-specific build.
 
-const configureAmplifyForOrganizer = (cognitoPoolId: string, cognitoClientId: string) => {
-  Amplify.configure({
-    Auth: {
-      Cognito: {
-        userPoolId: cognitoPoolId,
-        userPoolClientId: cognitoClientId,
-      },
+Amplify.configure({
+  Auth: {
+    Cognito: {
+      userPoolId: process.env.EXPO_PUBLIC_AWS_USER_POOL_ID,
+      userPoolClientId: process.env.EXPO_PUBLIC_AWS_USER_POOL_WEB_CLIENT_ID,
     },
-  });
-};
+  },
+});
 ```
 
-> **Note**: Static environment variables (`EXPO_PUBLIC_AWS_USER_POOL_ID`, `EXPO_PUBLIC_AWS_USER_POOL_WEB_CLIENT_ID`, `EXPO_PUBLIC_TOUR_DATA_API_BASE_URL`) are no longer sufficient for production configuration since all details vary per organizer. These env vars may still be used for development/testing with a specific organizer's infrastructure, but the production app must support dynamic configuration.
+> **Note**: Expo public environment variables are the supported configuration mechanism for the default organizer-specific build (`EXPO_PUBLIC_SUBSCRIPTION_MODE=single`). The optional multi-subscription flow remains a future extension and must be explicitly enabled.
 
 > **Important**: Each organizer has their own complete infrastructure (Cognito User Pool, DynamoDB tables, API Gateway, Lambda, S3) provisioned as part of their subscription. Nothing is shared across organizers. The tour-data-api API Gateway authorizer for each organizer trusts only that organizer's Cognito pool.
 
@@ -313,8 +318,9 @@ const configureAmplifyForOrganizer = (cognitoPoolId: string, cognitoClientId: st
 
 All users in an organizer's Cognito User Pool are that organizer's riders. Differentiation between General Riders and Registered Riders is determined by tour enrollment status (stored in tour-data-api), not by Cognito groups.
 
-1. **Custom Attributes** (in each organizer's Rider User Pool):
-   - `custom:profileId` attribute: links to the organizer's RiderProfile table
+1. **Profile Identity Link**:
+  - Cognito `sub` is mapped to `profileId` using rider link endpoints (`POST/GET /v1/riders/link/{cognitoUserName}`)
+  - App does not rely on Cognito `custom:profileId` for runtime profile resolution
 
 2. **App-Level Differentiation**:
    - **General Rider**: User exists in Cognito but has no active tour enrollment in tour-data-api
@@ -340,7 +346,7 @@ Each tour organizer has their own dedicated tour-data-api deployment as part of 
 
 ### API Client Features
 
-- **Base URL**: Configured dynamically per organizer (from saved organizer context). Static `EXPO_PUBLIC_TOUR_DATA_API_BASE_URL` used for dev/test only.
+- **Base URL**: Configured from Expo public env vars for the default single-organizer build. Future multi-organizer support may replace it dynamically.
 - **Authentication**: JWT token injected from Amplify Auth session
 - **Auto-retry**: Exponential backoff for network failures (3 retries)
 - **Timeout protection**: Requests are aborted when timeout elapses (default 15s, overridable per request)
@@ -373,28 +379,27 @@ RootNavigator
 │   ├── SignUpScreen
 │   └── ForgotPasswordScreen
 └── AppNavigator (authenticated subtree)
-  └── MainNavigator
-    └── BottomTabNavigator
-      ├── HomeTab
-      │   ├── HomeScreen (General Rider: Tour List)
-      │   └── TourDashboardScreen (Registered Rider: Active Tour)
-      ├── CheckInTab (Registered Riders only)
-      │   ├── CheckInStatusScreen
-      │   └── CheckInHistoryScreen
-      ├── NotificationsTab (Registered Riders only)
-      │   └── NotificationsScreen
-      └── ProfileTab
-        └── ProfileScreen
+  └── AuthenticatedStack
+    ├── ProfileCreationScreen (forced when profile is missing)
+    └── MainDrawerNavigator
+      ├── Home → HomeScreen
+      ├── ViewProfile → ProfileScreen
+      ├── TrainingChallenge → TrainingChallengeScreen
+      ├── Tour → TourStackNavigator
+      │   ├── TourRides → TourScreen
+      │   └── RideDetails → RideDetailsScreen
+      ├── ChangePassword → ChangePasswordScreen
+      └── SignOut (drawer action, not a route)
 ```
 
 ### Navigation Rules
 
 - **Unauthenticated users** are restricted to the AuthNavigator
-- **General Riders** (not enrolled in tour) see Home as Tour List
-- **Registered Riders** (enrolled in active tour) see Home as Tour Dashboard
-- **Bottom tabs** dynamically show/hide based on enrollment status:
-  - CheckIn tab only visible if enrolled in active tour
-  - Notifications tab only visible if enrolled in active tour
+- **Profile gate**: authenticated users without a rider profile are restricted to ProfileCreationScreen until profile completion
+- **Home** shows a rider-first dashboard layout (profile summary, quick cards, announcements placeholder)
+- **Tour** menu entry opens a nested stack for active-tour ride list and ride details
+- **Drawer content** provides a dedicated Sign Out action
+- **Legacy bottom tabs** remain in code (`MainNavigator.tsx`) but are deferred and not wired to active navigation
 
 ---
 

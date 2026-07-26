@@ -33,7 +33,8 @@
           "photosPermission": "The app accesses your photos to let you set a profile picture.",
           "cameraPermission": "The app accesses your camera to let you take a profile picture."
         }
-      ]
+      ],
+      "@react-native-community/datetimepicker"
     ],
     "extra": {
       "_comment": "For single-subscription mode builds, customize these values for the specific organizer:",

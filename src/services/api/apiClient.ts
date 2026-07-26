@@ -2,7 +2,7 @@
  * Base API client for tour-data-api backend communication.
  *
  * Responsibilities:
- * - Base URL configuration (static in single-subscription mode, dynamic in multi-subscription mode)
+ * - Base URL configuration (Expo public env config in single-subscription mode, dynamic in future multi-subscription mode)
  * - JWT token injection from Amplify Auth session
  * - Automatic token refresh on 401 responses
  * - Standardised error handling matching backend error format

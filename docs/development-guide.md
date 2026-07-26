@@ -83,6 +83,9 @@ cp .env.example .env
 Edit `.env` and add your AWS and API configuration:
 
 ```
+EXPO_PUBLIC_SUBSCRIPTION_MODE=single
+EXPO_PUBLIC_ORGANIZER_ID=<your-organizer-id>
+EXPO_PUBLIC_ORGANIZER_NAME=<your-organizer-name>
 EXPO_PUBLIC_AWS_USER_POOL_ID=<your-cognito-user-pool-id>
 EXPO_PUBLIC_AWS_USER_POOL_WEB_CLIENT_ID=<your-cognito-client-id>
 EXPO_PUBLIC_AWS_IDENTITY_POOL_ID=<your-cognito-identity-pool-id>

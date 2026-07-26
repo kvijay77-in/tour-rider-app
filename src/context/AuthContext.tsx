@@ -22,9 +22,12 @@ import {
   confirmSignUp,
   resetPassword,
   confirmResetPassword,
+  updatePassword,
 } from 'aws-amplify/auth';
 
 import { setAuthTokenProvider, setAuthInvalidatedCallback } from '../services/api/apiClient';
+import { ApiError } from '../services/api/apiClient';
+import { getLinkedProfileId } from '../services/api/riderApi';
 import { logger } from '../utils/logger';
 import {
   subscriptionConfig,
@@ -45,9 +48,11 @@ export interface AuthUser {
   userId: string;
   /** Email address from Cognito attributes */
   email: string;
-  /** Linked rider profile ID (from custom:profileId attribute, if set) */
+  /** Linked rider profile ID resolved via riders/link endpoint */
   profileId?: string;
 }
+
+type PostLoginRedirect = 'ProfileCreation' | null;
 
 interface AuthContextValue {
   /** The authenticated rider, or null if not logged in */
@@ -61,7 +66,7 @@ interface AuthContextValue {
   /** Error message from the last auth operation */
   error: string | null;
   /** Sign in with email and password */
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<AuthUser>;
   /** Create a new rider account */
   signUp: (
     email: string,
@@ -80,6 +85,16 @@ interface AuthContextValue {
     code: string,
     newPassword: string,
   ) => Promise<void>;
+  /** Change password for currently authenticated user */
+  changePassword: (oldPassword: string, newPassword: string) => Promise<void>;
+  /** Update linked profile ID on the current user state */
+  setLinkedProfileId: (profileId?: string) => void;
+  /** Post-login route used for one-time redirects after auth transitions */
+  postLoginRedirect: PostLoginRedirect;
+  /** Set one-time post-login redirect route */
+  setPostLoginRedirect: (route: PostLoginRedirect) => void;
+  /** Clear one-time post-login redirect route */
+  clearPostLoginRedirect: () => void;
   /** Set organizer configuration dynamically (multi-subscription mode) */
   setOrganizerConfig: (config: OrganizerConfig) => void;
 }
@@ -94,12 +109,19 @@ const AuthContext = createContext<AuthContextValue>({
   isLoading: true,
   isAuthenticating: false,
   error: null,
-  login: async () => {},
+  login: async () => {
+    throw new Error('AuthContext not initialized');
+  },
   signUp: async () => {},
   confirmSignUpCode: async () => {},
   logout: async () => {},
   requestPasswordReset: async () => {},
   confirmPasswordReset: async () => {},
+  changePassword: async () => {},
+  setLinkedProfileId: () => {},
+  postLoginRedirect: null,
+  setPostLoginRedirect: () => {},
+  clearPostLoginRedirect: () => {},
   setOrganizerConfig: () => {},
 });
 
@@ -114,18 +136,34 @@ export function useAuth(): AuthContextValue {
 /**
  * Build an AuthUser from the current Cognito session.
  */
+async function resolveProfileIdForUser(sub: string): Promise<string | undefined> {
+  try {
+    const response = await getLinkedProfileId(sub);
+    return response.data?.profileId;
+  } catch (err) {
+    if (err instanceof ApiError && err.statusCode === 404) {
+      logger.info(TAG, `No linked profile found for Cognito user ${sub}`);
+      return undefined;
+    }
+
+    logger.warn(TAG, `Failed to resolve linked profile for Cognito user ${sub}`, err);
+    return undefined;
+  }
+}
+
 async function buildAuthUser(
   session?: Awaited<ReturnType<typeof fetchAuthSession>>,
 ): Promise<AuthUser> {
   const currentUser = await getCurrentUser();
   const sess = session ?? await fetchAuthSession();
   const payload = sess.tokens?.idToken?.payload;
+  const profileId = await resolveProfileIdForUser(currentUser.userId);
 
   return {
     username: currentUser.username,
     userId: currentUser.userId,
     email: (payload?.['email'] as string) ?? currentUser.username,
-    profileId: (payload?.['custom:profileId'] as string) ?? undefined,
+    profileId,
   };
 }
 
@@ -146,6 +184,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [isAuthenticating, setIsAuthenticating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [postLoginRedirect, setPostLoginRedirect] = useState<PostLoginRedirect>(null);
 
   // Wire the JWT token provider into apiClient so all API calls include auth
   useEffect(() => {
@@ -170,9 +209,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
   // Log organizer info at startup
   useEffect(() => {
     if (organizer) {
+      const organizerLabel = organizer.organizerName ?? organizer.organizerId ?? 'configured organizer';
       logger.info(
         TAG,
-        `Running with organizer: ${organizer.organizerName} (${organizer.organizerId})`,
+        `Running with organizer: ${organizerLabel}`,
       );
     }
   }, [organizer]);
@@ -207,10 +247,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   const setOrganizerConfig = useCallback((config: OrganizerConfig) => {
     setOrganizer(config);
-    logger.info(TAG, `Organizer config updated: ${config.organizerName}`);
+    logger.info(TAG, `Organizer config updated: ${config.organizerName ?? config.organizerId ?? 'configured organizer'}`);
   }, []);
 
-  const login = useCallback(async (email: string, password: string): Promise<void> => {
+  const login = useCallback(async (email: string, password: string): Promise<AuthUser> => {
     setIsAuthenticating(true);
     setError(null);
     try {
@@ -223,12 +263,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
       if (result.isSignedIn) {
         const authUser = await buildAuthUser();
         setUser(authUser);
+        setPostLoginRedirect(null);
         logger.info(TAG, `Login successful for ${email}`);
-        return;
+        return authUser;
       }
 
       // Unexpected step — treat as error
-      setError(`Unexpected authentication step: ${result.nextStep.signInStep}`);
+      const message = `Unexpected authentication step: ${result.nextStep.signInStep}`;
+      setError(message);
+      throw new Error(message);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Login failed. Please try again.';
       logger.error(TAG, 'Login failed', err);
@@ -294,6 +337,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     } finally {
       setUser(null);
       setError(null);
+      setPostLoginRedirect(null);
     }
   }, []);
 
@@ -333,6 +377,42 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
   }, []);
 
+  const changePassword = useCallback(async (
+    oldPassword: string,
+    newPassword: string,
+  ): Promise<void> => {
+    setIsAuthenticating(true);
+    setError(null);
+    try {
+      await updatePassword({ oldPassword, newPassword });
+      logger.info(TAG, 'Password changed successfully');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Password change failed.';
+      logger.error(TAG, 'Password change failed', err);
+      setError(message);
+      throw err;
+    } finally {
+      setIsAuthenticating(false);
+    }
+  }, []);
+
+  const setLinkedProfileId = useCallback((profileId?: string) => {
+    setUser((previousUser) => {
+      if (!previousUser) {
+        return previousUser;
+      }
+
+      return {
+        ...previousUser,
+        profileId,
+      };
+    });
+  }, []);
+
+  const clearPostLoginRedirect = useCallback(() => {
+    setPostLoginRedirect(null);
+  }, []);
+
   const value: AuthContextValue = {
     user,
     organizer,
@@ -345,6 +425,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
     logout,
     requestPasswordReset,
     confirmPasswordReset: handleConfirmPasswordReset,
+    changePassword,
+    setLinkedProfileId,
+    postLoginRedirect,
+    setPostLoginRedirect,
+    clearPostLoginRedirect,
     setOrganizerConfig,
   };
 

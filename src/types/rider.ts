@@ -57,6 +57,7 @@ export interface RiderProfile {
  * Rider profile creation request
  */
 export interface CreateRiderProfileRequest {
+  profileId?: string;
   firstName: string;
   lastName: string;
   email: string;
@@ -67,6 +68,7 @@ export interface CreateRiderProfileRequest {
   emergencyContactName?: string;
   emergencyContactRelationship?: string;
   emergencyContactPhone?: string;
+  photoS3Key?: string;
 }
 
 /**
@@ -82,4 +84,24 @@ export interface UpdateRiderProfileRequest {
   emergencyContactName?: string;
   emergencyContactRelationship?: string;
   emergencyContactPhone?: string;
+  photoS3Key?: string;
+}
+
+/**
+ * Profile picture upload URL response payload.
+ */
+export interface ProfilePictureUploadUrlResponse {
+  uploadUrl: string;
+  photoS3Key: string;
+  contentType: string;
+  expiresIn: number;
+  profileId: string;
+}
+
+/**
+ * Cognito-sub to rider profile link response payload.
+ */
+export interface LinkProfileResponse {
+  profileId: string;
+  cognitoUserName: string;
 }

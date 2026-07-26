@@ -2,8 +2,9 @@
  * Tour registration screen — submit registration request for a tour.
  */
 
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
+  findNodeHandle,
   View,
   Text,
   TextInput,
@@ -37,6 +38,9 @@ export function TourRegistrationScreen({ route, navigation }: {
 }) {
   const { tourId } = route.params;
   const { user } = useAuth();
+  const scrollViewRef = useRef<ScrollView>(null);
+  const medicalConditionsInputRef = useRef<TextInput>(null);
+  const specialRequirementsInputRef = useRef<TextInput>(null);
 
   const [experienceLevel, setExperienceLevel] = useState<ExperienceLevel>('Intermediate');
   const [medicalConditions, setMedicalConditions] = useState('');
@@ -44,6 +48,20 @@ export function TourRegistrationScreen({ route, navigation }: {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+
+  const scrollInputIntoView = (inputRef: React.RefObject<TextInput | null>) => {
+    const inputNode = findNodeHandle(inputRef.current);
+
+    if (!inputNode || !scrollViewRef.current) {
+      return;
+    }
+
+    scrollViewRef.current.scrollResponderScrollNativeHandleToKeyboard(
+      inputNode,
+      96,
+      true,
+    );
+  };
 
   const handleSubmit = async () => {
     if (!user?.profileId) {
@@ -93,10 +111,12 @@ export function TourRegistrationScreen({ route, navigation }: {
     <SafeAreaView style={styles.safeArea}>
       <KeyboardAvoidingView
         style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
         <ScrollView
+          ref={scrollViewRef}
           contentContainerStyle={styles.container}
+          keyboardDismissMode="on-drag"
           keyboardShouldPersistTaps="handled"
         >
           <Text style={styles.title}>Tour Registration</Text>
@@ -137,6 +157,7 @@ export function TourRegistrationScreen({ route, navigation }: {
 
             <Text style={styles.label}>Medical Conditions (optional)</Text>
             <TextInput
+              ref={medicalConditionsInputRef}
               style={[styles.input, styles.textArea]}
               value={medicalConditions}
               onChangeText={setMedicalConditions}
@@ -147,10 +168,12 @@ export function TourRegistrationScreen({ route, navigation }: {
               textAlignVertical="top"
               editable={!isSubmitting}
               accessibilityLabel="Medical conditions"
+              onFocus={() => scrollInputIntoView(medicalConditionsInputRef)}
             />
 
             <Text style={styles.label}>Special Requirements (optional)</Text>
             <TextInput
+              ref={specialRequirementsInputRef}
               style={[styles.input, styles.textArea]}
               value={specialRequirements}
               onChangeText={setSpecialRequirements}
@@ -161,6 +184,7 @@ export function TourRegistrationScreen({ route, navigation }: {
               textAlignVertical="top"
               editable={!isSubmitting}
               accessibilityLabel="Special requirements"
+              onFocus={() => scrollInputIntoView(specialRequirementsInputRef)}
             />
 
             <Button
