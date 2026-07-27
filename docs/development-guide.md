@@ -185,6 +185,8 @@ Use this checklist before and after architecture-focused changes to confirm no b
 - Requests continue to use timeout protection, retry eligible failures, and exponential backoff.
 - A `401` response still attempts one token refresh path before auth invalidation is triggered.
 - Non-retryable API failures continue to surface as `ApiError` instances with backend error details when available.
+- Expected first-time rider `404` responses (missing Cognito link or missing rider profile) are treated as informational states and handled in auth/profile bootstrap flows.
+- Active tour loading must not run until rider profile creation is complete.
 
 ### 1. Create a Feature Branch
 
@@ -279,6 +281,9 @@ Follow the ESLint configuration from tour-mgmt-app for consistent formatting.
 
 **Issue**: Cannot connect to tour-data-api
 - **Solution**: Check `EXPO_PUBLIC_TOUR_DATA_API_BASE_URL` is correct
+
+**Issue**: New rider sees "not found" logs after sign-up verification
+- **Solution**: Confirm app is on latest flow where missing rider link/profile during first-time bootstrap is informational; rider should be directed to Profile Creation before any tour API fetches.
 
 **Issue**: App crashes on startup
 - **Solution**: Check the logs in Expo Go or terminal for error details

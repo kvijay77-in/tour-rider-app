@@ -263,6 +263,7 @@ State that can be computed from other state should not be stored separately. Exa
    - Verification code sent to email
   - User verifies email
   - App auto-signs in rider with the same credentials
+  - During this first sign-in, linked-profile lookup is deferred until after link creation
   - App links Cognito `sub` to rider profile identity via `POST /v1/riders/link/{cognitoUserName}`
   - App routes rider to profile creation flow
 5. On login:
@@ -272,8 +273,14 @@ State that can be computed from other state should not be stored separately. Exa
    - `AuthContext` stores auth state
    - `RiderContext` loads rider profile
   - If profile is missing, profile gate redirects to Profile Creation and blocks main app navigation
-   - `TourContext` checks for active tour enrollment
+  - `TourContext` checks for active tour enrollment only after rider profile exists
    - Navigation routes user to appropriate home screen
+
+### First-Time Rider Not-Found Handling
+
+- `GET /v1/riders/link/{cognitoUserName}` may return `404` for a newly verified rider before link creation.
+- `GET /v1/riders/profile/{profileId}` may return `404` until profile creation is completed.
+- These first-time rider `404` responses are expected states and are handled as informational logs instead of warning/error conditions.
 6. Authenticated users can change password via `Amplify.Auth.updatePassword()` from the Change Password screen
 
 ### Token Management

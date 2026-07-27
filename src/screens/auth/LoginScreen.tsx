@@ -100,7 +100,10 @@ export function LoginScreen({ navigation }: Props) {
     }
 
     try {
-      await login(email.trim(), password);
+      const authenticatedUser = await login(email.trim(), password);
+      if (!authenticatedUser) {
+        return;
+      }
 
       if (rememberMe) {
         // Accepted tradeoff: credentials are persisted in SecureStore for convenience.

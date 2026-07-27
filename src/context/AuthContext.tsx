@@ -52,6 +52,20 @@ export interface AuthUser {
   profileId?: string;
 }
 
+interface LoginOptions {
+  /**
+   * Skip linked-profile lookup during login bootstrap.
+   * Used by sign-up verification flow before link creation is complete.
+   */
+  skipProfileLookup?: boolean;
+}
+
+interface NamedError {
+  name?: string;
+  code?: string;
+  message?: string;
+}
+
 type PostLoginRedirect = 'ProfileCreation' | null;
 
 interface AuthContextValue {
@@ -66,13 +80,13 @@ interface AuthContextValue {
   /** Error message from the last auth operation */
   error: string | null;
   /** Sign in with email and password */
-  login: (email: string, password: string) => Promise<AuthUser>;
+  login: (email: string, password: string, options?: LoginOptions) => Promise<AuthUser | null>;
   /** Create a new rider account */
   signUp: (
     email: string,
     password: string,
     attributes?: Record<string, string>,
-  ) => Promise<void>;
+  ) => Promise<boolean>;
   /** Confirm sign-up with verification code */
   confirmSignUpCode: (email: string, code: string) => Promise<void>;
   /** Sign out and clear session */
@@ -112,7 +126,7 @@ const AuthContext = createContext<AuthContextValue>({
   login: async () => {
     throw new Error('AuthContext not initialized');
   },
-  signUp: async () => {},
+  signUp: async () => false,
   confirmSignUpCode: async () => {},
   logout: async () => {},
   requestPasswordReset: async () => {},
@@ -127,6 +141,21 @@ const AuthContext = createContext<AuthContextValue>({
 
 export function useAuth(): AuthContextValue {
   return useContext(AuthContext);
+}
+
+function isUserAlreadyExistsError(error: unknown): boolean {
+  const maybeError = error as NamedError;
+  return maybeError?.name === 'UsernameExistsException' || maybeError?.code === 'UsernameExistsException';
+}
+
+function isInvalidCredentialsError(error: unknown): boolean {
+  const maybeError = error as NamedError;
+  return maybeError?.name === 'NotAuthorizedException' || maybeError?.code === 'NotAuthorizedException';
+}
+
+function isUserNotFoundError(error: unknown): boolean {
+  const maybeError = error as NamedError;
+  return maybeError?.name === 'UserNotFoundException' || maybeError?.code === 'UserNotFoundException';
 }
 
 // ---------------------------------------------------------------------------
@@ -153,11 +182,14 @@ async function resolveProfileIdForUser(sub: string): Promise<string | undefined>
 
 async function buildAuthUser(
   session?: Awaited<ReturnType<typeof fetchAuthSession>>,
+  options: LoginOptions = {},
 ): Promise<AuthUser> {
   const currentUser = await getCurrentUser();
   const sess = session ?? await fetchAuthSession();
   const payload = sess.tokens?.idToken?.payload;
-  const profileId = await resolveProfileIdForUser(currentUser.userId);
+  const profileId = options.skipProfileLookup
+    ? undefined
+    : await resolveProfileIdForUser(currentUser.userId);
 
   return {
     username: currentUser.username,
@@ -199,7 +231,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
     // Register callback for unrecoverable 401 — forces re-login
     setAuthInvalidatedCallback(() => {
-      logger.warn(TAG, 'Auth invalidated by 401 — forcing logout');
+      logger.info(TAG, 'Auth invalidated by 401 — resetting session to login flow');
       signOut().catch(() => {});
       setUser(null);
       setError('Your session has expired. Please sign in again.');
@@ -224,10 +256,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
         const currentUser = await getCurrentUser();
         logger.info(TAG, `Session found for ${currentUser.username}`);
 
-        // Verify the session is still valid by forcing a token refresh
-        const session = await fetchAuthSession({ forceRefresh: true });
+        // Read the current session; if token is missing, fall back to login flow.
+        const session = await fetchAuthSession();
         if (!session.tokens?.accessToken) {
-          logger.warn(TAG, 'Session invalid — no access token after forceRefresh');
+          logger.info(TAG, 'Session invalid — no access token found, starting fresh login flow');
           await signOut().catch(() => {});
           setUser(null);
         } else {
@@ -250,7 +282,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
     logger.info(TAG, `Organizer config updated: ${config.organizerName ?? config.organizerId ?? 'configured organizer'}`);
   }, []);
 
-  const login = useCallback(async (email: string, password: string): Promise<AuthUser> => {
+  const login = useCallback(async (
+    email: string,
+    password: string,
+    options: LoginOptions = {},
+  ): Promise<AuthUser | null> => {
     setIsAuthenticating(true);
     setError(null);
     try {
@@ -261,19 +297,25 @@ export function AuthProvider({ children }: AuthProviderProps) {
       });
 
       if (result.isSignedIn) {
-        const authUser = await buildAuthUser();
+        const authUser = await buildAuthUser(undefined, options);
         setUser(authUser);
         setPostLoginRedirect(null);
         logger.info(TAG, `Login successful for ${email}`);
         return authUser;
       }
 
-      // Unexpected step — treat as error
+      // Unexpected step — surface to UI without throwing
       const message = `Unexpected authentication step: ${result.nextStep.signInStep}`;
       setError(message);
-      throw new Error(message);
+      return null;
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Login failed. Please try again.';
+
+      if (isInvalidCredentialsError(err) || isUserNotFoundError(err)) {
+        setError(message);
+        return null;
+      }
+
       logger.error(TAG, 'Login failed', err);
       setError(message);
       throw err;
@@ -286,7 +328,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     email: string,
     password: string,
     attributes?: Record<string, string>,
-  ): Promise<void> => {
+  ): Promise<boolean> => {
     setIsAuthenticating(true);
     setError(null);
     try {
@@ -301,8 +343,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
         },
       });
       logger.info(TAG, `Sign-up initiated for ${email}`);
+      return true;
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Sign-up failed. Please try again.';
+
+      if (isUserAlreadyExistsError(err)) {
+        setError(message);
+        return false;
+      }
+
       logger.error(TAG, 'Sign-up failed', err);
       setError(message);
       throw err;

@@ -11,8 +11,10 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 
 import { useAuth } from './AuthContext';
+import { useRider } from './RiderContext';
 import { getTours, getTourDetails, getTourRiderByProfile } from '../services/api/tourApi';
 import { logger } from '../utils/logger';
+import { ApiError } from '../services/api/apiClient';
 import type { Tour, TourRider } from '../types/tour';
 import { TourRiderStatus, TourStatus } from '../types/tour';
 
@@ -74,6 +76,7 @@ interface TourProviderProps {
 
 export function TourProvider({ children }: TourProviderProps) {
   const { user } = useAuth();
+  const { hasProfile, isLoading: isLoadingProfile } = useRider();
   const [activeTour, setActiveTourState] = useState<Tour | null>(null);
   const [enrollment, setEnrollment] = useState<TourRider | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -83,6 +86,15 @@ export function TourProvider({ children }: TourProviderProps) {
   const loadActiveTour = useCallback(async (): Promise<void> => {
     if (!user?.profileId) {
       logger.debug(TAG, 'No authenticated user or profileId — skipping tour load');
+      setActiveTourState(null);
+      setEnrollment(null);
+      return;
+    }
+
+    if (!hasProfile) {
+      logger.info(TAG, 'Rider profile not created yet — skipping active tour load');
+      setActiveTourState(null);
+      setEnrollment(null);
       return;
     }
 
@@ -125,13 +137,20 @@ export function TourProvider({ children }: TourProviderProps) {
       setActiveTourState(null);
       setEnrollment(null);
     } catch (err) {
+      if (err instanceof ApiError && err.statusCode === 404) {
+        logger.info(TAG, 'No active tour data found for current rider profile');
+        setActiveTourState(null);
+        setEnrollment(null);
+        return;
+      }
+
       logger.error(TAG, 'Error loading active tour', err);
       setActiveTourState(null);
       setEnrollment(null);
     } finally {
       setIsLoading(false);
     }
-  }, [user?.profileId]);
+  }, [hasProfile, user?.profileId]);
 
   const setActiveTour = useCallback((tour: Tour | null, tourEnrollment: TourRider | null): void => {
     setActiveTourState(tour);
@@ -145,13 +164,17 @@ export function TourProvider({ children }: TourProviderProps) {
 
   // Load active tour when user authenticates
   useEffect(() => {
-    if (user?.profileId) {
+    if (isLoadingProfile) {
+      return;
+    }
+
+    if (user?.profileId && hasProfile) {
       loadActiveTour();
     } else {
       setActiveTourState(null);
       setEnrollment(null);
     }
-  }, [user?.profileId, loadActiveTour]);
+  }, [hasProfile, isLoadingProfile, user?.profileId, loadActiveTour]);
 
   const value: TourContextValue = {
     activeTour,

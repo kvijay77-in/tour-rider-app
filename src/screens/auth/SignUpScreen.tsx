@@ -100,7 +100,11 @@ export function SignUpScreen({ navigation }: Props) {
     if (!validateRegistration()) return;
 
     try {
-      await signUp(email.trim(), password);
+      const wasSignedUp = await signUp(email.trim(), password);
+      if (!wasSignedUp) {
+        return;
+      }
+
       setStep('verification');
       logger.info(TAG, 'Sign-up initiated — verification code sent');
     } catch {
@@ -119,7 +123,13 @@ export function SignUpScreen({ navigation }: Props) {
       const normalizedEmail = email.trim();
       await confirmSignUpCode(normalizedEmail, verificationCode.trim());
 
-      const authUser = await login(normalizedEmail, password);
+      const authUser = await login(normalizedEmail, password, {
+        skipProfileLookup: true,
+      });
+      if (!authUser) {
+        return;
+      }
+
       const linkResponse = await linkCognitoUser(authUser.userId);
       const linkedProfileId = linkResponse.data?.profileId;
 

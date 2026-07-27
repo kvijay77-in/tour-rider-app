@@ -203,6 +203,20 @@ async function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function logRequestError(attempt: number, error: unknown): void {
+  if (error instanceof ApiError && !isRetryable(error.statusCode)) {
+    if (error.statusCode === 404) {
+      logger.info(TAG, `Request not found (attempt ${attempt})`, error);
+      return;
+    }
+
+    logger.info(TAG, `Request failed without retry (attempt ${attempt})`, error);
+    return;
+  }
+
+  logger.warn(TAG, `Request error (attempt ${attempt})`, error);
+}
+
 // ---------------------------------------------------------------------------
 // Core request function with retry
 // ---------------------------------------------------------------------------
@@ -301,7 +315,7 @@ async function request<T>(
     } catch (error) {
       clearTimeout(timeoutId);
 
-      logger.warn(TAG, `Request error (attempt ${attempt + 1})`, error);
+      logRequestError(attempt + 1, error);
 
       if (signal?.aborted) {
         throw error;
