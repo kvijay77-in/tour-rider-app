@@ -17,7 +17,7 @@ export interface ProfileSummaryCardProps {
 
 function ProfileSummaryCardInner({ profile, onPress }: ProfileSummaryCardProps) {
   const displayName = profile
-    ? `${profile.firstName} ${profile.lastName}`.trim()
+    ? profile.name
     : 'Profile not available';
 
   return (

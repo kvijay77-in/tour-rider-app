@@ -203,20 +203,6 @@ async function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function logRequestError(attempt: number, error: unknown): void {
-  if (error instanceof ApiError && !isRetryable(error.statusCode)) {
-    if (error.statusCode === 404) {
-      logger.info(TAG, `Request not found (attempt ${attempt})`, error);
-      return;
-    }
-
-    logger.info(TAG, `Request failed without retry (attempt ${attempt})`, error);
-    return;
-  }
-
-  logger.warn(TAG, `Request error (attempt ${attempt})`, error);
-}
-
 // ---------------------------------------------------------------------------
 // Core request function with retry
 // ---------------------------------------------------------------------------
@@ -238,6 +224,16 @@ async function request<T>(
   const url = buildUrl(path, params);
   const headers = await buildHeaders(extraHeaders);
   const debugMethod = shouldDebugMethod(method);
+
+  if (debugMethod) {
+    logger.debug(TAG, `Request init ${method}`, {
+      path,
+      params,
+      hasAuthHeader: Boolean(headers.Authorization),
+      timeoutMs,
+      maxRetries,
+    });
+  }
 
   if (debugMethod) {
     logger.debug(TAG, `${method} ${url}`);
@@ -264,11 +260,22 @@ async function request<T>(
         fetchOptions.body = JSON.stringify(body);
       }
 
+      if (debugMethod) {
+        logger.debug(TAG, `Request attempt ${attempt + 1}/${maxRetries + 1}`, {
+          method,
+          path,
+        });
+      }
+
       const response = await fetch(url, fetchOptions);
       clearTimeout(timeoutId);
 
       if (debugMethod) {
-        logger.debug(TAG, `Response ${response.status} (attempt ${attempt + 1})`);
+        logger.debug(TAG, `Response ${response.status} (attempt ${attempt + 1})`, {
+          method,
+          path,
+          ok: response.ok,
+        });
       }
 
       // Handle 401 — attempt token refresh once
@@ -315,7 +322,14 @@ async function request<T>(
     } catch (error) {
       clearTimeout(timeoutId);
 
-      logRequestError(attempt + 1, error);
+      if (debugMethod) {
+        logger.debug(TAG, `Request error (attempt ${attempt + 1})`, {
+          method,
+          path,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+      logger.warn(TAG, `Request error (attempt ${attempt + 1})`, error);
 
       if (signal?.aborted) {
         throw error;
@@ -338,7 +352,11 @@ async function request<T>(
     if (attempt < maxRetries) {
       const backoffMs = INITIAL_RETRY_DELAY_MS * Math.pow(2, attempt);
       if (debugMethod) {
-        logger.debug(TAG, `Retry backoff ${backoffMs}ms`);
+        logger.debug(TAG, `Retry backoff ${backoffMs}ms`, {
+          method,
+          path,
+          nextAttempt: attempt + 2,
+        });
       }
       await delay(backoffMs);
     }

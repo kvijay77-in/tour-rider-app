@@ -27,12 +27,24 @@ import { createRiderProfile, linkCognitoUser } from '../../services/api/riderApi
 import { isNotEmpty, isValidPhone } from '../../utils/validation';
 import { logger } from '../../utils/logger';
 import type { AppStackParamList } from '../../types/navigation';
+import type { RiderAddress } from '../../types/rider';
 
 const TAG = 'ProfileCreationScreen';
 
 type Props = NativeStackScreenProps<AppStackParamList, 'ProfileCreation'>;
 
 type GenderOption = 'Male' | 'Female' | 'Other' | 'Prefer not to say';
+
+type FormErrors = Partial<Record<
+  | 'name'
+  | 'phone'
+  | 'dateOfBirth'
+  | 'gender'
+  | 'emergencyContactName'
+  | 'emergencyContactRelationship'
+  | 'emergencyContactPhone',
+  string
+>>;
 
 const GENDER_OPTIONS: GenderOption[] = ['Male', 'Female', 'Other', 'Prefer not to say'];
 
@@ -48,14 +60,49 @@ function formatDateForApi(date: Date): string {
   return date.toISOString().split('T')[0] ?? '';
 }
 
+function buildAddressPayload(
+  line1: string,
+  line2: string,
+  city: string,
+  state: string,
+  postalCode: string,
+): RiderAddress | undefined {
+  const normalizedLine1 = line1.trim();
+  const normalizedLine2 = line2.trim();
+  const normalizedCity = city.trim();
+  const normalizedState = state.trim();
+  const normalizedPostalCode = postalCode.trim();
+
+  if (
+    !normalizedLine1
+    && !normalizedLine2
+    && !normalizedCity
+    && !normalizedState
+    && !normalizedPostalCode
+  ) {
+    return undefined;
+  }
+
+  return {
+    ...(normalizedLine1 ? { 'Line 1': normalizedLine1 } : {}),
+    ...(normalizedLine2 ? { 'Line 2': normalizedLine2 } : {}),
+    ...(normalizedCity ? { City: normalizedCity } : {}),
+    ...(normalizedState ? { State: normalizedState } : {}),
+    ...(normalizedPostalCode ? { 'Postal Code': normalizedPostalCode } : {}),
+  };
+}
+
 export function ProfileCreationScreen({ navigation }: Props) {
-  const { user, setLinkedProfileId } = useAuth();
+  const { user, setLinkedProfileId, logout, isAuthenticating } = useAuth();
   const { uploadProfilePicture, refreshProfile } = useRider();
 
-  const [firstName, setFirstName] = useState('');
-  const [lastName, setLastName] = useState('');
+  const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
-  const [address, setAddress] = useState('');
+  const [addressLine1, setAddressLine1] = useState('');
+  const [addressLine2, setAddressLine2] = useState('');
+  const [city, setCity] = useState('');
+  const [state, setState] = useState('');
+  const [postalCode, setPostalCode] = useState('');
   const [emergencyContactName, setEmergencyContactName] = useState('');
   const [emergencyContactRelationship, setEmergencyContactRelationship] = useState('');
   const [emergencyContactPhone, setEmergencyContactPhone] = useState('');
@@ -65,7 +112,8 @@ export function ProfileCreationScreen({ navigation }: Props) {
   const [selectedPhotoUri, setSelectedPhotoUri] = useState<string | null>(null);
   const [selectedPhotoMimeType, setSelectedPhotoMimeType] = useState<string | undefined>(undefined);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [formErrors, setFormErrors] = useState<FormErrors>({});
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const email = user?.email ?? '';
 
@@ -83,6 +131,7 @@ export function ProfileCreationScreen({ navigation }: Props) {
 
     if (event.type === 'set' && selectedDate) {
       setDateOfBirth(selectedDate);
+      setFormErrors((prev) => ({ ...prev, dateOfBirth: undefined }));
     }
   };
 
@@ -95,7 +144,7 @@ export function ProfileCreationScreen({ navigation }: Props) {
       }
 
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: ['images'],
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.85,
@@ -125,49 +174,50 @@ export function ProfileCreationScreen({ navigation }: Props) {
   };
 
   const validate = (): boolean => {
-    if (!isNotEmpty(firstName) || !isNotEmpty(lastName)) {
-      setError('First name and last name are required.');
-      return false;
+    const nextErrors: FormErrors = {};
+
+    if (!isNotEmpty(name)) {
+      nextErrors.name = 'Name is required.';
     }
 
     if (!isValidPhone(phone)) {
-      setError('Please enter a valid phone number.');
-      return false;
+      nextErrors.phone = 'Please enter a valid phone number.';
     }
 
     if (!dateOfBirth) {
-      setError('Date of birth is required.');
-      return false;
+      nextErrors.dateOfBirth = 'Date of birth is required.';
     }
 
     if (!gender) {
-      setError('Gender is required.');
-      return false;
+      nextErrors.gender = 'Gender is required.';
     }
 
-    if (!isNotEmpty(emergencyContactName) || !isNotEmpty(emergencyContactRelationship)) {
-      setError('Emergency contact name and relationship are required.');
-      return false;
+    if (!isNotEmpty(emergencyContactName)) {
+      nextErrors.emergencyContactName = 'Emergency contact name is required.';
+    }
+
+    if (!isNotEmpty(emergencyContactRelationship)) {
+      nextErrors.emergencyContactRelationship = 'Emergency relationship is required.';
     }
 
     if (!isValidPhone(emergencyContactPhone)) {
-      setError('Please enter a valid emergency contact phone number.');
-      return false;
+      nextErrors.emergencyContactPhone = 'Please enter a valid emergency contact phone number.';
     }
 
-    if (!email) {
-      setError('Authenticated user email is unavailable. Please sign in again.');
-      return false;
-    }
-
-    return true;
+    setFormErrors(nextErrors);
+    return Object.keys(nextErrors).length === 0;
   };
 
   const handleSubmit = async () => {
-    setError(null);
+    setSubmitError(null);
 
     if (!user) {
-      setError('No authenticated user found. Please sign in again.');
+      setSubmitError('No authenticated user found. Please sign in again.');
+      return;
+    }
+
+    if (!email) {
+      setSubmitError('Authenticated user email is unavailable. Please sign in again.');
       return;
     }
 
@@ -194,16 +244,17 @@ export function ProfileCreationScreen({ navigation }: Props) {
 
       await createRiderProfile({
         profileId,
-        firstName: firstName.trim(),
-        lastName: lastName.trim(),
+        name: name.trim(),
         email,
         phone: phone.trim(),
         dateOfBirth: formatDateForApi(dateOfBirth as Date),
         gender: gender ?? undefined,
-        address: address.trim() || undefined,
-        emergencyContactName: emergencyContactName.trim(),
-        emergencyContactRelationship: emergencyContactRelationship.trim(),
-        emergencyContactPhone: emergencyContactPhone.trim(),
+        address: buildAddressPayload(addressLine1, addressLine2, city, state, postalCode),
+        emergencyContact: {
+          name: emergencyContactName.trim(),
+          relation: emergencyContactRelationship.trim(),
+          phone: emergencyContactPhone.trim(),
+        },
       });
 
       if (selectedPhotoUri) {
@@ -219,12 +270,40 @@ export function ProfileCreationScreen({ navigation }: Props) {
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to create profile';
       logger.error(TAG, 'Profile creation failed', err);
-      setError(message);
+      setSubmitError(message);
       Alert.alert('Profile creation failed', message);
     } finally {
       setIsSubmitting(false);
     }
   };
+
+  const handleLogout = () => {
+    Alert.alert(
+      'Sign out',
+      'Are you sure you want to sign out? Your unsaved profile details will be lost.',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Sign Out',
+          style: 'destructive',
+          onPress: () => {
+            logout().catch((err) => {
+              logger.error(TAG, 'Error logging out from profile creation screen', err);
+              Alert.alert('Sign out failed', 'Unable to sign out right now. Please try again.');
+            });
+          },
+        },
+      ],
+    );
+  };
+
+  const inputStyle = (fieldError?: string) => ([
+    styles.input,
+    fieldError ? styles.inputError : null,
+  ]);
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -232,33 +311,27 @@ export function ProfileCreationScreen({ navigation }: Props) {
         <Text style={styles.title}>Create Your Profile</Text>
         <Text style={styles.subtitle}>Complete your rider profile to continue using the app.</Text>
 
-        {error ? (
+        {submitError ? (
           <View style={styles.errorContainer}>
-            <Text style={styles.errorText}>{error}</Text>
+            <Text style={styles.errorText}>{submitError}</Text>
           </View>
         ) : null}
 
-        <Text style={styles.label}>First Name</Text>
+        <Text style={styles.label}>Name *</Text>
         <TextInput
-          style={styles.input}
-          value={firstName}
-          onChangeText={setFirstName}
+          style={inputStyle(formErrors.name)}
+          value={name}
+          onChangeText={(value) => {
+            setName(value);
+            setFormErrors((prev) => ({ ...prev, name: undefined }));
+          }}
           editable={!isSubmitting}
-          placeholder="First name"
+          placeholder="Full name"
           placeholderTextColor={COLORS.textDisabled}
         />
+        {formErrors.name ? <Text style={styles.fieldErrorText}>{formErrors.name}</Text> : null}
 
-        <Text style={styles.label}>Last Name</Text>
-        <TextInput
-          style={styles.input}
-          value={lastName}
-          onChangeText={setLastName}
-          editable={!isSubmitting}
-          placeholder="Last name"
-          placeholderTextColor={COLORS.textDisabled}
-        />
-
-        <Text style={styles.label}>Email</Text>
+        <Text style={styles.label}>Email *</Text>
         <TextInput
           style={[styles.input, styles.readOnlyInput]}
           value={email}
@@ -266,26 +339,42 @@ export function ProfileCreationScreen({ navigation }: Props) {
           placeholderTextColor={COLORS.textDisabled}
         />
 
-        <Text style={styles.label}>Phone</Text>
+        <Text style={styles.label}>Personal Code</Text>
         <TextInput
-          style={styles.input}
+          style={[styles.input, styles.readOnlyInput]}
+          value="Assigned by tour organizer"
+          editable={false}
+          placeholderTextColor={COLORS.textDisabled}
+        />
+
+        <Text style={styles.label}>Phone *</Text>
+        <TextInput
+          style={inputStyle(formErrors.phone)}
           value={phone}
-          onChangeText={setPhone}
+          onChangeText={(value) => {
+            setPhone(value);
+            setFormErrors((prev) => ({ ...prev, phone: undefined }));
+          }}
           editable={!isSubmitting}
           placeholder="Phone number"
           keyboardType="phone-pad"
           placeholderTextColor={COLORS.textDisabled}
         />
+        {formErrors.phone ? <Text style={styles.fieldErrorText}>{formErrors.phone}</Text> : null}
 
-        <Text style={styles.label}>Date of Birth</Text>
+        <Text style={styles.label}>Date of Birth *</Text>
         <TouchableOpacity
-          style={styles.inputButton}
+          style={[
+            styles.inputButton,
+            formErrors.dateOfBirth ? styles.inputError : null,
+          ]}
           onPress={() => setShowDatePicker(true)}
           disabled={isSubmitting}
           accessibilityRole="button"
         >
           <Text style={dateOfBirth ? styles.inputButtonText : styles.placeholderText}>{dateLabel}</Text>
         </TouchableOpacity>
+        {formErrors.dateOfBirth ? <Text style={styles.fieldErrorText}>{formErrors.dateOfBirth}</Text> : null}
 
         {showDatePicker ? (
           <DateTimePicker
@@ -297,15 +386,22 @@ export function ProfileCreationScreen({ navigation }: Props) {
           />
         ) : null}
 
-        <Text style={styles.label}>Gender</Text>
+        <Text style={styles.label}>Gender *</Text>
         <View style={styles.genderRow}>
           {GENDER_OPTIONS.map((option) => {
             const selected = gender === option;
             return (
               <TouchableOpacity
                 key={option}
-                style={[styles.genderChip, selected ? styles.genderChipSelected : null]}
-                onPress={() => setGender(option)}
+                style={[
+                  styles.genderChip,
+                  selected ? styles.genderChipSelected : null,
+                  formErrors.gender ? styles.inputError : null,
+                ]}
+                onPress={() => {
+                  setGender(option);
+                  setFormErrors((prev) => ({ ...prev, gender: undefined }));
+                }}
                 disabled={isSubmitting}
               >
                 <Text style={[styles.genderChipText, selected ? styles.genderChipTextSelected : null]}>{option}</Text>
@@ -313,47 +409,96 @@ export function ProfileCreationScreen({ navigation }: Props) {
             );
           })}
         </View>
+        {formErrors.gender ? <Text style={styles.fieldErrorText}>{formErrors.gender}</Text> : null}
 
         <Text style={styles.label}>Address (Optional)</Text>
         <TextInput
           style={styles.input}
-          value={address}
-          onChangeText={setAddress}
+          value={addressLine1}
+          onChangeText={setAddressLine1}
           editable={!isSubmitting}
-          placeholder="Address"
+          placeholder="Line 1"
+          placeholderTextColor={COLORS.textDisabled}
+        />
+        <TextInput
+          style={styles.input}
+          value={addressLine2}
+          onChangeText={setAddressLine2}
+          editable={!isSubmitting}
+          placeholder="Line 2"
+          placeholderTextColor={COLORS.textDisabled}
+        />
+        <TextInput
+          style={styles.input}
+          value={city}
+          onChangeText={setCity}
+          editable={!isSubmitting}
+          placeholder="City"
+          placeholderTextColor={COLORS.textDisabled}
+        />
+        <TextInput
+          style={styles.input}
+          value={state}
+          onChangeText={setState}
+          editable={!isSubmitting}
+          placeholder="State"
+          placeholderTextColor={COLORS.textDisabled}
+        />
+        <TextInput
+          style={styles.input}
+          value={postalCode}
+          onChangeText={setPostalCode}
+          editable={!isSubmitting}
+          placeholder="Postal code"
           placeholderTextColor={COLORS.textDisabled}
         />
 
-        <Text style={styles.label}>Emergency Contact Name</Text>
+        <Text style={styles.label}>Emergency Contact Name *</Text>
         <TextInput
-          style={styles.input}
+          style={inputStyle(formErrors.emergencyContactName)}
           value={emergencyContactName}
-          onChangeText={setEmergencyContactName}
+          onChangeText={(value) => {
+            setEmergencyContactName(value);
+            setFormErrors((prev) => ({ ...prev, emergencyContactName: undefined }));
+          }}
           editable={!isSubmitting}
           placeholder="Emergency contact name"
           placeholderTextColor={COLORS.textDisabled}
         />
+        {formErrors.emergencyContactName ? <Text style={styles.fieldErrorText}>{formErrors.emergencyContactName}</Text> : null}
 
-        <Text style={styles.label}>Emergency Contact Relationship</Text>
+        <Text style={styles.label}>Emergency Contact Relationship *</Text>
         <TextInput
-          style={styles.input}
+          style={inputStyle(formErrors.emergencyContactRelationship)}
           value={emergencyContactRelationship}
-          onChangeText={setEmergencyContactRelationship}
+          onChangeText={(value) => {
+            setEmergencyContactRelationship(value);
+            setFormErrors((prev) => ({ ...prev, emergencyContactRelationship: undefined }));
+          }}
           editable={!isSubmitting}
           placeholder="Relationship"
           placeholderTextColor={COLORS.textDisabled}
         />
+        {formErrors.emergencyContactRelationship ? (
+          <Text style={styles.fieldErrorText}>{formErrors.emergencyContactRelationship}</Text>
+        ) : null}
 
-        <Text style={styles.label}>Emergency Contact Phone</Text>
+        <Text style={styles.label}>Emergency Contact Phone *</Text>
         <TextInput
-          style={styles.input}
+          style={inputStyle(formErrors.emergencyContactPhone)}
           value={emergencyContactPhone}
-          onChangeText={setEmergencyContactPhone}
+          onChangeText={(value) => {
+            setEmergencyContactPhone(value);
+            setFormErrors((prev) => ({ ...prev, emergencyContactPhone: undefined }));
+          }}
           editable={!isSubmitting}
           placeholder="Emergency contact phone"
           keyboardType="phone-pad"
           placeholderTextColor={COLORS.textDisabled}
         />
+        {formErrors.emergencyContactPhone ? (
+          <Text style={styles.fieldErrorText}>{formErrors.emergencyContactPhone}</Text>
+        ) : null}
 
         <Text style={styles.label}>Profile Picture (Optional)</Text>
         <View style={styles.photoSection}>
@@ -378,6 +523,16 @@ export function ProfileCreationScreen({ navigation }: Props) {
             onPress={handleSubmit}
             loading={isSubmitting}
             disabled={isSubmitting}
+          />
+        </View>
+
+        <View style={styles.logoutContainer}>
+          <Button
+            title="Sign Out"
+            onPress={handleLogout}
+            variant="danger"
+            loading={isAuthenticating}
+            disabled={isSubmitting || isAuthenticating}
           />
         </View>
       </ScrollView>
@@ -429,7 +584,15 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     fontSize: 16,
     color: COLORS.textPrimary,
-    marginBottom: 14,
+    marginBottom: 8,
+  },
+  inputError: {
+    borderColor: COLORS.danger,
+  },
+  fieldErrorText: {
+    color: COLORS.danger,
+    fontSize: 12,
+    marginBottom: 10,
   },
   readOnlyInput: {
     backgroundColor: COLORS.gray[100],
@@ -442,7 +605,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 12,
-    marginBottom: 14,
+    marginBottom: 8,
   },
   inputButtonText: {
     fontSize: 16,
@@ -456,7 +619,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
-    marginBottom: 14,
+    marginBottom: 8,
   },
   genderChip: {
     borderWidth: 1,
@@ -507,6 +670,9 @@ const styles = StyleSheet.create({
   },
   submitContainer: {
     marginTop: 8,
+    marginBottom: 12,
+  },
+  logoutContainer: {
     marginBottom: 24,
   },
 });

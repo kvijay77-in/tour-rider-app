@@ -152,7 +152,7 @@ export function RiderProvider({ children }: RiderProviderProps) {
   ): Promise<void> => {
     if (!user?.profileId) {
       const msg = 'Cannot upload profile picture — no profileId available';
-      logger.warn(TAG, msg);
+      logger.error(TAG, msg);
       setError(msg);
       throw new Error(msg);
     }
@@ -166,7 +166,7 @@ export function RiderProvider({ children }: RiderProviderProps) {
 
       if (!uploadUrlResponse.success || !uploadData) {
         const msg = uploadUrlResponse.error?.message ?? 'Failed to request upload URL';
-        logger.warn(TAG, msg);
+        logger.error(TAG, msg);
         setError(msg);
         throw new Error(msg);
       }
@@ -195,7 +195,7 @@ export function RiderProvider({ children }: RiderProviderProps) {
         logger.info(TAG, `Profile picture uploaded for ${user.profileId}`);
       } else {
         const msg = profileUpdateResponse.error?.message ?? 'Failed to save profile picture';
-        logger.warn(TAG, msg);
+        logger.error(TAG, msg);
         setError(msg);
         throw new Error(msg);
       }

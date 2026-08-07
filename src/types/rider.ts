@@ -6,18 +6,32 @@
 /**
  * Rider profile information (from RiderProfile table in tour-data-api)
  */
+export interface RiderAddress {
+  'Line 1'?: string;
+  'Line 2'?: string;
+  City?: string;
+  State?: string;
+  'Postal Code'?: string;
+}
+
+export interface RiderEmergencyContact {
+  name: string;
+  phone: string;
+  relation: string;
+}
+
 export interface RiderProfile {
   /** Unique profile identifier (UUID) */
   profileId: string;
 
-  /** First name */
-  firstName: string;
-
-  /** Last name */
-  lastName: string;
+  /** Rider full name */
+  name: string;
 
   /** Contact email (primary identifier, same as Cognito email) */
   email: string;
+
+  /** Personal code assigned by organizers (read-only for riders) */
+  personalCode?: string;
 
   /** Contact phone number */
   phone?: string;
@@ -28,17 +42,11 @@ export interface RiderProfile {
   /** Gender */
   gender?: 'Male' | 'Female' | 'Other' | 'Prefer not to say';
 
-  /** Address (optional) */
-  address?: string;
+  /** Address object (DynamoDB map) */
+  address?: RiderAddress;
 
-  /** Emergency contact name */
-  emergencyContactName?: string;
-
-  /** Emergency contact relationship */
-  emergencyContactRelationship?: string;
-
-  /** Emergency contact phone */
-  emergencyContactPhone?: string;
+  /** Emergency contact object (DynamoDB map) */
+  emergencyContact?: RiderEmergencyContact;
 
   /** S3 object key for profile picture */
   photoS3Key?: string;
@@ -58,16 +66,13 @@ export interface RiderProfile {
  */
 export interface CreateRiderProfileRequest {
   profileId?: string;
-  firstName: string;
-  lastName: string;
+  name: string;
   email: string;
-  phone?: string;
+  phone: string;
+  emergencyContact: RiderEmergencyContact;
   dateOfBirth?: string;
-  gender?: string;
-  address?: string;
-  emergencyContactName?: string;
-  emergencyContactRelationship?: string;
-  emergencyContactPhone?: string;
+  gender?: RiderProfile['gender'];
+  address?: RiderAddress;
   photoS3Key?: string;
 }
 
@@ -75,15 +80,13 @@ export interface CreateRiderProfileRequest {
  * Rider profile update request
  */
 export interface UpdateRiderProfileRequest {
-  firstName?: string;
-  lastName?: string;
+  name?: string;
+  email?: string;
   phone?: string;
   dateOfBirth?: string;
-  gender?: string;
-  address?: string;
-  emergencyContactName?: string;
-  emergencyContactRelationship?: string;
-  emergencyContactPhone?: string;
+  gender?: RiderProfile['gender'];
+  address?: RiderAddress;
+  emergencyContact?: RiderEmergencyContact;
   photoS3Key?: string;
 }
 

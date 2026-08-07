@@ -15,6 +15,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import {
   signIn,
+  confirmSignIn,
   signUp,
   signOut,
   fetchAuthSession,
@@ -60,6 +61,11 @@ interface LoginOptions {
   skipProfileLookup?: boolean;
 }
 
+interface PendingAuthChallenge {
+  step: 'CONFIRM_SIGN_IN_WITH_NEW_PASSWORD_REQUIRED';
+  email: string;
+}
+
 interface NamedError {
   name?: string;
   code?: string;
@@ -81,6 +87,12 @@ interface AuthContextValue {
   error: string | null;
   /** Sign in with email and password */
   login: (email: string, password: string, options?: LoginOptions) => Promise<AuthUser | null>;
+  /** Cognito challenge state for auth steps that require user input */
+  pendingAuthChallenge: PendingAuthChallenge | null;
+  /** Complete Cognito NEW_PASSWORD_REQUIRED challenge */
+  completeNewPasswordChallenge: (newPassword: string, options?: LoginOptions) => Promise<AuthUser | null>;
+  /** Cancel and clear pending sign-in challenge state */
+  cancelPendingAuthChallenge: () => Promise<void>;
   /** Create a new rider account */
   signUp: (
     email: string,
@@ -126,6 +138,11 @@ const AuthContext = createContext<AuthContextValue>({
   login: async () => {
     throw new Error('AuthContext not initialized');
   },
+  pendingAuthChallenge: null,
+  completeNewPasswordChallenge: async () => {
+    throw new Error('AuthContext not initialized');
+  },
+  cancelPendingAuthChallenge: async () => {},
   signUp: async () => false,
   confirmSignUpCode: async () => {},
   logout: async () => {},
@@ -216,6 +233,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [isAuthenticating, setIsAuthenticating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pendingAuthChallenge, setPendingAuthChallenge] = useState<PendingAuthChallenge | null>(null);
   const [postLoginRedirect, setPostLoginRedirect] = useState<PostLoginRedirect>(null);
 
   // Wire the JWT token provider into apiClient so all API calls include auth
@@ -299,9 +317,20 @@ export function AuthProvider({ children }: AuthProviderProps) {
       if (result.isSignedIn) {
         const authUser = await buildAuthUser(undefined, options);
         setUser(authUser);
+        setPendingAuthChallenge(null);
         setPostLoginRedirect(null);
         logger.info(TAG, `Login successful for ${email}`);
         return authUser;
+      }
+
+      if (result.nextStep.signInStep === 'CONFIRM_SIGN_IN_WITH_NEW_PASSWORD_REQUIRED') {
+        setPendingAuthChallenge({
+          step: 'CONFIRM_SIGN_IN_WITH_NEW_PASSWORD_REQUIRED',
+          email: email.trim(),
+        });
+        setError(null);
+        logger.info(TAG, `Password change required for ${email}`);
+        return null;
       }
 
       // Unexpected step — surface to UI without throwing
@@ -321,6 +350,57 @@ export function AuthProvider({ children }: AuthProviderProps) {
       throw err;
     } finally {
       setIsAuthenticating(false);
+    }
+  }, []);
+
+  const completeNewPasswordChallenge = useCallback(async (
+    newPassword: string,
+    options: LoginOptions = {},
+  ): Promise<AuthUser | null> => {
+    setIsAuthenticating(true);
+    setError(null);
+
+    if (!pendingAuthChallenge || pendingAuthChallenge.step !== 'CONFIRM_SIGN_IN_WITH_NEW_PASSWORD_REQUIRED') {
+      setIsAuthenticating(false);
+      setError('Password change session has expired. Please sign in again.');
+      return null;
+    }
+
+    try {
+      const result = await confirmSignIn({ challengeResponse: newPassword });
+
+      if (!result.isSignedIn) {
+        const message = `Unexpected authentication step: ${result.nextStep.signInStep}`;
+        setError(message);
+        return null;
+      }
+
+      const authUser = await buildAuthUser(undefined, options);
+      setUser(authUser);
+      setPendingAuthChallenge(null);
+      setPostLoginRedirect(null);
+      logger.info(TAG, `Password challenge completed for ${pendingAuthChallenge.email}`);
+      return authUser;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Password change failed. Please try again.';
+      setError(message);
+      logger.error(TAG, 'Password challenge completion failed', err);
+      return null;
+    } finally {
+      setIsAuthenticating(false);
+    }
+  }, [pendingAuthChallenge]);
+
+  const cancelPendingAuthChallenge = useCallback(async (): Promise<void> => {
+    try {
+      await signOut();
+    } catch {
+      logger.warn(TAG, 'Challenge cancel sign-out failed — clearing local state');
+    } finally {
+      setUser(null);
+      setError(null);
+      setPostLoginRedirect(null);
+      setPendingAuthChallenge(null);
     }
   }, []);
 
@@ -387,6 +467,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setUser(null);
       setError(null);
       setPostLoginRedirect(null);
+      setPendingAuthChallenge(null);
     }
   }, []);
 
@@ -469,6 +550,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
     isAuthenticating,
     error,
     login,
+    pendingAuthChallenge,
+    completeNewPasswordChallenge,
+    cancelPendingAuthChallenge,
     signUp: handleSignUp,
     confirmSignUpCode,
     logout,

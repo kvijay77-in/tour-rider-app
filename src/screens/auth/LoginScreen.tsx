@@ -4,6 +4,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import {
+  Alert,
   findNodeHandle,
   View,
   Text,
@@ -33,10 +34,17 @@ const REMEMBERED_CREDENTIALS_KEY = 'auth.rememberedCredentials';
 type Props = NativeStackScreenProps<AuthStackParamList, 'Login'>;
 
 export function LoginScreen({ navigation }: Props) {
-  const { login, error, isAuthenticating } = useAuth();
+  const {
+    login,
+    error,
+    isAuthenticating,
+    pendingAuthChallenge,
+    cancelPendingAuthChallenge,
+  } = useAuth();
   const scrollViewRef = useRef<ScrollView>(null);
   const emailInputRef = useRef<TextInput>(null);
   const passwordInputRef = useRef<TextInput>(null);
+  const challengeAlertShownRef = useRef(false);
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -72,6 +80,49 @@ export function LoginScreen({ navigation }: Props) {
       isMounted = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (!pendingAuthChallenge || challengeAlertShownRef.current) {
+      if (!pendingAuthChallenge) {
+        challengeAlertShownRef.current = false;
+      }
+      return;
+    }
+
+    challengeAlertShownRef.current = true;
+    Alert.alert(
+      'Password Change Required',
+      'Password change has been enforced. Change password to login.',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+          onPress: () => {
+            void (async () => {
+              await cancelPendingAuthChallenge();
+              setEmail('');
+              setPassword('');
+              setRememberMe(false);
+              setValidationError(null);
+              navigation.reset({
+                index: 0,
+                routes: [{ name: 'Login' }],
+              });
+            })();
+          },
+        },
+        {
+          text: 'OK',
+          onPress: () => {
+            navigation.navigate('EnforcedPasswordChange', {
+              email: pendingAuthChallenge.email,
+            });
+          },
+        },
+      ],
+      { cancelable: false },
+    );
+  }, [pendingAuthChallenge, cancelPendingAuthChallenge, navigation]);
 
   const scrollInputIntoView = (inputRef: React.RefObject<TextInput | null>) => {
     const inputNode = findNodeHandle(inputRef.current);

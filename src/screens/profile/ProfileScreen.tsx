@@ -27,10 +27,22 @@ import { useRider } from '../../hooks/useRider';
 import { formatDate } from '../../utils/dateFormatter';
 import { isNotEmpty, isValidPhone } from '../../utils/validation';
 import { logger } from '../../utils/logger';
+import type { RiderAddress } from '../../types/rider';
 
 const TAG = 'ProfileScreen';
 
 type GenderOption = 'Male' | 'Female' | 'Other' | 'Prefer not to say';
+
+type FormErrors = Partial<Record<
+  | 'name'
+  | 'phone'
+  | 'dateOfBirth'
+  | 'gender'
+  | 'emergencyContactName'
+  | 'emergencyContactRelationship'
+  | 'emergencyContactPhone',
+  string
+>>;
 
 const GENDER_OPTIONS: GenderOption[] = ['Male', 'Female', 'Other', 'Prefer not to say'];
 
@@ -51,6 +63,58 @@ function toDate(value?: string): Date | null {
   return date;
 }
 
+function buildAddressPayload(
+  line1: string,
+  line2: string,
+  city: string,
+  state: string,
+  postalCode: string,
+): RiderAddress | undefined {
+  const normalizedLine1 = line1.trim();
+  const normalizedLine2 = line2.trim();
+  const normalizedCity = city.trim();
+  const normalizedState = state.trim();
+  const normalizedPostalCode = postalCode.trim();
+
+  if (
+    !normalizedLine1
+    && !normalizedLine2
+    && !normalizedCity
+    && !normalizedState
+    && !normalizedPostalCode
+  ) {
+    return undefined;
+  }
+
+  return {
+    ...(normalizedLine1 ? { 'Line 1': normalizedLine1 } : {}),
+    ...(normalizedLine2 ? { 'Line 2': normalizedLine2 } : {}),
+    ...(normalizedCity ? { City: normalizedCity } : {}),
+    ...(normalizedState ? { State: normalizedState } : {}),
+    ...(normalizedPostalCode ? { 'Postal Code': normalizedPostalCode } : {}),
+  };
+}
+
+function formatAddress(address?: RiderAddress): string {
+  if (!address) {
+    return '—';
+  }
+
+  const segments = [
+    address['Line 1'],
+    address['Line 2'],
+    address.City,
+    address.State,
+    address['Postal Code'],
+  ].filter((segment): segment is string => Boolean(segment && segment.trim()));
+
+  if (!segments.length) {
+    return '—';
+  }
+
+  return segments.join(', ');
+}
+
 export function ProfileScreen() {
   const { logout, isAuthenticating } = useAuth();
   const {
@@ -66,10 +130,13 @@ export function ProfileScreen() {
   const [isSaving, setIsSaving] = useState(false);
   const [successMessageVisible, setSuccessMessageVisible] = useState(false);
 
-  const [firstName, setFirstName] = useState('');
-  const [lastName, setLastName] = useState('');
+  const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
-  const [address, setAddress] = useState('');
+  const [addressLine1, setAddressLine1] = useState('');
+  const [addressLine2, setAddressLine2] = useState('');
+  const [city, setCity] = useState('');
+  const [state, setState] = useState('');
+  const [postalCode, setPostalCode] = useState('');
   const [emergencyContactName, setEmergencyContactName] = useState('');
   const [emergencyContactRelationship, setEmergencyContactRelationship] = useState('');
   const [emergencyContactPhone, setEmergencyContactPhone] = useState('');
@@ -78,6 +145,7 @@ export function ProfileScreen() {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [selectedPhotoUri, setSelectedPhotoUri] = useState<string | null>(null);
   const [selectedPhotoMimeType, setSelectedPhotoMimeType] = useState<string | undefined>(undefined);
+  const [formErrors, setFormErrors] = useState<FormErrors>({});
 
   useEffect(() => {
     if (!successMessageVisible) {
@@ -92,17 +160,21 @@ export function ProfileScreen() {
   }, [successMessageVisible]);
 
   const syncEditorStateFromProfile = useCallback(() => {
-    setFirstName(profile?.firstName ?? '');
-    setLastName(profile?.lastName ?? '');
+    setName(profile?.name ?? '');
     setPhone(profile?.phone ?? '');
-    setAddress(profile?.address ?? '');
-    setEmergencyContactName(profile?.emergencyContactName ?? '');
-    setEmergencyContactRelationship(profile?.emergencyContactRelationship ?? '');
-    setEmergencyContactPhone(profile?.emergencyContactPhone ?? '');
+    setAddressLine1(profile?.address?.['Line 1'] ?? '');
+    setAddressLine2(profile?.address?.['Line 2'] ?? '');
+    setCity(profile?.address?.City ?? '');
+    setState(profile?.address?.State ?? '');
+    setPostalCode(profile?.address?.['Postal Code'] ?? '');
+    setEmergencyContactName(profile?.emergencyContact?.name ?? '');
+    setEmergencyContactRelationship(profile?.emergencyContact?.relation ?? '');
+    setEmergencyContactPhone(profile?.emergencyContact?.phone ?? '');
     setGender((profile?.gender as GenderOption) ?? null);
     setDateOfBirth(toDate(profile?.dateOfBirth));
     setSelectedPhotoUri(null);
     setSelectedPhotoMimeType(undefined);
+    setFormErrors({});
   }, [profile]);
 
   const onChangeDate = (event: DateTimePickerEvent, selectedDate?: Date) => {
@@ -112,6 +184,7 @@ export function ProfileScreen() {
 
     if (event.type === 'set' && selectedDate) {
       setDateOfBirth(selectedDate);
+      setFormErrors((prev) => ({ ...prev, dateOfBirth: undefined }));
     }
   };
 
@@ -124,7 +197,7 @@ export function ProfileScreen() {
       }
 
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: ['images'],
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.85,
@@ -164,40 +237,40 @@ export function ProfileScreen() {
   }, [syncEditorStateFromProfile]);
 
   const validateEdit = useCallback((): boolean => {
-    if (!isNotEmpty(firstName) || !isNotEmpty(lastName)) {
-      Alert.alert('Validation error', 'First name and last name are required.');
-      return false;
+    const nextErrors: FormErrors = {};
+
+    if (!isNotEmpty(name)) {
+      nextErrors.name = 'Name is required.';
     }
 
     if (!isValidPhone(phone)) {
-      Alert.alert('Validation error', 'Please enter a valid phone number.');
-      return false;
+      nextErrors.phone = 'Please enter a valid phone number.';
     }
 
     if (dateOfBirth === null) {
-      Alert.alert('Validation error', 'Date of birth is required.');
-      return false;
+      nextErrors.dateOfBirth = 'Date of birth is required.';
     }
 
     if (!gender) {
-      Alert.alert('Validation error', 'Gender is required.');
-      return false;
+      nextErrors.gender = 'Gender is required.';
     }
 
-    if (!isNotEmpty(emergencyContactName) || !isNotEmpty(emergencyContactRelationship)) {
-      Alert.alert('Validation error', 'Emergency contact name and relationship are required.');
-      return false;
+    if (!isNotEmpty(emergencyContactName)) {
+      nextErrors.emergencyContactName = 'Emergency contact name is required.';
+    }
+
+    if (!isNotEmpty(emergencyContactRelationship)) {
+      nextErrors.emergencyContactRelationship = 'Emergency relationship is required.';
     }
 
     if (!isValidPhone(emergencyContactPhone)) {
-      Alert.alert('Validation error', 'Please enter a valid emergency contact phone number.');
-      return false;
+      nextErrors.emergencyContactPhone = 'Please enter a valid emergency contact phone number.';
     }
 
-    return true;
+    setFormErrors(nextErrors);
+    return Object.keys(nextErrors).length === 0;
   }, [
-    firstName,
-    lastName,
+    name,
     phone,
     dateOfBirth,
     gender,
@@ -214,15 +287,16 @@ export function ProfileScreen() {
     setIsSaving(true);
     try {
       await updateProfile({
-        firstName: firstName.trim(),
-        lastName: lastName.trim(),
+        name: name.trim(),
         phone: phone.trim(),
         dateOfBirth: dateOfBirth ? formatDateForApi(dateOfBirth) : undefined,
         gender: gender ?? undefined,
-        address: address.trim() || undefined,
-        emergencyContactName: emergencyContactName.trim(),
-        emergencyContactRelationship: emergencyContactRelationship.trim(),
-        emergencyContactPhone: emergencyContactPhone.trim(),
+        address: buildAddressPayload(addressLine1, addressLine2, city, state, postalCode),
+        emergencyContact: {
+          name: emergencyContactName.trim(),
+          relation: emergencyContactRelationship.trim(),
+          phone: emergencyContactPhone.trim(),
+        },
       });
 
       if (selectedPhotoUri) {
@@ -239,12 +313,15 @@ export function ProfileScreen() {
       setIsSaving(false);
     }
   }, [
-    firstName,
-    lastName,
+    name,
     phone,
     dateOfBirth,
     gender,
-    address,
+    addressLine1,
+    addressLine2,
+    city,
+    state,
+    postalCode,
     emergencyContactName,
     emergencyContactRelationship,
     emergencyContactPhone,
@@ -267,6 +344,13 @@ export function ProfileScreen() {
   const displayPhotoUrl = useMemo(() => {
     return selectedPhotoUri ?? profile?.photoUrl;
   }, [selectedPhotoUri, profile?.photoUrl]);
+
+  const formattedAddress = useMemo(() => formatAddress(profile?.address), [profile?.address]);
+
+  const inputStyle = (fieldError?: string) => ([
+    styles.input,
+    fieldError ? styles.inputError : null,
+  ]);
 
   if (isLoading && !profile) {
     return (
@@ -295,7 +379,7 @@ export function ProfileScreen() {
 
           {profile ? (
             <>
-              <Text style={styles.name}>{profile.firstName} {profile.lastName}</Text>
+              <Text style={styles.name}>{profile.name}</Text>
               <Text style={styles.email}>{profile.email}</Text>
             </>
           ) : null}
@@ -314,27 +398,47 @@ export function ProfileScreen() {
           </View>
         ) : isEditing ? (
           <View style={styles.form}>
-            <Text style={styles.label}>First Name</Text>
-            <TextInput style={styles.input} value={firstName} onChangeText={setFirstName} editable={!isSaving} />
+            <Text style={styles.label}>Name *</Text>
+            <TextInput
+              style={inputStyle(formErrors.name)}
+              value={name}
+              onChangeText={(value) => {
+                setName(value);
+                setFormErrors((prev) => ({ ...prev, name: undefined }));
+              }}
+              editable={!isSaving}
+            />
+            {formErrors.name ? <Text style={styles.fieldErrorText}>{formErrors.name}</Text> : null}
 
-            <Text style={styles.label}>Last Name</Text>
-            <TextInput style={styles.input} value={lastName} onChangeText={setLastName} editable={!isSaving} />
-
-            <Text style={styles.label}>Email</Text>
+            <Text style={styles.label}>Email *</Text>
             <TextInput style={[styles.input, styles.readOnlyInput]} value={profile.email} editable={false} />
 
-            <Text style={styles.label}>Phone</Text>
+            <Text style={styles.label}>Personal Code</Text>
             <TextInput
-              style={styles.input}
+              style={[styles.input, styles.readOnlyInput]}
+              value={profile.personalCode ?? 'Assigned by tour organizer'}
+              editable={false}
+            />
+
+            <Text style={styles.label}>Phone *</Text>
+            <TextInput
+              style={inputStyle(formErrors.phone)}
               value={phone}
-              onChangeText={setPhone}
+              onChangeText={(value) => {
+                setPhone(value);
+                setFormErrors((prev) => ({ ...prev, phone: undefined }));
+              }}
               keyboardType="phone-pad"
               editable={!isSaving}
             />
+            {formErrors.phone ? <Text style={styles.fieldErrorText}>{formErrors.phone}</Text> : null}
 
-            <Text style={styles.label}>Date of Birth</Text>
+            <Text style={styles.label}>Date of Birth *</Text>
             <TouchableOpacity
-              style={styles.inputButton}
+              style={[
+                styles.inputButton,
+                formErrors.dateOfBirth ? styles.inputError : null,
+              ]}
               onPress={() => setShowDatePicker(true)}
               disabled={isSaving}
             >
@@ -342,6 +446,7 @@ export function ProfileScreen() {
                 {dateOfBirth ? formatDate(dateOfBirth.toISOString()) : 'Select date of birth'}
               </Text>
             </TouchableOpacity>
+            {formErrors.dateOfBirth ? <Text style={styles.fieldErrorText}>{formErrors.dateOfBirth}</Text> : null}
 
             {showDatePicker ? (
               <DateTimePicker
@@ -353,15 +458,22 @@ export function ProfileScreen() {
               />
             ) : null}
 
-            <Text style={styles.label}>Gender</Text>
+            <Text style={styles.label}>Gender *</Text>
             <View style={styles.genderRow}>
               {GENDER_OPTIONS.map((option) => {
                 const selected = gender === option;
                 return (
                   <TouchableOpacity
                     key={option}
-                    style={[styles.genderChip, selected ? styles.genderChipSelected : null]}
-                    onPress={() => setGender(option)}
+                    style={[
+                      styles.genderChip,
+                      selected ? styles.genderChipSelected : null,
+                      formErrors.gender ? styles.inputError : null,
+                    ]}
+                    onPress={() => {
+                      setGender(option);
+                      setFormErrors((prev) => ({ ...prev, gender: undefined }));
+                    }}
                     disabled={isSaving}
                   >
                     <Text style={[styles.genderChipText, selected ? styles.genderChipTextSelected : null]}>{option}</Text>
@@ -369,39 +481,57 @@ export function ProfileScreen() {
                 );
               })}
             </View>
+            {formErrors.gender ? <Text style={styles.fieldErrorText}>{formErrors.gender}</Text> : null}
 
             <Text style={styles.label}>Address (Optional)</Text>
-            <TextInput
-              style={styles.input}
-              value={address}
-              onChangeText={setAddress}
-              editable={!isSaving}
-            />
+            <TextInput style={styles.input} value={addressLine1} onChangeText={setAddressLine1} editable={!isSaving} placeholder="Line 1" />
+            <TextInput style={styles.input} value={addressLine2} onChangeText={setAddressLine2} editable={!isSaving} placeholder="Line 2" />
+            <TextInput style={styles.input} value={city} onChangeText={setCity} editable={!isSaving} placeholder="City" />
+            <TextInput style={styles.input} value={state} onChangeText={setState} editable={!isSaving} placeholder="State" />
+            <TextInput style={styles.input} value={postalCode} onChangeText={setPostalCode} editable={!isSaving} placeholder="Postal code" />
 
-            <Text style={styles.label}>Emergency Contact Name</Text>
+            <Text style={styles.label}>Emergency Contact Name *</Text>
             <TextInput
-              style={styles.input}
+              style={inputStyle(formErrors.emergencyContactName)}
               value={emergencyContactName}
-              onChangeText={setEmergencyContactName}
+              onChangeText={(value) => {
+                setEmergencyContactName(value);
+                setFormErrors((prev) => ({ ...prev, emergencyContactName: undefined }));
+              }}
               editable={!isSaving}
             />
+            {formErrors.emergencyContactName ? (
+              <Text style={styles.fieldErrorText}>{formErrors.emergencyContactName}</Text>
+            ) : null}
 
-            <Text style={styles.label}>Emergency Contact Relationship</Text>
+            <Text style={styles.label}>Emergency Contact Relationship *</Text>
             <TextInput
-              style={styles.input}
+              style={inputStyle(formErrors.emergencyContactRelationship)}
               value={emergencyContactRelationship}
-              onChangeText={setEmergencyContactRelationship}
+              onChangeText={(value) => {
+                setEmergencyContactRelationship(value);
+                setFormErrors((prev) => ({ ...prev, emergencyContactRelationship: undefined }));
+              }}
               editable={!isSaving}
             />
+            {formErrors.emergencyContactRelationship ? (
+              <Text style={styles.fieldErrorText}>{formErrors.emergencyContactRelationship}</Text>
+            ) : null}
 
-            <Text style={styles.label}>Emergency Contact Phone</Text>
+            <Text style={styles.label}>Emergency Contact Phone *</Text>
             <TextInput
-              style={styles.input}
+              style={inputStyle(formErrors.emergencyContactPhone)}
               value={emergencyContactPhone}
-              onChangeText={setEmergencyContactPhone}
+              onChangeText={(value) => {
+                setEmergencyContactPhone(value);
+                setFormErrors((prev) => ({ ...prev, emergencyContactPhone: undefined }));
+              }}
               keyboardType="phone-pad"
               editable={!isSaving}
             />
+            {formErrors.emergencyContactPhone ? (
+              <Text style={styles.fieldErrorText}>{formErrors.emergencyContactPhone}</Text>
+            ) : null}
 
             {selectedPhotoUri ? (
               <Image source={{ uri: selectedPhotoUri }} style={styles.photoPreview} />
@@ -418,17 +548,18 @@ export function ProfileScreen() {
           </View>
         ) : (
           <View style={styles.profileSection}>
+            <ProfileRow label="Personal Code" value={profile.personalCode ?? 'Not assigned'} />
             <ProfileRow label="Email" value={profile.email} />
             <ProfileRow label="Phone" value={profile.phone ?? '—'} />
             <ProfileRow label="Date of Birth" value={profile.dateOfBirth ? formatDate(profile.dateOfBirth) : '—'} />
             <ProfileRow label="Gender" value={profile.gender ?? '—'} />
-            <ProfileRow label="Address" value={profile.address ?? '—'} />
-            <ProfileRow label="Emergency Contact Name" value={profile.emergencyContactName ?? '—'} />
+            <ProfileRow label="Address" value={formattedAddress} />
+            <ProfileRow label="Emergency Contact Name" value={profile.emergencyContact?.name ?? '—'} />
             <ProfileRow
               label="Emergency Relationship"
-              value={profile.emergencyContactRelationship ?? '—'}
+              value={profile.emergencyContact?.relation ?? '—'}
             />
-            <ProfileRow label="Emergency Contact Phone" value={profile.emergencyContactPhone ?? '—'} />
+            <ProfileRow label="Emergency Contact Phone" value={profile.emergencyContact?.phone ?? '—'} />
 
             <View style={styles.editButtonContainer}>
               <Button title="Edit Profile" onPress={handleEdit} variant="secondary" />
@@ -566,7 +697,15 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     fontSize: 16,
     color: COLORS.textPrimary,
-    marginBottom: 14,
+    marginBottom: 8,
+  },
+  inputError: {
+    borderColor: COLORS.danger,
+  },
+  fieldErrorText: {
+    color: COLORS.danger,
+    fontSize: 12,
+    marginBottom: 10,
   },
   readOnlyInput: {
     backgroundColor: COLORS.gray[100],
@@ -579,7 +718,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 12,
-    marginBottom: 14,
+    marginBottom: 8,
   },
   inputButtonText: {
     fontSize: 16,
@@ -593,7 +732,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
-    marginBottom: 14,
+    marginBottom: 8,
   },
   genderChip: {
     borderWidth: 1,

@@ -170,7 +170,13 @@ function log(level: LogLevel, tag: string, message: string, data?: unknown): voi
       console.error(line);
       break;
     case LogLevel.WARN:
-      console.warn(line);
+      try {
+        console.warn(line);
+      } catch {
+        // Some environments can monkey-patch console.warn; degrade gracefully.
+        // eslint-disable-next-line no-console
+        console.log(line);
+      }
       break;
     default:
       // eslint-disable-next-line no-console

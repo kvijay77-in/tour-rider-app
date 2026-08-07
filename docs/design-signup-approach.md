@@ -287,8 +287,7 @@ Step 2: Registration Form (shown after valid code)
   │  Registering with:              │
   │  🚴 [Organizer Name]            │
   │                                 │
-  │  First Name: ________________   │
-  │  Last Name:  ________________   │
+  │  Name:       ________________   │
   │  Email:      ________________   │
   │  Phone:      ________________   │
   │  Password:   ________________   │

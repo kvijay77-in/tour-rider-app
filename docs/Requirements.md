@@ -56,13 +56,15 @@ The app supports two types of users, collectively referred to as **riders**:
 - Riders must complete a profile after account verification and first authenticated sign-in
 - If profile data is missing, app access is gated and the rider is redirected to Profile Creation until completed
 - Required profile information:
-  - Full name (First name, Last name)
+  - Name (single full-name field)
   - Email address (used for authentication)
   - Phone number (for emergency contact and notifications)
-  - Emergency contact details (Name, relationship, phone number)
+  - Emergency contact object (Name, relationship, phone number)
   - Date of birth
   - Gender
-  - Address (optional)
+  - Address object is optional (`Line 1`, `Line 2`, `City`, `State`, `Postal Code`)
+- Personal code is optional and is assigned/managed only by tour organizers
+- Riders can view personal code when available, but cannot create or modify it in the app
 
 ### Profile Picture
 - Riders can upload a profile picture during profile creation or later from profile settings
@@ -76,7 +78,7 @@ The app supports two types of users, collectively referred to as **riders**:
 
 ### Profile Management
 - Riders can view their complete profile after login
-- Riders can edit profile details (except email, which is the primary identifier)
+- Riders can edit profile details (except email and personal code, which are organizer/system-controlled)
 - Profile changes sync to tour-data-api backend
 - Profile data persists across tours within the organizer's data infrastructure
 - On successful profile update, app displays a temporary success banner

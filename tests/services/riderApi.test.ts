@@ -32,7 +32,16 @@ beforeEach(() => {
 
 describe('createRiderProfile', () => {
   it('posts to /v1/riders/profile with profile data', async () => {
-    const data = { firstName: 'John', lastName: 'Doe', email: 'john@example.com' };
+    const data = {
+      name: 'John Doe',
+      email: 'john@example.com',
+      phone: '+14155550100',
+      emergencyContact: {
+        name: 'Jane Doe',
+        relation: 'Spouse',
+        phone: '+14155550101',
+      },
+    };
     mockedPost.mockResolvedValueOnce({
       success: true,
       data: { profileId: 'P1', ...data },
@@ -54,13 +63,13 @@ describe('getRiderProfile', () => {
   it('fetches profile by ID', async () => {
     mockedGet.mockResolvedValueOnce({
       success: true,
-      data: { profileId: 'P1', firstName: 'Jane', lastName: 'Smith', email: 'jane@example.com' },
+      data: { profileId: 'P1', name: 'Jane Smith', email: 'jane@example.com' },
       timestamp: '',
     });
 
     const result = await getRiderProfile('P1');
     expect(mockedGet).toHaveBeenCalledWith('/v1/riders/profile/P1');
-    expect(result.data?.firstName).toBe('Jane');
+    expect(result.data?.name).toBe('Jane Smith');
   });
 
   it('encodes profile ID', async () => {

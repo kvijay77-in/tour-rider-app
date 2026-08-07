@@ -1,5 +1,7 @@
 export type {
   RiderProfile,
+  RiderAddress,
+  RiderEmergencyContact,
   CreateRiderProfileRequest,
   UpdateRiderProfileRequest,
   ProfilePictureUploadUrlResponse,
