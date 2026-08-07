@@ -65,18 +65,21 @@ function buildAddressPayload(
   line2: string,
   city: string,
   state: string,
+  country: string,
   postalCode: string,
 ): RiderAddress | undefined {
   const normalizedLine1 = line1.trim();
   const normalizedLine2 = line2.trim();
   const normalizedCity = city.trim();
   const normalizedState = state.trim();
+  const normalizedCountry = country.trim();
   const normalizedPostalCode = postalCode.trim();
 
   if (
     !normalizedLine1
     && !normalizedLine2
     && !normalizedCity
+    && !normalizedCountry
     && !normalizedState
     && !normalizedPostalCode
   ) {
@@ -84,11 +87,12 @@ function buildAddressPayload(
   }
 
   return {
-    ...(normalizedLine1 ? { 'Line 1': normalizedLine1 } : {}),
-    ...(normalizedLine2 ? { 'Line 2': normalizedLine2 } : {}),
-    ...(normalizedCity ? { City: normalizedCity } : {}),
-    ...(normalizedState ? { State: normalizedState } : {}),
-    ...(normalizedPostalCode ? { 'Postal Code': normalizedPostalCode } : {}),
+    ...(normalizedLine1 ? { line1: normalizedLine1 } : {}),
+    ...(normalizedLine2 ? { line2: normalizedLine2 } : {}),
+    ...(normalizedCity ? { city: normalizedCity } : {}),
+    ...(normalizedState ? { state: normalizedState } : {}),
+    ...(normalizedCountry ? { country: normalizedCountry } : {}),
+    ...(normalizedPostalCode ? { postalcode: normalizedPostalCode } : {}),
   };
 }
 
@@ -102,6 +106,7 @@ export function ProfileCreationScreen({ navigation }: Props) {
   const [addressLine2, setAddressLine2] = useState('');
   const [city, setCity] = useState('');
   const [state, setState] = useState('');
+  const [country, setCountry] = useState('');
   const [postalCode, setPostalCode] = useState('');
   const [emergencyContactName, setEmergencyContactName] = useState('');
   const [emergencyContactRelationship, setEmergencyContactRelationship] = useState('');
@@ -249,7 +254,7 @@ export function ProfileCreationScreen({ navigation }: Props) {
         phone: phone.trim(),
         dateOfBirth: formatDateForApi(dateOfBirth as Date),
         gender: gender ?? undefined,
-        address: buildAddressPayload(addressLine1, addressLine2, city, state, postalCode),
+        address: buildAddressPayload(addressLine1, addressLine2, city, state, country, postalCode),
         emergencyContact: {
           name: emergencyContactName.trim(),
           relation: emergencyContactRelationship.trim(),
@@ -442,6 +447,14 @@ export function ProfileCreationScreen({ navigation }: Props) {
           onChangeText={setState}
           editable={!isSubmitting}
           placeholder="State"
+          placeholderTextColor={COLORS.textDisabled}
+        />
+        <TextInput
+          style={styles.input}
+          value={country}
+          onChangeText={setCountry}
+          editable={!isSubmitting}
+          placeholder="Country"
           placeholderTextColor={COLORS.textDisabled}
         />
         <TextInput

@@ -7,11 +7,12 @@
  * Rider profile information (from RiderProfile table in tour-data-api)
  */
 export interface RiderAddress {
-  'Line 1'?: string;
-  'Line 2'?: string;
-  City?: string;
-  State?: string;
-  'Postal Code'?: string;
+  line1?: string;
+  line2?: string;
+  city?: string;
+  state?: string;
+  country?: string;
+  postalcode?: string;
 }
 
 export interface RiderEmergencyContact {

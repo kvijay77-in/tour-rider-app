@@ -232,6 +232,7 @@ async function request<T>(
       hasAuthHeader: Boolean(headers.Authorization),
       timeoutMs,
       maxRetries,
+      payload: body !== undefined && hasRequestBody(method) ? body : undefined,
     });
   }
 

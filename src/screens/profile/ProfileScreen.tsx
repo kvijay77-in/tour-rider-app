@@ -68,18 +68,21 @@ function buildAddressPayload(
   line2: string,
   city: string,
   state: string,
+  country: string,
   postalCode: string,
 ): RiderAddress | undefined {
   const normalizedLine1 = line1.trim();
   const normalizedLine2 = line2.trim();
   const normalizedCity = city.trim();
   const normalizedState = state.trim();
+  const normalizedCountry = country.trim();
   const normalizedPostalCode = postalCode.trim();
 
   if (
     !normalizedLine1
     && !normalizedLine2
     && !normalizedCity
+    && !normalizedCountry
     && !normalizedState
     && !normalizedPostalCode
   ) {
@@ -87,11 +90,12 @@ function buildAddressPayload(
   }
 
   return {
-    ...(normalizedLine1 ? { 'Line 1': normalizedLine1 } : {}),
-    ...(normalizedLine2 ? { 'Line 2': normalizedLine2 } : {}),
-    ...(normalizedCity ? { City: normalizedCity } : {}),
-    ...(normalizedState ? { State: normalizedState } : {}),
-    ...(normalizedPostalCode ? { 'Postal Code': normalizedPostalCode } : {}),
+    ...(normalizedLine1 ? { line1: normalizedLine1 } : {}),
+    ...(normalizedLine2 ? { line2: normalizedLine2 } : {}),
+    ...(normalizedCity ? { city: normalizedCity } : {}),
+    ...(normalizedState ? { state: normalizedState } : {}),
+    ...(normalizedCountry ? { country: normalizedCountry } : {}),
+    ...(normalizedPostalCode ? { postalcode: normalizedPostalCode } : {}),
   };
 }
 
@@ -101,11 +105,12 @@ function formatAddress(address?: RiderAddress): string {
   }
 
   const segments = [
-    address['Line 1'],
-    address['Line 2'],
-    address.City,
-    address.State,
-    address['Postal Code'],
+    address.line1,
+    address.line2,
+    address.city,
+    address.state,
+    address.country,
+    address.postalcode,
   ].filter((segment): segment is string => Boolean(segment && segment.trim()));
 
   if (!segments.length) {
@@ -136,6 +141,7 @@ export function ProfileScreen() {
   const [addressLine2, setAddressLine2] = useState('');
   const [city, setCity] = useState('');
   const [state, setState] = useState('');
+  const [country, setCountry] = useState('');
   const [postalCode, setPostalCode] = useState('');
   const [emergencyContactName, setEmergencyContactName] = useState('');
   const [emergencyContactRelationship, setEmergencyContactRelationship] = useState('');
@@ -162,11 +168,12 @@ export function ProfileScreen() {
   const syncEditorStateFromProfile = useCallback(() => {
     setName(profile?.name ?? '');
     setPhone(profile?.phone ?? '');
-    setAddressLine1(profile?.address?.['Line 1'] ?? '');
-    setAddressLine2(profile?.address?.['Line 2'] ?? '');
-    setCity(profile?.address?.City ?? '');
-    setState(profile?.address?.State ?? '');
-    setPostalCode(profile?.address?.['Postal Code'] ?? '');
+    setAddressLine1(profile?.address?.line1 ?? '');
+    setAddressLine2(profile?.address?.line2 ?? '');
+    setCity(profile?.address?.city ?? '');
+    setState(profile?.address?.state ?? '');
+    setCountry(profile?.address?.country ?? '');
+    setPostalCode(profile?.address?.postalcode ?? '');
     setEmergencyContactName(profile?.emergencyContact?.name ?? '');
     setEmergencyContactRelationship(profile?.emergencyContact?.relation ?? '');
     setEmergencyContactPhone(profile?.emergencyContact?.phone ?? '');
@@ -291,7 +298,7 @@ export function ProfileScreen() {
         phone: phone.trim(),
         dateOfBirth: dateOfBirth ? formatDateForApi(dateOfBirth) : undefined,
         gender: gender ?? undefined,
-        address: buildAddressPayload(addressLine1, addressLine2, city, state, postalCode),
+        address: buildAddressPayload(addressLine1, addressLine2, city, state, country, postalCode),
         emergencyContact: {
           name: emergencyContactName.trim(),
           relation: emergencyContactRelationship.trim(),
@@ -321,6 +328,7 @@ export function ProfileScreen() {
     addressLine2,
     city,
     state,
+    country,
     postalCode,
     emergencyContactName,
     emergencyContactRelationship,
@@ -488,6 +496,7 @@ export function ProfileScreen() {
             <TextInput style={styles.input} value={addressLine2} onChangeText={setAddressLine2} editable={!isSaving} placeholder="Line 2" />
             <TextInput style={styles.input} value={city} onChangeText={setCity} editable={!isSaving} placeholder="City" />
             <TextInput style={styles.input} value={state} onChangeText={setState} editable={!isSaving} placeholder="State" />
+            <TextInput style={styles.input} value={country} onChangeText={setCountry} editable={!isSaving} placeholder="Country" />
             <TextInput style={styles.input} value={postalCode} onChangeText={setPostalCode} editable={!isSaving} placeholder="Postal code" />
 
             <Text style={styles.label}>Emergency Contact Name *</Text>

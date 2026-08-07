@@ -147,6 +147,23 @@ describe('apiClient.post', () => {
     expect(fetchOptions.method).toBe('POST');
     expect(fetchOptions.body).toBe(JSON.stringify(body));
   });
+
+  it('logs the request payload for POST requests', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 201,
+      json: async () => ({ success: true, data: { id: 'new' }, timestamp: '2026-01-01T00:00:00Z' }),
+    });
+
+    const body = { name: 'Test', count: 1 };
+    await apiClient.post('/v1/resource', body);
+
+    expect(logger.debug).toHaveBeenCalledWith(
+      'ApiClient',
+      'Request init POST',
+      expect.objectContaining({ payload: body }),
+    );
+  });
 });
 
 // ---------------------------------------------------------------------------
