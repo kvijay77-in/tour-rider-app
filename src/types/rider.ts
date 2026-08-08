@@ -12,7 +12,7 @@ export interface RiderAddress {
   city?: string;
   state?: string;
   country?: string;
-  postalcode?: string;
+  postalCode?: string;
 }
 
 export interface RiderEmergencyContact {

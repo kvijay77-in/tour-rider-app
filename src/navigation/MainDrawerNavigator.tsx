@@ -3,10 +3,13 @@
  */
 
 import React from 'react';
+import { Pressable } from 'react-native';
 import { createDrawerNavigator } from '@react-navigation/drawer';
 import type { RouteProp } from '@react-navigation/native';
+import { Ionicons } from '@expo/vector-icons';
 
 import { COLORS } from '../constants';
+import { useAuth } from '../hooks/useAuth';
 import { HomeScreen } from '../screens/home/HomeScreen';
 import { ProfileScreen } from '../screens/profile/ProfileScreen';
 import { TrainingChallengeScreen } from '../screens/training/TrainingChallengeScreen';
@@ -22,6 +25,7 @@ type MainDrawerNavigatorProps = {
 };
 
 export function MainDrawerNavigator({ route }: MainDrawerNavigatorProps) {
+  const { logout } = useAuth();
   const successMessage = route?.params?.successMessage;
 
   return (
@@ -41,7 +45,25 @@ export function MainDrawerNavigator({ route }: MainDrawerNavigatorProps) {
         name="Home"
         component={HomeScreen}
         initialParams={successMessage ? { successMessage } : undefined}
-        options={{ title: 'Home' }}
+        options={{
+          title: 'Home',
+          headerRight: () => (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Log out"
+              hitSlop={8}
+              onPress={() => {
+                logout().catch(() => {});
+              }}
+              style={({ pressed }) => ({
+                opacity: pressed ? 0.7 : 1,
+                padding: 4,
+              })}
+            >
+              <Ionicons name="log-out-outline" size={24} color={COLORS.textPrimary} />
+            </Pressable>
+          ),
+        }}
       />
       <Drawer.Screen
         name="ViewProfile"

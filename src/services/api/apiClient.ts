@@ -87,6 +87,10 @@ export class ApiError extends Error {
   }
 }
 
+export function isValidationApiError(error: unknown): error is ApiError {
+  return error instanceof ApiError && error.statusCode === 422;
+}
+
 // ---------------------------------------------------------------------------
 // Auth token provider — wired by AuthContext at app startup
 // ---------------------------------------------------------------------------

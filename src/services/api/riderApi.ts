@@ -20,10 +20,21 @@ const TAG = 'RiderApi';
  * Create a new rider profile.
  */
 export async function createRiderProfile(
+  profileId: string,
   data: CreateRiderProfileRequest,
 ): Promise<ApiResponse<RiderProfile>> {
   logger.info(TAG, 'Creating rider profile', { email: data.email });
-  return apiClient.post<RiderProfile>('/v1/riders/profile', data);
+  if (profileId) {
+    logger.info(TAG, `Creating Profile for profileId: ${profileId}`);
+    return apiClient.post<RiderProfile>(`/v1/riders/profile/${encodeURIComponent(profileId)}`, data, {
+      isExpectedError: (error) => error.statusCode >= 400 && error.statusCode < 500,
+    });
+  } else {
+    return apiClient.post<RiderProfile>('/v1/riders/profile', data, {
+      isExpectedError: (error) => error.statusCode >= 400 && error.statusCode < 500,
+
+    });
+  }
 }
 
 /**

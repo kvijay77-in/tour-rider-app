@@ -43,7 +43,9 @@ tour-rider-app/
 │   │   │   ├── StageIndicator.tsx
 │   │   │   └── CheckInCard.tsx
 │   │   └── profile/           # Profile-specific components
-│   │       └── ProfilePicture.tsx
+│   │       ├── ProfilePicture.tsx
+│   │       ├── ProfileFormFields.tsx
+│   │       └── SearchableSelectField.tsx
 │   ├── config/                 # Configuration files
 │   │   └── amplify.ts         # AWS Amplify configuration
 │   ├── constants/              # Application constants
@@ -112,6 +114,7 @@ tour-rider-app/
 │   └── utils/                  # Utility functions
 │       ├── logger.ts          # Logging utility
 │       ├── dateFormatter.ts   # Date formatting
+│       ├── profileForm.ts     # Shared profile form defaults and validation
 │       ├── validation.ts      # Input validation
 │       └── permissions.ts     # Permission checks
 ├── .env.example                # Environment variables template

@@ -39,7 +39,7 @@ interface RiderContextValue {
   /** Update the rider profile with the given data */
   updateProfile: (data: UpdateRiderProfileRequest) => Promise<void>;
   /** Upload and attach a profile picture to the rider profile */
-  uploadProfilePicture: (localUri: string, mimeType?: string) => Promise<void>;
+  uploadProfilePicture: (localUri: string, mimeType?: string, profileId?: string) => Promise<void>;
   /** Alias for loadProfile — refreshes profile from the API */
   refreshProfile: () => Promise<void>;
 }
@@ -147,10 +147,17 @@ export function RiderProvider({ children }: RiderProviderProps) {
   }, [user?.profileId]);
 
   const uploadProfilePicture = useCallback(async (
-    localUri: string,
+    localUri?: string | null,
     mimeType?: string,
+    profileId?: string,
   ): Promise<void> => {
-    if (!user?.profileId) {
+    if (!localUri) {
+      logger.info(TAG, 'No profile picture selected; skipping upload');
+      return;
+    }
+
+    const targetProfileId = profileId ?? user?.profileId;
+    if (!targetProfileId) {
       const msg = 'Cannot upload profile picture — no profileId available';
       logger.error(TAG, msg);
       setError(msg);
@@ -161,14 +168,14 @@ export function RiderProvider({ children }: RiderProviderProps) {
     setError(null);
 
     try {
-      const uploadUrlResponse = await requestProfilePictureUploadUrl(user.profileId, mimeType);
+      const uploadUrlResponse = await requestProfilePictureUploadUrl(targetProfileId, mimeType);
+      logger.debug(TAG, `Upload URL response for ${targetProfileId}:`, uploadUrlResponse);
       const uploadData = uploadUrlResponse.data;
 
       if (!uploadUrlResponse.success || !uploadData) {
         const msg = uploadUrlResponse.error?.message ?? 'Failed to request upload URL';
-        logger.error(TAG, msg);
-        setError(msg);
-        throw new Error(msg);
+        logger.warn(TAG, msg);
+        return;
       }
 
       const localFileResponse = await fetch(localUri);
@@ -183,27 +190,25 @@ export function RiderProvider({ children }: RiderProviderProps) {
       });
 
       if (!putResponse.ok) {
-        throw new Error(`Profile picture upload failed with status ${putResponse.status}`);
+        logger.warn(TAG, `Profile picture upload failed with status ${putResponse.status}`);
+        return;
       }
 
-      const profileUpdateResponse = await updateRiderProfile(user.profileId, {
+      const profileUpdateResponse = await updateRiderProfile(targetProfileId, {
         photoS3Key: uploadData.photoS3Key,
       });
 
       if (profileUpdateResponse.success && profileUpdateResponse.data) {
         setProfile(profileUpdateResponse.data);
-        logger.info(TAG, `Profile picture uploaded for ${user.profileId}`);
+        logger.info(TAG, `Profile picture uploaded for ${targetProfileId}`);
       } else {
         const msg = profileUpdateResponse.error?.message ?? 'Failed to save profile picture';
-        logger.error(TAG, msg);
-        setError(msg);
-        throw new Error(msg);
+        logger.warn(TAG, msg);
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to upload profile picture';
-      logger.error(TAG, 'Error uploading profile picture', err);
+      logger.warn(TAG, 'Profile picture upload skipped due to error', err);
       setError(message);
-      throw err;
     } finally {
       setIsLoading(false);
     }

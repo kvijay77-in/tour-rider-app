@@ -58,16 +58,18 @@ The app supports two types of users, collectively referred to as **riders**:
 - Required profile information:
   - Name (single full-name field)
   - Email address (used for authentication)
-  - Phone number (for emergency contact and notifications)
-  - Emergency contact object (Name, relationship, phone number)
+  - Phone number, entered as a searchable country dialing code and local number
+  - Emergency contact object (Name, relationship, and phone number with searchable country dialing code)
   - Date of birth
   - Gender
-  - Address object is optional (`Line 1`, `Line 2`, `City`, `State`, `Postal Code`)
+  - Address object (`Line 1`, `City`, `State`, `Country`, and `Postal Code` are required; `Line 2` is optional)
+- Country defaults to India and is selected from a searchable country list
+- When Country is India, State is selected from the India state and union territory list; other countries use free-text State/Province input
 - Personal code is optional and is assigned/managed only by tour organizers
 - Riders can view personal code when available, but cannot create or modify it in the app
 
 ### Profile Picture
-- Riders can upload a profile picture during profile creation or later from profile settings
+- Riders must upload a profile picture during profile creation and may replace it later from profile settings
 - Supported formats: JPEG, PNG
 - Maximum file size: 5MB
 - Image upload flow:

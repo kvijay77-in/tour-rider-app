@@ -11,20 +11,28 @@ import {
   type DrawerContentComponentProps,
 } from '@react-navigation/drawer';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useAuth } from '../hooks/useAuth';
 import { COLORS } from '../constants';
 
 export function DrawerContent(props: DrawerContentComponentProps) {
   const { logout } = useAuth();
+  const insets = useSafeAreaInsets();
 
   return (
     <View style={styles.container}>
-      <DrawerContentScrollView {...props} contentContainerStyle={styles.scrollContent}>
+      <DrawerContentScrollView
+        {...props}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingTop: insets.top, paddingBottom: 8 },
+        ]}
+      >
         <DrawerItemList {...props} />
       </DrawerContentScrollView>
 
-      <View style={styles.footer}>
+      <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 8) }]}>
         <DrawerItem
           label="Sign Out"
           onPress={logout}
@@ -47,12 +55,12 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.background,
   },
   scrollContent: {
-    paddingTop: 0,
+    flexGrow: 1,
   },
   footer: {
     borderTopWidth: 1,
     borderTopColor: COLORS.border,
-    paddingVertical: 8,
+    paddingTop: 8,
   },
   signOutItem: {
     marginTop: 0,

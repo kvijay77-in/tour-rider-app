@@ -48,7 +48,7 @@ describe('createRiderProfile', () => {
       timestamp: '',
     });
 
-    const result = await createRiderProfile(data);
+    const result = await createRiderProfile('P1',data);
     expect(mockedPost).toHaveBeenCalledWith('/v1/riders/profile', data);
     expect(result.success).toBe(true);
     expect(result.data?.profileId).toBe('P1');
