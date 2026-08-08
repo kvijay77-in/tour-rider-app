@@ -8,18 +8,18 @@ import { logger, LogLevel } from '../../src/utils/logger';
 // Capture console output
 // ---------------------------------------------------------------------------
 
-let logSpy: jest.SpyInstance;
+let infoSpy: jest.SpyInstance;
 let warnSpy: jest.SpyInstance;
 let errorSpy: jest.SpyInstance;
 
 beforeEach(() => {
-  logSpy = jest.spyOn(console, 'log').mockImplementation();
+  infoSpy = jest.spyOn(console, 'info').mockImplementation();
   warnSpy = jest.spyOn(console, 'warn').mockImplementation();
   errorSpy = jest.spyOn(console, 'error').mockImplementation();
 });
 
 afterEach(() => {
-  logSpy.mockRestore();
+  infoSpy.mockRestore();
   warnSpy.mockRestore();
   errorSpy.mockRestore();
 });
@@ -32,18 +32,18 @@ describe('logger', () => {
   // Note: in the test environment __DEV__ is true, so activeLevel is DEBUG.
   // All levels should produce output.
 
-  it('logger.debug writes to console.log', () => {
+  it('logger.debug writes to console.info', () => {
     logger.debug('TestTag', 'debug message');
-    expect(logSpy).toHaveBeenCalledTimes(1);
-    expect(logSpy.mock.calls[0][0]).toContain('[DEBUG]');
-    expect(logSpy.mock.calls[0][0]).toContain('[TestTag]');
-    expect(logSpy.mock.calls[0][0]).toContain('debug message');
+    expect(infoSpy).toHaveBeenCalledTimes(1);
+    expect(infoSpy.mock.calls[0][0]).toContain('[DEBUG]');
+    expect(infoSpy.mock.calls[0][0]).toContain('[TestTag]');
+    expect(infoSpy.mock.calls[0][0]).toContain('debug message');
   });
 
-  it('logger.info writes to console.log', () => {
+  it('logger.info writes to console.info', () => {
     logger.info('TestTag', 'info message');
-    expect(logSpy).toHaveBeenCalledTimes(1);
-    expect(logSpy.mock.calls[0][0]).toContain('[INFO]');
+    expect(infoSpy).toHaveBeenCalledTimes(1);
+    expect(infoSpy.mock.calls[0][0]).toContain('[INFO]');
   });
 
   it('logger.warn writes to console.warn', () => {
@@ -60,7 +60,7 @@ describe('logger', () => {
 
   it('includes extra data when provided', () => {
     logger.info('TestTag', 'with data', { key: 'value' });
-    const output: string = logSpy.mock.calls[0][0];
+    const output: string = infoSpy.mock.calls[0][0];
     expect(output).toContain('key');
     expect(output).toContain('value');
   });
@@ -87,7 +87,7 @@ describe('logger', () => {
 
   it('handles string data directly', () => {
     logger.info('TestTag', 'msg', 'extra-string');
-    const output: string = logSpy.mock.calls[0][0];
+    const output: string = infoSpy.mock.calls[0][0];
     expect(output).toContain('extra-string');
   });
 
@@ -97,7 +97,7 @@ describe('logger', () => {
 
     logger.info('TestTag', 'circular', data);
 
-    const output: string = logSpy.mock.calls[0][0];
+    const output: string = infoSpy.mock.calls[0][0];
     expect(output).toContain('"name":"loop"');
     expect(output).toContain('[Circular]');
   });

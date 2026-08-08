@@ -104,6 +104,15 @@ describe('getTourRiderByProfile', () => {
     await getTourRiderByProfile('T1', 'P1');
     expect(mockedGet).toHaveBeenCalledWith('/v1/tours/T1/riders', {
       params: { profileId: 'P1' },
+      isExpectedError: expect.any(Function),
     });
+  });
+
+  it('classifies 404 as expected for enrollment lookup', async () => {
+    mockedGet.mockResolvedValueOnce({ success: false, error: { code: 'NOT_FOUND', message: 'not found' }, timestamp: '' });
+    await getTourRiderByProfile('T1', 'P1');
+    const options = mockedGet.mock.calls[0][1] as { isExpectedError?: (error: { statusCode: number }) => boolean };
+    expect(options.isExpectedError?.({ statusCode: 404 })).toBe(true);
+    expect(options.isExpectedError?.({ statusCode: 400 })).toBe(false);
   });
 });

@@ -63,6 +63,9 @@ export async function getTourRiderByProfile(
   logger.debug(TAG, `Fetching tour enrollment for profile ${profileId} in tour ${tourId}`);
   return apiClient.get<TourRider>(
     `/v1/tours/${encodeURIComponent(tourId)}/riders`,
-    { params: { profileId } },
+    {
+      params: { profileId },
+      isExpectedError: (error) => error.statusCode === 404,
+    },
   );
 }

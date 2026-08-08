@@ -14,7 +14,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
+import DateTimePicker, { type DateTimePickerChangeEvent } from '@react-native-community/datetimepicker';
 import * as ImagePicker from 'expo-image-picker';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -184,14 +184,18 @@ export function ProfileScreen() {
     setFormErrors({});
   }, [profile]);
 
-  const onChangeDate = (event: DateTimePickerEvent, selectedDate?: Date) => {
+  const onDateValueChange = (_event: DateTimePickerChangeEvent, selectedDate: Date) => {
     if (Platform.OS !== 'ios') {
       setShowDatePicker(false);
     }
 
-    if (event.type === 'set' && selectedDate) {
-      setDateOfBirth(selectedDate);
-      setFormErrors((prev) => ({ ...prev, dateOfBirth: undefined }));
+    setDateOfBirth(selectedDate);
+    setFormErrors((prev) => ({ ...prev, dateOfBirth: undefined }));
+  };
+
+  const onDateDismiss = () => {
+    if (Platform.OS !== 'ios') {
+      setShowDatePicker(false);
     }
   };
 
@@ -462,7 +466,9 @@ export function ProfileScreen() {
                 mode="date"
                 display={Platform.OS === 'ios' ? 'spinner' : 'default'}
                 maximumDate={new Date()}
-                onChange={onChangeDate}
+                onValueChange={onDateValueChange}
+                onDismiss={onDateDismiss}
+                onNeutralButtonPress={onDateDismiss}
               />
             ) : null}
 

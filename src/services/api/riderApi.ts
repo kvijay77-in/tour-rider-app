@@ -43,7 +43,9 @@ export async function getLinkedProfileId(
   sub: string,
 ): Promise<ApiResponse<LinkProfileResponse>> {
   logger.debug(TAG, `Fetching linked rider profile for Cognito user ${sub}`);
-  return apiClient.get<LinkProfileResponse>(`/v1/riders/link/${encodeURIComponent(sub)}`);
+  return apiClient.get<LinkProfileResponse>(`/v1/riders/link/${encodeURIComponent(sub)}`, {
+    isExpectedError: (error) => error.statusCode === 404,
+  });
 }
 
 /**
@@ -78,7 +80,9 @@ export async function getRiderProfile(
   profileId: string,
 ): Promise<ApiResponse<RiderProfile>> {
   logger.debug(TAG, `Fetching rider profile ${profileId}`);
-  return apiClient.get<RiderProfile>(`/v1/riders/profile/${encodeURIComponent(profileId)}`);
+  return apiClient.get<RiderProfile>(`/v1/riders/profile/${encodeURIComponent(profileId)}`, {
+    isExpectedError: (error) => error.statusCode === 404,
+  });
 }
 
 /**

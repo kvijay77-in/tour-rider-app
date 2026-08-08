@@ -60,6 +60,11 @@ interface RequestOptions {
   timeoutMs?: number;
   /** Override default max retries */
   maxRetries?: number;
+  /**
+   * Marks API errors that are expected and handled by caller flows.
+   * Expected errors are still thrown, but are not logged as warnings.
+   */
+  isExpectedError?: (error: ApiError) => boolean;
 }
 
 type RequestMethod = 'GET' | 'POST' | 'PUT' | 'DELETE';
@@ -181,6 +186,44 @@ function hasRequestBody(method: RequestMethod): boolean {
   return method === 'POST' || method === 'PUT';
 }
 
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    !Array.isArray(value) &&
+    Object.getPrototypeOf(value) === Object.prototype
+  );
+}
+
+function toCamelCaseKey(key: string): string {
+  return key.replace(/_([a-z0-9])/g, (_match, ch: string) => ch.toUpperCase());
+}
+
+function normalizePayloadKeysToCamelCase(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map((item) => normalizePayloadKeysToCamelCase(item));
+  }
+
+  if (!isPlainObject(value)) {
+    return value;
+  }
+
+  const normalized: Record<string, unknown> = {};
+  for (const [key, nestedValue] of Object.entries(value)) {
+    normalized[toCamelCaseKey(key)] = normalizePayloadKeysToCamelCase(nestedValue);
+  }
+
+  return normalized;
+}
+
+function isDevelopmentRuntime(): boolean {
+  const maybeDev = (globalThis as { __DEV__?: unknown }).__DEV__;
+  if (typeof maybeDev === 'boolean') {
+    return maybeDev;
+  }
+  return process.env.NODE_ENV !== 'production';
+}
+
 /**
  * Determine whether an error represents a network connectivity failure.
  */
@@ -219,6 +262,7 @@ async function request<T>(
     signal,
     timeoutMs = DEFAULT_TIMEOUT_MS,
     maxRetries = MAX_RETRIES,
+    isExpectedError,
   } = options;
 
   const url = buildUrl(path, params);
@@ -232,7 +276,6 @@ async function request<T>(
       hasAuthHeader: Boolean(headers.Authorization),
       timeoutMs,
       maxRetries,
-      payload: body !== undefined && hasRequestBody(method) ? body : undefined,
     });
   }
 
@@ -258,7 +301,14 @@ async function request<T>(
       };
 
       if (body !== undefined && hasRequestBody(method)) {
-        fetchOptions.body = JSON.stringify(body);
+        const normalizedBody = normalizePayloadKeysToCamelCase(body);
+        if (debugMethod && isDevelopmentRuntime() && attempt === 0) {
+          logger.debug(TAG, `${method} payload (normalized)`, {
+            path,
+            payload: normalizedBody,
+          });
+        }
+        fetchOptions.body = JSON.stringify(normalizedBody);
       }
 
       if (debugMethod) {
@@ -330,7 +380,18 @@ async function request<T>(
           error: error instanceof Error ? error.message : String(error),
         });
       }
-      logger.warn(TAG, `Request error (attempt ${attempt + 1})`, error);
+
+      if (error instanceof ApiError && isExpectedError?.(error)) {
+        logger.info(TAG, `Expected API error (attempt ${attempt + 1})`, {
+          method,
+          path,
+          statusCode: error.statusCode,
+          errorCode: error.errorCode,
+          message: error.message,
+        });
+      } else {
+        logger.warn(TAG, `Request error (attempt ${attempt + 1})`, error);
+      }
 
       if (signal?.aborted) {
         throw error;

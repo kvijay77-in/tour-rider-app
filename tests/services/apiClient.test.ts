@@ -160,7 +160,7 @@ describe('apiClient.post', () => {
 
     expect(logger.debug).toHaveBeenCalledWith(
       'ApiClient',
-      'Request init POST',
+      'POST payload (normalized)',
       expect.objectContaining({ payload: body }),
     );
   });
@@ -255,6 +255,36 @@ describe('apiClient error handling', () => {
     await expect(
       apiClient.get('/v1/slow', { timeoutMs: 10, maxRetries: 0 }),
     ).rejects.toThrow(ApiError);
+  });
+
+  it('logs expected API errors at info level and not warn', async () => {
+    mockFetch.mockResolvedValue({
+      ok: false,
+      status: 404,
+      json: async () => ({
+        success: false,
+        error: { code: 'NOT_FOUND', message: 'Resource not found' },
+        timestamp: '2026-01-01T00:00:00Z',
+      }),
+    });
+
+    await expect(
+      apiClient.get('/v1/missing', {
+        isExpectedError: (error) => error.statusCode === 404,
+        maxRetries: 0,
+      }),
+    ).rejects.toThrow(ApiError);
+
+    expect(logger.info).toHaveBeenCalledWith(
+      'ApiClient',
+      'Expected API error (attempt 1)',
+      expect.objectContaining({ statusCode: 404, errorCode: 'NOT_FOUND' }),
+    );
+    expect(logger.warn).not.toHaveBeenCalledWith(
+      'ApiClient',
+      'Request error (attempt 1)',
+      expect.anything(),
+    );
   });
 });
 

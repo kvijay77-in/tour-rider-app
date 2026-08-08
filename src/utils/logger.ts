@@ -43,35 +43,65 @@ function shouldLog(level: LogLevel): boolean {
   return level >= activeLevel;
 }
 
-function serializeError(error: Error): Record<string, unknown> {
-  const details: Record<string, unknown> = {
-    name: error.name,
-    message: error.message,
-  };
+function safeStringify(value: unknown): string {
+  if (value === undefined) return 'undefined';
+  if (value === null) return 'null';
 
-  const errorWithMeta = error as Error & {
-    statusCode?: number;
-    errorCode?: string;
-    cause?: unknown;
-  };
+  try {
+    const seen = new WeakSet<object>();
+    return JSON.stringify(value, (_key, nestedValue: unknown) => {
+      if (nestedValue instanceof Error) {
+        const details: Record<string, unknown> = {
+          name: nestedValue.name,
+          message: nestedValue.message,
+        };
 
-  if (error.stack) {
-    details.stack = error.stack;
+        const errorWithMeta = nestedValue as Error & {
+          statusCode?: number;
+          errorCode?: string;
+          cause?: unknown;
+        };
+
+        if (nestedValue.stack) {
+          details.stack = nestedValue.stack;
+        }
+        if (errorWithMeta.statusCode !== undefined) {
+          details.statusCode = errorWithMeta.statusCode;
+        }
+        if (errorWithMeta.errorCode) {
+          details.errorCode = errorWithMeta.errorCode;
+        }
+        if (errorWithMeta.cause !== undefined) {
+          details.cause = errorWithMeta.cause;
+        }
+
+        return details;
+      }
+
+      if (typeof nestedValue === 'object' && nestedValue !== null) {
+        if (seen.has(nestedValue as object)) {
+          return '[Circular]';
+        }
+        seen.add(nestedValue as object);
+      }
+      if (typeof nestedValue === 'bigint') {
+        return nestedValue.toString();
+      }
+      if (typeof nestedValue === 'function') {
+        return `[Function ${nestedValue.name || 'anonymous'}]`;
+      }
+      if (typeof nestedValue === 'symbol') {
+        return nestedValue.toString();
+      }
+      return nestedValue;
+    });
+  } catch {
+    try {
+      return String(value);
+    } catch {
+      return '[Unserializable]';
+    }
   }
-
-  if (errorWithMeta.statusCode !== undefined) {
-    details.statusCode = errorWithMeta.statusCode;
-  }
-
-  if (errorWithMeta.errorCode) {
-    details.errorCode = errorWithMeta.errorCode;
-  }
-
-  if (errorWithMeta.cause !== undefined) {
-    details.cause = errorWithMeta.cause;
-  }
-
-  return details;
 }
 
 /**
@@ -89,79 +119,16 @@ function formatError(err: unknown): string {
     }
     return parts.join(' | ');
   }
-  try {
-    return JSON.stringify(err);
-  } catch {
-    return String(err);
-  }
-}
-
-function createJsonReplacer(): (key: string, value: unknown) => unknown {
-  const seen = new WeakSet<object>();
-
-  return (_key: string, value: unknown): unknown => {
-    if (value instanceof Error) {
-      return serializeError(value);
-    }
-
-    if (typeof value === 'bigint') {
-      return `${value}n`;
-    }
-
-    if (typeof value === 'function') {
-      return `[Function ${value.name || 'anonymous'}]`;
-    }
-
-    if (typeof value === 'symbol') {
-      return value.toString();
-    }
-
-    if (typeof value === 'undefined') {
-      return '[undefined]';
-    }
-
-    if (typeof value === 'object' && value !== null) {
-      if (seen.has(value)) {
-        return '[Circular]';
-      }
-
-      seen.add(value);
-    }
-
-    return value;
-  };
-}
-
-function serializeData(data: unknown): string {
-  if (typeof data === 'string') {
-    return data;
-  }
-
-  if (data instanceof Error) {
-    return formatError(data);
-  }
-
-  if (typeof data === 'undefined') {
-    return '[undefined]';
-  }
-
-  try {
-    const serialized = JSON.stringify(data, createJsonReplacer());
-    if (serialized !== undefined) {
-      return serialized;
-    }
-  } catch {
-    // Fall through to a best-effort string conversion.
-  }
-
-  return String(data);
+  return safeStringify(err);
 }
 
 function log(level: LogLevel, tag: string, message: string, data?: unknown): void {
   if (!shouldLog(level)) return;
 
   const prefix = `[${LEVEL_NAMES[level]}] [${tag}]`;
-  const extra = data !== undefined ? serializeData(data) : '';
+  const extra = data !== undefined
+    ? (data instanceof Error ? formatError(data) : (typeof data === 'string' ? data : safeStringify(data)))
+    : '';
 
   const line = extra ? `${prefix} ${message} - ${extra}` : `${prefix} ${message}`;
 
@@ -170,17 +137,10 @@ function log(level: LogLevel, tag: string, message: string, data?: unknown): voi
       console.error(line);
       break;
     case LogLevel.WARN:
-      try {
-        console.warn(line);
-      } catch {
-        // Some environments can monkey-patch console.warn; degrade gracefully.
-        // eslint-disable-next-line no-console
-        console.log(line);
-      }
+      console.warn(line);
       break;
     default:
-      // eslint-disable-next-line no-console
-      console.log(line);
+      console.info(line);
       break;
   }
 }
