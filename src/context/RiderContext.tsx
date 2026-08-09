@@ -39,7 +39,12 @@ interface RiderContextValue {
   /** Update the rider profile with the given data */
   updateProfile: (data: UpdateRiderProfileRequest) => Promise<void>;
   /** Upload and attach a profile picture to the rider profile */
-  uploadProfilePicture: (localUri: string, mimeType?: string, profileId?: string) => Promise<void>;
+  uploadProfilePicture: (
+    localUri: string | null,
+    mimeType?: string,
+    profileId?: string,
+    base64Data?: string,
+  ) => Promise<void>;
   /** Alias for loadProfile — refreshes profile from the API */
   refreshProfile: () => Promise<void>;
 }
@@ -61,6 +66,23 @@ const RiderContext = createContext<RiderContextValue>({
 
 export function useRider(): RiderContextValue {
   return useContext(RiderContext);
+}
+
+function base64ToUint8Array(base64Data: string): Uint8Array {
+  const atobFn = globalThis.atob;
+
+  if (typeof atobFn !== 'function') {
+    throw new Error('Image decoding is not available in this runtime.');
+  }
+
+  const binaryString = atobFn(base64Data);
+  const bytes = new Uint8Array(binaryString.length);
+
+  for (let index = 0; index < binaryString.length; index += 1) {
+    bytes[index] = binaryString.charCodeAt(index);
+  }
+
+  return bytes;
 }
 
 // ---------------------------------------------------------------------------
@@ -150,10 +172,13 @@ export function RiderProvider({ children }: RiderProviderProps) {
     localUri?: string | null,
     mimeType?: string,
     profileId?: string,
+    base64Data?: string,
   ): Promise<void> => {
-    if (!localUri) {
-      logger.info(TAG, 'No profile picture selected; skipping upload');
-      return;
+    if (!localUri || !base64Data) {
+      const msg = 'Cannot upload profile picture — image data is missing';
+      logger.error(TAG, msg);
+      setError(msg);
+      throw new Error(msg);
     }
 
     const targetProfileId = profileId ?? user?.profileId;
@@ -175,23 +200,27 @@ export function RiderProvider({ children }: RiderProviderProps) {
       if (!uploadUrlResponse.success || !uploadData) {
         const msg = uploadUrlResponse.error?.message ?? 'Failed to request upload URL';
         logger.warn(TAG, msg);
-        return;
+        throw new Error(msg);
       }
 
-      const localFileResponse = await fetch(localUri);
-      const blob = await localFileResponse.blob();
+      const uploadBytes = base64ToUint8Array(base64Data);
+      const uploadBuffer = uploadBytes.buffer.slice(
+        uploadBytes.byteOffset,
+        uploadBytes.byteOffset + uploadBytes.byteLength,
+      ) as ArrayBuffer;
 
       const putResponse = await fetch(uploadData.uploadUrl, {
         method: 'PUT',
         headers: {
           'Content-Type': mimeType ?? uploadData.contentType,
         },
-        body: blob,
+        body: uploadBuffer,
       });
 
       if (!putResponse.ok) {
-        logger.warn(TAG, `Profile picture upload failed with status ${putResponse.status}`);
-        return;
+        const msg = `Profile picture upload failed with status ${putResponse.status}`;
+        logger.warn(TAG, msg);
+        throw new Error(msg);
       }
 
       const profileUpdateResponse = await updateRiderProfile(targetProfileId, {
@@ -204,11 +233,13 @@ export function RiderProvider({ children }: RiderProviderProps) {
       } else {
         const msg = profileUpdateResponse.error?.message ?? 'Failed to save profile picture';
         logger.warn(TAG, msg);
+        throw new Error(msg);
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to upload profile picture';
       logger.warn(TAG, 'Profile picture upload skipped due to error', err);
       setError(message);
+      throw err instanceof Error ? err : new Error(message);
     } finally {
       setIsLoading(false);
     }

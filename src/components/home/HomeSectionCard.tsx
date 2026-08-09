@@ -4,7 +4,7 @@
 
 import React from 'react';
 import {
-  Image,
+  ImageBackground,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -37,11 +37,12 @@ function HomeSectionCardInner({
       accessibilityLabel={title}
     >
       <Card style={styles.card}>
-        <Image source={imageSource} style={styles.image} resizeMode="cover" />
-        <View style={styles.overlay}>
-          <Text style={styles.title} numberOfLines={1}>{title}</Text>
-          {subtitle ? <Text style={styles.subtitle} numberOfLines={2}>{subtitle}</Text> : null}
-        </View>
+        <ImageBackground source={imageSource} style={styles.image} resizeMode="cover">
+          <View style={styles.overlay}>
+            <Text style={styles.title} numberOfLines={1}>{title}</Text>
+            {subtitle ? <Text style={styles.subtitle} numberOfLines={2}>{subtitle}</Text> : null}
+          </View>
+        </ImageBackground>
       </Card>
     </TouchableOpacity>
   );
@@ -59,9 +60,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   image: {
-    ...StyleSheet.absoluteFillObject,
-    width: undefined,
-    height: undefined,
+    flex: 1,
   },
   overlay: {
     flex: 1,

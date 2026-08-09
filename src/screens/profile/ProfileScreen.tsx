@@ -25,7 +25,7 @@ import {
   type ProfileFormField,
   type ProfileFormValues,
 } from '../../utils/profileForm';
-import type { RiderAddress } from '../../types/rider';
+import type { RiderAddress, RiderEmergencyContact, UpdateRiderProfileRequest } from '../../types/rider';
 
 const TAG = 'ProfileScreen';
 
@@ -46,6 +46,77 @@ function formatAddress(address?: RiderAddress): string {
   return segments.length ? segments.join(', ') : '—';
 }
 
+function buildProfileUpdatePayload(
+  profile: NonNullable<ReturnType<typeof useRider>['profile']>,
+  values: ProfileFormValues,
+): UpdateRiderProfileRequest {
+  const payload: UpdateRiderProfileRequest = {};
+  const name = values.name.trim();
+  const phone = combinePhoneNumber(values.phoneCallingCode, values.phoneNumber);
+  const dateOfBirth = formatDateForApi(values.dateOfBirth as Date);
+  const gender = values.gender ?? undefined;
+  const address: RiderAddress = {
+    line1: values.addressLine1.trim(),
+    city: values.city.trim(),
+    state: values.state.trim(),
+    country: values.country,
+    postalCode: values.postalCode.trim(),
+  };
+  const addressLine2 = values.addressLine2.trim();
+  if (addressLine2) {
+    address.line2 = addressLine2;
+  }
+
+  const emergencyContact: RiderEmergencyContact = {
+    name: values.emergencyContactName.trim(),
+    relation: values.emergencyContactRelationship.trim(),
+    phone: combinePhoneNumber(values.emergencyPhoneCallingCode, values.emergencyContactPhone),
+  };
+
+  if (name !== profile.name) {
+    payload.name = name;
+  }
+
+  if (phone !== (profile.phone ?? '')) {
+    payload.phone = phone;
+  }
+
+  if (dateOfBirth !== (profile.dateOfBirth ?? '')) {
+    payload.dateOfBirth = dateOfBirth;
+  }
+
+  if (gender !== profile.gender) {
+    payload.gender = gender;
+  }
+
+  const currentAddress: RiderAddress = {
+    line1: profile.address?.line1 ?? '',
+    city: profile.address?.city ?? '',
+    state: profile.address?.state ?? '',
+    country: profile.address?.country ?? '',
+    postalCode: profile.address?.postalCode ?? '',
+  };
+  if (profile.address?.line2?.trim()) {
+    currentAddress.line2 = profile.address.line2.trim();
+  }
+
+  if (JSON.stringify(address) !== JSON.stringify(currentAddress)) {
+    payload.address = address;
+  }
+
+  const currentEmergencyContact: RiderEmergencyContact = {
+    name: profile.emergencyContact?.name ?? '',
+    relation: profile.emergencyContact?.relation ?? '',
+    phone: profile.emergencyContact?.phone ?? '',
+  };
+
+  if (JSON.stringify(emergencyContact) !== JSON.stringify(currentEmergencyContact)) {
+    payload.emergencyContact = emergencyContact;
+  }
+
+  return payload;
+}
+
 export function ProfileScreen() {
   const { logout, isAuthenticating } = useAuth();
   const { profile, isLoading, error, updateProfile, uploadProfilePicture, refreshProfile } = useRider();
@@ -55,6 +126,7 @@ export function ProfileScreen() {
   const [values, setValues] = useState<ProfileFormValues>(() => createProfileFormValues());
   const [selectedPhotoUri, setSelectedPhotoUri] = useState<string | null>(null);
   const [selectedPhotoMimeType, setSelectedPhotoMimeType] = useState<string | undefined>();
+  const [selectedPhotoBase64, setSelectedPhotoBase64] = useState<string | null>(null);
   const [formErrors, setFormErrors] = useState<ProfileFormErrors>({});
 
   useEffect(() => {
@@ -67,6 +139,7 @@ export function ProfileScreen() {
     setValues(createProfileFormValues(profile));
     setSelectedPhotoUri(null);
     setSelectedPhotoMimeType(undefined);
+    setSelectedPhotoBase64(null);
     setFormErrors({});
   }, [profile]);
 
@@ -92,9 +165,14 @@ export function ProfileScreen() {
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.85,
+        base64: true,
       });
       const asset = result.canceled ? undefined : result.assets[0];
       if (!asset?.uri) return;
+      if (!asset.base64) {
+        Alert.alert('Invalid photo', 'Unable to read image data. Please select another photo.');
+        return;
+      }
 
       if (asset.fileSize && asset.fileSize > 5 * 1024 * 1024) {
         Alert.alert('Invalid photo', 'Profile picture must be 5MB or smaller.');
@@ -103,6 +181,7 @@ export function ProfileScreen() {
 
       setSelectedPhotoUri(asset.uri);
       setSelectedPhotoMimeType(asset.mimeType ?? 'image/jpeg');
+      setSelectedPhotoBase64(asset.base64);
       setFormErrors((previous) => ({ ...previous, photo: undefined }));
       logger.info(TAG, 'Profile photo selected for profile update');
     } catch (pickError) {
@@ -122,6 +201,10 @@ export function ProfileScreen() {
   }, [resetEditor]);
 
   const handleSave = useCallback(async () => {
+    if (!profile) {
+      return;
+    }
+
     const hasPhoto = Boolean(selectedPhotoUri || profile?.photoUrl || profile?.photoS3Key);
     const errors = validateProfileForm(values, hasPhoto);
     setFormErrors(errors);
@@ -129,27 +212,29 @@ export function ProfileScreen() {
 
     setIsSaving(true);
     try {
-      await updateProfile({
-        name: values.name.trim(),
-        phone: combinePhoneNumber(values.phoneCallingCode, values.phoneNumber),
-        dateOfBirth: formatDateForApi(values.dateOfBirth as Date),
-        gender: values.gender ?? undefined,
-        address: {
-          line1: values.addressLine1.trim(),
-          ...(values.addressLine2.trim() ? { line2: values.addressLine2.trim() } : {}),
-          city: values.city.trim(),
-          state: values.state.trim(),
-          country: values.country,
-          postalCode: values.postalCode.trim(),
-        },
-        emergencyContact: {
-          name: values.emergencyContactName.trim(),
-          relation: values.emergencyContactRelationship.trim(),
-          phone: combinePhoneNumber(values.emergencyPhoneCallingCode, values.emergencyContactPhone),
-        },
-      });
+      const profileUpdates = buildProfileUpdatePayload(profile, values);
+      const hasProfileUpdates = Object.keys(profileUpdates).length > 0;
+      const hasPhotoUpdate = Boolean(selectedPhotoUri);
 
-      if (selectedPhotoUri) await uploadProfilePicture(selectedPhotoUri, selectedPhotoMimeType);
+      if (!hasProfileUpdates && !hasPhotoUpdate) {
+        logger.info(TAG, 'Profile save skipped because no changes were detected');
+        setIsEditing(false);
+        return;
+      }
+
+      if (hasProfileUpdates) {
+        await updateProfile(profileUpdates);
+      }
+
+      if (hasPhotoUpdate) {
+        await uploadProfilePicture(
+          selectedPhotoUri,
+          selectedPhotoMimeType,
+          profile?.profileId,
+          selectedPhotoBase64 ?? undefined,
+        );
+      }
+
       setIsEditing(false);
       setSuccessMessageVisible(true);
       logger.info(TAG, 'Profile updated');
@@ -159,7 +244,15 @@ export function ProfileScreen() {
     } finally {
       setIsSaving(false);
     }
-  }, [profile, selectedPhotoMimeType, selectedPhotoUri, updateProfile, uploadProfilePicture, values]);
+  }, [
+    profile,
+    selectedPhotoBase64,
+    selectedPhotoMimeType,
+    selectedPhotoUri,
+    updateProfile,
+    uploadProfilePicture,
+    values,
+  ]);
 
   const handleLogout = useCallback(async () => {
     try {
@@ -207,6 +300,7 @@ export function ProfileScreen() {
             ) : null}
           </TouchableOpacity>
           {isEditing ? <Text style={styles.photoHint}>Tap the photo to change it</Text> : null}
+          {isEditing && formErrors.photo ? <Text style={styles.photoErrorText}>Profile picture is required.</Text> : null}
           {profile && !isEditing ? (
             <>
               <Text style={styles.name}>{profile.name}</Text>
@@ -319,6 +413,7 @@ const styles = StyleSheet.create({
     borderColor: COLORS.white,
   },
   photoHint: { marginTop: 9, color: COLORS.primary, fontSize: 13, fontWeight: '600' },
+  photoErrorText: { marginTop: 8, color: COLORS.danger, fontSize: 13, fontWeight: '600' },
   name: { fontSize: 24, fontWeight: '700', color: COLORS.textPrimary, marginTop: 12 },
   email: { fontSize: 14, color: COLORS.textSecondary, marginTop: 4 },
   centered: { alignItems: 'center', paddingVertical: 24 },

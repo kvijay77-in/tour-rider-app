@@ -12,11 +12,11 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 
 import { useAuth } from './AuthContext';
 import { useRider } from './RiderContext';
-import { getTours, getTourDetails, getTourRiderByProfile } from '../services/api/tourApi';
+import { getActiveTour, getTourRiderByProfile } from '../services/api/tourApi';
 import { logger } from '../utils/logger';
 import { ApiError } from '../services/api/apiClient';
 import type { Tour, TourRider } from '../types/tour';
-import { TourRiderStatus, TourStatus } from '../types/tour';
+import { TourRiderStatus } from '../types/tour';
 
 const TAG = 'TourContext';
 
@@ -100,40 +100,31 @@ export function TourProvider({ children }: TourProviderProps) {
 
     setIsLoading(true);
     try {
-      // Fetch active tours the rider may be enrolled in
-      const toursResponse = await getTours({ status: TourStatus.ACTIVE });
+      // Fetch the currently active tour for organizer context.
+      const activeTourResponse = await getActiveTour();
 
-      if (!toursResponse.success || !toursResponse.data?.items?.length) {
+      if (!activeTourResponse.success || !activeTourResponse.data) {
         logger.info(TAG, 'No active tours found');
         setActiveTourState(null);
         setEnrollment(null);
         return;
       }
 
-      // Check each active tour for rider enrollment using profileId
-      for (const tour of toursResponse.data.items) {
-        try {
-          const riderResponse = await getTourRiderByProfile(tour.tourId, user.profileId);
-          if (riderResponse.success && riderResponse.data) {
-            // Fetch full tour details
-            const detailsResponse = await getTourDetails(tour.tourId);
-            const fullTour = detailsResponse.success && detailsResponse.data
-              ? detailsResponse.data
-              : tour;
+      const tour = activeTourResponse.data;
 
-            setActiveTourState(fullTour);
-            setEnrollment(riderResponse.data);
-            logger.info(TAG, `Active tour found: ${tour.tourId} (status: ${riderResponse.data.status})`);
-            return;
-          }
-        } catch {
-          // Rider not enrolled in this tour — continue checking
-          logger.debug(TAG, `Rider not enrolled in tour ${tour.tourId}`);
+      try {
+        const riderResponse = await getTourRiderByProfile(tour.tourId, user.profileId);
+        if (riderResponse.success && riderResponse.data) {
+          setActiveTourState(tour);
+          setEnrollment(riderResponse.data);
+          logger.info(TAG, `Active tour found: ${tour.tourId} (status: ${riderResponse.data.status})`);
+          return;
         }
+      } catch {
+        logger.debug(TAG, `Rider not enrolled in tour ${tour.tourId}`);
       }
 
-      // No enrollment found in any active tour
-      logger.info(TAG, 'Rider not enrolled in any active tour');
+      logger.info(TAG, 'Rider not enrolled in active tour');
       setActiveTourState(null);
       setEnrollment(null);
     } catch (err) {

@@ -41,6 +41,7 @@ export function ProfileCreationScreen({ navigation }: Props) {
   const [values, setValues] = useState<ProfileFormValues>(() => createProfileFormValues());
   const [selectedPhotoUri, setSelectedPhotoUri] = useState<string | null>(null);
   const [selectedPhotoMimeType, setSelectedPhotoMimeType] = useState<string | undefined>();
+  const [selectedPhotoBase64, setSelectedPhotoBase64] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formErrors, setFormErrors] = useState<ProfileFormErrors>({});
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -68,9 +69,14 @@ export function ProfileCreationScreen({ navigation }: Props) {
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.85,
+        base64: true,
       });
       const asset = result.canceled ? undefined : result.assets[0];
       if (!asset?.uri) return;
+      if (!asset.base64) {
+        Alert.alert('Invalid photo', 'Unable to read image data. Please select another photo.');
+        return;
+      }
 
       if (asset.fileSize && asset.fileSize > 5 * 1024 * 1024) {
         Alert.alert('Invalid photo', 'Profile picture must be 5MB or smaller.');
@@ -79,6 +85,7 @@ export function ProfileCreationScreen({ navigation }: Props) {
 
       setSelectedPhotoUri(asset.uri);
       setSelectedPhotoMimeType(asset.mimeType ?? 'image/jpeg');
+      setSelectedPhotoBase64(asset.base64);
       setFormErrors((previous) => ({ ...previous, photo: undefined }));
       logger.info(TAG, 'Profile photo selected during profile creation');
     } catch (error) {
@@ -130,7 +137,12 @@ export function ProfileCreationScreen({ navigation }: Props) {
         },
       });
 
-      await uploadProfilePicture(selectedPhotoUri, selectedPhotoMimeType, profileId);
+      await uploadProfilePicture(
+        selectedPhotoUri,
+        selectedPhotoMimeType,
+        profileId,
+        selectedPhotoBase64 ?? undefined,
+      );
       await refreshProfile();
       logger.info(TAG, 'Profile created successfully');
       navigation.replace('MainTabs', { successMessage: 'Profile created successfully' });
@@ -209,6 +221,7 @@ export function ProfileCreationScreen({ navigation }: Props) {
             </View>
             <MaterialIcons name="chevron-right" size={24} color={COLORS.textSecondary} />
           </TouchableOpacity>
+          {formErrors.photo ? <Text style={styles.photoErrorText}>Profile picture is required.</Text> : null}
         </View>
 
         <ProfileFormFields
@@ -268,6 +281,7 @@ const styles = StyleSheet.create({
   photoCopy: { flex: 1, paddingHorizontal: 13 },
   photoTitle: { fontSize: 15, fontWeight: '700', color: COLORS.textPrimary },
   photoHint: { fontSize: 12, color: COLORS.textSecondary, marginTop: 4 },
+  photoErrorText: { marginTop: 8, color: COLORS.danger, fontSize: 13, fontWeight: '600' },
   actions: { gap: 10, marginTop: 24 },
 });
 

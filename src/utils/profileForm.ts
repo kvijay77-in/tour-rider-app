@@ -159,6 +159,7 @@ export function validateProfileForm(values: ProfileFormValues, hasPhoto: boolean
   if (!isValidLocalPhone(values.emergencyPhoneCallingCode, values.emergencyContactPhone)) {
     errors.emergencyContactPhone = true;
   }
+  if (!hasPhoto) errors.photo = true;
 
   return errors;
 }

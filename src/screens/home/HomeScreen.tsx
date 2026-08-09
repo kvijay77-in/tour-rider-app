@@ -80,7 +80,7 @@ export function HomeScreen({ navigation, route }: Props) {
           />
           <HomeSectionCard
             title="Tour"
-            subtitle="View active tour rides"
+            subtitle="ToT 2026"
             imageSource={require('../../../assets/rideplan-2026.png')}
             onPress={() => navigation.navigate('Tour')}
           />

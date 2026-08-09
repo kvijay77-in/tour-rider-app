@@ -26,7 +26,7 @@ describe('profile form utilities', () => {
     expect(combinePhoneNumber('91', '98765 43210')).toBe('+919876543210');
   });
 
-  it('marks every mandatory field except address line 2 and photo', () => {
+  it('marks every mandatory field except address line 2', () => {
     const errors = validateProfileForm(createProfileFormValues(), false);
 
     expect(errors).toEqual(expect.objectContaining({
@@ -44,6 +44,12 @@ describe('profile form utilities', () => {
     }));
     expect(errors).not.toHaveProperty('addressLine2');
     expect(errors).not.toHaveProperty('country');
+    expect(errors).toHaveProperty('photo');
+  });
+
+  it('does not require a photo when one already exists', () => {
+    const errors = validateProfileForm(createProfileFormValues(), true);
+
     expect(errors).not.toHaveProperty('photo');
   });
 });
