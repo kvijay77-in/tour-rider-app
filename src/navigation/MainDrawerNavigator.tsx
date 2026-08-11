@@ -34,6 +34,22 @@ export function MainDrawerNavigator({ route }: MainDrawerNavigatorProps) {
       drawerContent={(props) => <DrawerContent {...props} />}
       screenOptions={{
         headerShown: true,
+        headerRight: () => (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Log out"
+            hitSlop={8}
+            onPress={() => {
+              logout().catch(() => {});
+            }}
+            style={({ pressed }) => ({
+              opacity: pressed ? 0.7 : 1,
+              padding: 4,
+            })}
+          >
+            <Ionicons name="log-out-outline" size={24} color={COLORS.textPrimary} />
+          </Pressable>
+        ),
         drawerActiveTintColor: COLORS.primary,
         drawerLabelStyle: {
           fontSize: 16,
@@ -47,22 +63,6 @@ export function MainDrawerNavigator({ route }: MainDrawerNavigatorProps) {
         initialParams={successMessage ? { successMessage } : undefined}
         options={{
           title: 'Home',
-          headerRight: () => (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Log out"
-              hitSlop={8}
-              onPress={() => {
-                logout().catch(() => {});
-              }}
-              style={({ pressed }) => ({
-                opacity: pressed ? 0.7 : 1,
-                padding: 4,
-              })}
-            >
-              <Ionicons name="log-out-outline" size={24} color={COLORS.textPrimary} />
-            </Pressable>
-          ),
         }}
       />
       <Drawer.Screen

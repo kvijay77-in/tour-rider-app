@@ -38,7 +38,7 @@ export type MainDrawerParamList = {
  */
 export type TourStackParamList = {
   TourRides: undefined;
-  RideDetails: { rideId: string };
+  RideDetails: { rideId: string; tourId: string };
 };
 
 /**

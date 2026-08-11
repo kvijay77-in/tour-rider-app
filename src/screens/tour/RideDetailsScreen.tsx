@@ -10,9 +10,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { COLORS } from '../../constants';
 import { Card } from '../../components/common/Card';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
-import { useTour } from '../../hooks/useTour';
 import { getRideDetails } from '../../services/api/rideApi';
-import { getActiveTour } from '../../services/api/tourApi';
 import { formatDate } from '../../utils/dateFormatter';
 import { logger } from '../../utils/logger';
 import type { Ride } from '../../types/ride';
@@ -23,8 +21,7 @@ const TAG = 'RideDetailsScreen';
 type Props = NativeStackScreenProps<TourStackParamList, 'RideDetails'>;
 
 export function RideDetailsScreen({ route }: Props) {
-  const { activeTour } = useTour();
-  const { rideId } = route.params;
+  const { rideId, tourId } = route.params;
 
   const [ride, setRide] = useState<Ride | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -36,12 +33,6 @@ export function RideDetailsScreen({ route }: Props) {
       setError(null);
 
       try {
-        const tourId = activeTour?.tourId ?? (await getActiveTour()).data?.tourId;
-
-        if (!tourId) {
-          throw new Error('No active tour available.');
-        }
-
         const response = await getRideDetails(tourId, rideId);
         if (response.success && response.data) {
           setRide(response.data);
@@ -58,7 +49,7 @@ export function RideDetailsScreen({ route }: Props) {
         setIsLoading(false);
       }
     })();
-  }, [activeTour?.tourId, rideId]);
+  }, [rideId, tourId]);
 
   if (isLoading) {
     return <LoadingSpinner message="Loading ride details..." />;

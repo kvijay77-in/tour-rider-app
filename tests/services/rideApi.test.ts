@@ -65,6 +65,18 @@ describe('getTourRides', () => {
     expect(result.data?.items).toHaveLength(2);
   });
 
+  it('normalizes backend ride arrays into items', async () => {
+    mockedGet.mockResolvedValueOnce({
+      success: true,
+      data: { rides: [{ rideId: 'R1' }, { rideId: 'R2' }], total: 2 },
+      timestamp: '',
+    });
+
+    const result = await getTourRides('T1');
+    expect(result.data?.items).toEqual([{ rideId: 'R1' }, { rideId: 'R2' }]);
+    expect(result.data?.total).toBe(2);
+  });
+
   it('passes query params', async () => {
     mockedGet.mockResolvedValueOnce({ success: true, data: { items: [] }, timestamp: '' });
     await getTourRides('T1', { status: 'COMPLETED' });

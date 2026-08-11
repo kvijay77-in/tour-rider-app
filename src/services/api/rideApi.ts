@@ -10,6 +10,34 @@ import type { Ride } from '../../types/ride';
 
 const TAG = 'RideApi';
 
+function normalizeRideListPayload(payload: unknown): PaginatedResponse<Ride> {
+  if (Array.isArray(payload)) {
+    return { items: payload };
+  }
+
+  if (!payload || typeof payload !== 'object') {
+    return { items: [] };
+  }
+
+  const response = payload as Record<string, unknown>;
+  const items =
+    (Array.isArray(response.items) ? response.items : undefined) ??
+    (Array.isArray(response.rides) ? response.rides : undefined) ??
+    (Array.isArray(response.results) ? response.results : undefined) ??
+    (Array.isArray(response.data) ? response.data : undefined) ??
+    [];
+
+  return {
+    items,
+    ...(typeof response.nextToken === 'string'
+      ? { nextToken: response.nextToken }
+      : {}),
+    ...(typeof response.total === 'number'
+      ? { total: response.total }
+      : {}),
+  };
+}
+
 /**
  * Get today's ride for a specific tour.
  */
@@ -28,10 +56,19 @@ export async function getTourRides(
   params?: Record<string, string>,
 ): Promise<ApiResponse<PaginatedResponse<Ride>>> {
   logger.debug(TAG, `Fetching rides for tour ${tourId}`);
-  return apiClient.get<PaginatedResponse<Ride>>(
+  const response = await apiClient.get<unknown>(
     `/v1/tours/${encodeURIComponent(tourId)}/rides`,
     { params },
   );
+
+  if (!response.success) {
+    return response as ApiResponse<PaginatedResponse<Ride>>;
+  }
+
+  return {
+    ...response,
+    data: normalizeRideListPayload(response.data),
+  } as ApiResponse<PaginatedResponse<Ride>>;
 }
 
 /**
