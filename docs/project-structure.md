@@ -100,6 +100,8 @@ tour-rider-app/
 │   │   │   ├── rideApi.ts     # Ride API
 │   │   │   ├── checkInApi.ts  # Check-in API
 │   │   │   └── notificationApi.ts # Notification API
+│   │   ├── activeTourStore.ts # SQLite cache for the sign-in refreshed active snapshot
+│   │   ├── tourHistoryStore.ts # SQLite cache for long-lived historical tours and rides
 │   │   └── config/            # Runtime configuration
 │   │       └── orgConfigService.ts # Org config secure storage
 │   ├── types/                  # TypeScript type definitions
@@ -211,6 +213,10 @@ HTTP client and API service layer for tour-data-api integration:
 - Handle errors consistently
 - Return typed responses
 - Log API calls at DEBUG level
+
+#### Local SQLite caches
+- **activeTourStore.ts**: Replaces the rider's active-tour snapshot at sign-in and serves active tour and active rides locally during the session
+- **tourHistoryStore.ts**: Stores immutable historical tour catalog and ride data for reuse across later visits to the Tour page
 
 ### `/src/types`
 TypeScript type definitions and interfaces:

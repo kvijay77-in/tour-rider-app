@@ -187,6 +187,7 @@ Use this checklist before and after architecture-focused changes to confirm no b
 - Non-retryable API failures continue to surface as `ApiError` instances with backend error details when available.
 - Expected first-time rider `404` responses (missing Cognito link or missing rider profile) are treated as informational states and handled in auth/profile bootstrap flows.
 - Active tour loading must not run until rider profile creation is complete.
+- Active tour bootstrap should perform a single refresh path through `TourContext`, reseed the SQLite active snapshot, and keep active-tour screens on local cached reads until the next explicit refresh or sign-in.
 
 ### 1. Create a Feature Branch
 

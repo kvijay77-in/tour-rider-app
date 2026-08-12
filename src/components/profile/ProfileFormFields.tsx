@@ -22,7 +22,7 @@ import {
   type ProfileFormField,
   type ProfileFormValues,
 } from '../../utils/profileForm';
-import { SearchableSelectField, type SelectOption } from './SearchableSelectField';
+import { SearchableSelectField, type SelectOption } from '../common/SearchableSelectField';
 
 interface Props {
   email: string;

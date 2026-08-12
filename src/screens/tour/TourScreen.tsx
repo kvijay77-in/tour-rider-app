@@ -17,9 +17,10 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { COLORS } from '../../constants';
 import { Card } from '../../components/common/Card';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
-import { SearchableSelectField, type SelectOption } from '../../components/profile/SearchableSelectField';
+import { SearchableSelectField, type SelectOption } from '../../components/common/SearchableSelectField';
 import { getTourRides } from '../../services/api/rideApi';
-import { getActiveTour, getTours } from '../../services/api/tourApi';
+import { getTours } from '../../services/api/tourApi';
+import { useTour } from '../../hooks/useTour';
 import {
   cacheHistoricalTourCatalog,
   cacheHistoricalTourRides,
@@ -47,10 +48,38 @@ function formatTourDateRange(startDate?: string, endDate?: string): string {
   return `${formatDate(startDate)} - ${formatDate(endDate)}`;
 }
 
+function extractTourItems(payload: unknown): Tour[] {
+  logger.debug(TAG, 'Extracting tour items from payload...');
+
+  if (Array.isArray(payload)) {
+    logger.debug(TAG, `Payload is an array with ${payload.length} items`);
+    return payload as Tour[];
+  }
+
+  if (payload && typeof payload === 'object') {
+    const objectPayload = payload as { tours?: unknown; items?: unknown; count?: unknown };
+    logger.debug(TAG, `Payload actual keys: ${JSON.stringify(Object.keys(objectPayload))}`);
+
+    if (Array.isArray(objectPayload.tours)) {
+      logger.debug(TAG, `Payload has tours array with ${objectPayload.tours.length} items`);
+      return objectPayload.tours as Tour[];
+    }
+
+    if (Array.isArray(objectPayload.items)) {
+      logger.debug(TAG, `Payload has items array with ${objectPayload.items.length} items`);
+      return objectPayload.items as Tour[];
+    }
+  }
+
+  logger.warn(TAG, 'Tours payload did not include a supported tours list key');
+
+  return [];
+}
+
 type Props = NativeStackScreenProps<TourStackParamList, 'TourRides'>;
 
 export function TourScreen({ navigation }: Props) {
-  const [activeTour, setActiveTour] = useState<Tour | null>(null);
+  const { activeTour, activeRides, loadActiveTour } = useTour();
   const [historicalTours, setHistoricalTours] = useState<Tour[]>([]);
   const [selectedTourId, setSelectedTourId] = useState<string | null>(null);
   const [rides, setRides] = useState<Ride[]>([]);
@@ -79,6 +108,7 @@ export function TourScreen({ navigation }: Props) {
   );
 
   const tourOptions = useMemo<SelectOption[]>(() => {
+    logger.debug(TAG, `Generating tour options for ${availableTours.length} available tours`);
     return availableTours.map((tour) => ({
       value: tour.tourId,
       label: tour.name,
@@ -99,19 +129,11 @@ export function TourScreen({ navigation }: Props) {
 
     try {
       if (tour.status === TourStatus.ACTIVE) {
-        const ridesResponse = await getTourRides(tour.tourId);
         if (requestId !== ridesRequestIdRef.current) {
           return;
         }
 
-        if (ridesResponse.success) {
-          const items = ridesResponse.data?.items ?? [];
-          setRides(sortRidesForDisplay(items));
-        } else {
-          logger.warn(TAG, ridesResponse.error?.message ?? `Unable to load rides for tour ${tour.tourId}`);
-          setRides([]);
-        }
-
+        setRides(sortRidesForDisplay(activeRides));
         return;
       }
 
@@ -160,30 +182,27 @@ export function TourScreen({ navigation }: Props) {
         setIsLoadingRides(false);
       }
     }
-  }, []);
+  }, [activeRides]);
 
   const loadTourData = useCallback(async () => {
     const requestId = ++catalogRequestIdRef.current;
     const currentSelectedTourId = selectedTourIdRef.current;
 
     try {
-      const activeTourResponse = await getActiveTour();
-      const activeTourData = activeTourResponse.success ? activeTourResponse.data ?? null : null;
-
-      if (!activeTourResponse.success) {
-        logger.warn(TAG, activeTourResponse.error?.message ?? 'Unable to load active tour');
-      }
-
       let cachedHistoricalTours = await getCachedHistoricalTours();
 
       if (!cachedHistoricalTours.length) {
         const toursResponse = await getTours();
+        logger.debug(TAG, `Response status for historical tours catalog: ${toursResponse.success ? 'success' : 'failure'}`);
         if (requestId !== catalogRequestIdRef.current) {
           return;
         }
 
-        if (toursResponse.success && toursResponse.data?.items) {
-          cachedHistoricalTours = filterHistoricalTours(toursResponse.data.items);
+      const fetchedTours = extractTourItems(toursResponse.data);
+      logger.debug(TAG, `Fetched ${fetchedTours.length} historical tours from API`);
+
+        if (toursResponse.success || fetchedTours.length > 0) {
+          cachedHistoricalTours = filterHistoricalTours(fetchedTours);
           await cacheHistoricalTourCatalog(cachedHistoricalTours);
         } else {
           logger.warn(TAG, toursResponse.error?.message ?? 'Unable to load historical tour catalog');
@@ -194,31 +213,30 @@ export function TourScreen({ navigation }: Props) {
         return;
       }
 
-      setActiveTour(activeTourData);
       setHistoricalTours(cachedHistoricalTours);
+      logger.debug(TAG, `Loaded ${cachedHistoricalTours.length} historical tours from cache`);
 
       const nextSelectedTourId = (() => {
-        if (activeTourData && !previousActiveTourIdRef.current) {
-          return activeTourData.tourId;
+        if (activeTour && !previousActiveTourIdRef.current) {
+          return activeTour.tourId;
         }
 
-        if (activeTourData && currentSelectedTourId === previousActiveTourIdRef.current) {
-          return activeTourData.tourId;
+        if (activeTour && currentSelectedTourId === previousActiveTourIdRef.current) {
+          return activeTour.tourId;
         }
 
-        if (currentSelectedTourId && [...cachedHistoricalTours, ...(activeTourData ? [activeTourData] : [])].some((tour) => tour.tourId === currentSelectedTourId)) {
+        if (currentSelectedTourId && [...cachedHistoricalTours, ...(activeTour ? [activeTour] : [])].some((tour) => tour.tourId === currentSelectedTourId)) {
           return currentSelectedTourId;
         }
 
-        return activeTourData?.tourId ?? cachedHistoricalTours[0]?.tourId ?? null;
+        return activeTour?.tourId ?? cachedHistoricalTours[0]?.tourId ?? null;
       })();
 
-      previousActiveTourIdRef.current = activeTourData?.tourId ?? null;
+      previousActiveTourIdRef.current = activeTour?.tourId ?? null;
       setSelectedTourId(nextSelectedTourId);
     } catch (err) {
       logger.warn(TAG, 'Failed to load tour data');
       logger.debug(TAG, 'Tour data load failure', err);
-      setActiveTour(null);
       setHistoricalTours([]);
       setSelectedTourId(null);
       setRides([]);
@@ -227,7 +245,7 @@ export function TourScreen({ navigation }: Props) {
         setIsLoadingTours(false);
       }
     }
-  }, []);
+  }, [activeTour]);
 
   useEffect(() => {
     void loadTourData();
@@ -243,9 +261,10 @@ export function TourScreen({ navigation }: Props) {
 
   const onRefresh = useCallback(async () => {
     setIsRefreshing(true);
+    await loadActiveTour();
     await loadTourData();
     setIsRefreshing(false);
-  }, [loadTourData]);
+  }, [loadActiveTour, loadTourData]);
 
   const sortedRides = useMemo(() => sortRidesForDisplay(rides), [rides]);
 

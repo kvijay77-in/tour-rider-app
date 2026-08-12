@@ -160,7 +160,7 @@ In this mode, the app supports multiple organizers via invitation-based sign-up:
 ### Logout
 - Clear authentication tokens from secure storage
 - Navigate back to login screen
-- Clear any cached tour data from local storage
+- Clear the sign-in-refreshed active tour cache from local storage
 
 ### Session Management
 - JWT tokens auto-refresh via Amplify SDK
@@ -199,6 +199,9 @@ In this model, riders can browse available tours and submit registration request
 
 The Tour Dashboard is the home screen for registered riders during an active tour.
 
+- When the authenticated rider reaches the home/dashboard flow and a rider profile exists, the app must refresh the current active tour snapshot once for that sign-in.
+- The active snapshot refresh must fetch the active tour and the active tour ride list, replace any previously cached active snapshot in SQLite, and serve subsequent active-tour reads from that local cache until the rider explicitly refreshes or signs in again.
+
 #### Dashboard Features
 - Current tour information banner:
   - Tour name
@@ -227,10 +230,10 @@ The Tour Dashboard is the home screen for registered riders during an active tou
 The app provides a dedicated Tour page in the authenticated menu for viewing ride plans of the active tour.
 
 #### Tour Page Features
-- Loads the currently active tour from `GET /v1/tours/active`
-- Loads ride list for that tour from `GET /v1/tours/{tourId}/rides`
+- Reads the active tour and active ride list from the SQLite-backed active snapshot populated during sign-in
+- Pull-to-refresh refreshes the active snapshot from `GET /v1/tours/active` plus `GET /v1/tours/{tourId}/rides`, replaces the cached active snapshot, and then serves the updated data locally
 - Shows each ride's date, route summary, distance, and stage count
-- Supports pull-to-refresh to reload active tour and ride data
+- Historical tours and their rides continue using the separate long-lived historical cache
 
 #### Ride Details Features
 - Rider can open a ride details page by selecting any ride from the Tour page

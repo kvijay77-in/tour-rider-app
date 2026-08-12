@@ -212,7 +212,7 @@ The app uses React Context for global state:
 |---------|---------|-----------|
 | **AuthContext** | Authentication state | User info, JWT tokens, login/logout |
 | **RiderContext** | Rider profile state | Profile data, profile-exists flag, picture upload flow |
-| **TourContext** | Tour enrollment state | Active tour, enrollment status, tour details |
+| **TourContext** | Tour enrollment state | Active tour, enrollment status, cached active rides, derived today's ride |
 
 **Provider Order** (in `App.tsx` and navigation subtree):
 ```
@@ -231,6 +231,8 @@ The app bootstrap flow wraps the full provider and navigation tree in a root `Er
 
 `RiderContext` and `TourContext` mount only when a user session is active. This keeps authenticated state lifecycle scoped to the authenticated subtree and avoids unnecessary provider work before login.
 
+`TourContext` is the single owner of active-tour bootstrap. After a rider with a completed profile signs in, it refreshes the active tour snapshot once by calling `GET /v1/tours/active`, `GET /v1/tours/{tourId}/riders?profileId=...`, and `GET /v1/tours/{tourId}/rides`, replaces any previously cached active snapshot in SQLite, and then exposes active tour, active rides, and derived today's ride from that local cache to the rest of the app.
+
 ### Local State
 
 Screen-specific and component-specific state uses `useState` and `useReducer` hooks. Examples:
@@ -244,7 +246,7 @@ Screen-specific and component-specific state uses `useState` and `useReducer` ho
 State that can be computed from other state should not be stored separately. Examples:
 - Rider's current enrollment status (derived from TourContext)
 - Unread notification count (derived from notifications array)
-- Today's ride (derived from rides array + current date)
+- Today's ride (derived from the cached active rides array + current UTC date)
 
 ---
 
@@ -273,7 +275,7 @@ State that can be computed from other state should not be stored separately. Exa
    - `AuthContext` stores auth state
    - `RiderContext` loads rider profile
   - If profile is missing, profile gate redirects to Profile Creation and blocks main app navigation
-  - `TourContext` checks for active tour enrollment only after rider profile exists
+  - `TourContext` checks for active tour enrollment only after rider profile exists, refreshes the active snapshot once for that sign-in, and persists it to SQLite before active-tour screens consume it
    - Navigation routes user to appropriate home screen
 
 ### First-Time Rider Not-Found Handling
