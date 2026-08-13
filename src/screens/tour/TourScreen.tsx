@@ -112,7 +112,8 @@ export function TourScreen({ navigation }: Props) {
     return availableTours.map((tour) => ({
       value: tour.tourId,
       label: tour.name,
-      detail: `${tour.status} • ${formatTourDateRange(tour.startDate, tour.endDate)}`,
+      // No details required as name itself is good enough.
+      detail: '',
     }));
   }, [availableTours]);
 
