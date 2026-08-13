@@ -12,6 +12,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import { useAuth } from './AuthContext';
 import { ApiError } from '../services/api/apiClient';
 import {
+  getProfilePictureDownloadUrl,
   getRiderProfile,
   updateRiderProfile,
   requestProfilePictureUploadUrl,
@@ -85,6 +86,29 @@ function base64ToUint8Array(base64Data: string): Uint8Array {
   return bytes;
 }
 
+async function resolveProfilePicture(profile: RiderProfile): Promise<RiderProfile> {
+  if (!profile.photoS3Key) {
+    return profile;
+  }
+
+  try {
+    const response = await getProfilePictureDownloadUrl(profile.profileId);
+    if (response.success && response.data?.downloadUrl) {
+      return { ...profile, photoUrl: response.data.downloadUrl };
+    }
+
+    if (response.error?.message.includes('Access denied')) {
+      return { ...profile, photoAccessDenied: true };
+    }
+
+    logger.warn(TAG, response.error?.message ?? 'Failed to load profile picture');
+  } catch (err) {
+    logger.warn(TAG, 'Error loading profile picture', err);
+  }
+
+  return profile;
+}
+
 // ---------------------------------------------------------------------------
 // Provider
 // ---------------------------------------------------------------------------
@@ -113,7 +137,7 @@ export function RiderProvider({ children }: RiderProviderProps) {
     try {
       const response = await getRiderProfile(user.profileId);
       if (response.success && response.data) {
-        setProfile(response.data);
+        setProfile(await resolveProfilePicture(response.data));
         logger.info(TAG, `Profile loaded for ${user.profileId}`);
       } else {
         const msg = response.error?.message ?? 'Failed to load profile';
@@ -151,7 +175,7 @@ export function RiderProvider({ children }: RiderProviderProps) {
     try {
       const response = await updateRiderProfile(user.profileId, data);
       if (response.success && response.data) {
-        setProfile(response.data);
+        setProfile(await resolveProfilePicture(response.data));
         logger.info(TAG, `Profile updated for ${user.profileId}`);
       } else {
         const msg = response.error?.message ?? 'Failed to update profile';
@@ -228,7 +252,7 @@ export function RiderProvider({ children }: RiderProviderProps) {
       });
 
       if (profileUpdateResponse.success && profileUpdateResponse.data) {
-        setProfile(profileUpdateResponse.data);
+        setProfile(await resolveProfilePicture(profileUpdateResponse.data));
         logger.info(TAG, `Profile picture uploaded for ${targetProfileId}`);
       } else {
         const msg = profileUpdateResponse.error?.message ?? 'Failed to save profile picture';

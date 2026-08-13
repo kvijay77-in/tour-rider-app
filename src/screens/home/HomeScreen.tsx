@@ -13,6 +13,7 @@ import { LoadingSpinner } from '../../components/common/LoadingSpinner';
 import { ProfileSummaryCard } from '../../components/home/ProfileSummaryCard';
 import { HomeSectionCard } from '../../components/home/HomeSectionCard';
 import { useRider } from '../../hooks/useRider';
+import { logger } from '../../utils/logger';
 
 interface HomeNavigation {
   navigate: (screen: string, params?: Record<string, unknown>) => void;

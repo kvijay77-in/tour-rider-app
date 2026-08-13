@@ -55,6 +55,9 @@ export interface RiderProfile {
   /** Profile picture URL (resolved from S3 key) */
   photoUrl?: string;
 
+  /** True when the current user is not authorized to view the profile picture */
+  photoAccessDenied?: boolean;
+
   /** Created timestamp */
   createdAt?: string;
 
@@ -98,6 +101,16 @@ export interface ProfilePictureUploadUrlResponse {
   uploadUrl: string;
   photoS3Key: string;
   contentType: string;
+  expiresIn: number;
+  profileId: string;
+}
+
+/**
+ * Profile picture download URL response payload.
+ */
+export interface ProfilePictureDownloadUrlResponse {
+  downloadUrl: string;
+  photoS3Key: string;
   expiresIn: number;
   profileId: string;
 }

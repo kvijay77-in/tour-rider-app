@@ -3,7 +3,17 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import {
+  Alert,
+  Image,
+  Modal,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+  useWindowDimensions,
+} from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -120,8 +130,11 @@ function buildProfileUpdatePayload(
 export function ProfileScreen() {
   const { logout, isAuthenticating } = useAuth();
   const { profile, isLoading, error, updateProfile, uploadProfilePicture, refreshProfile } = useRider();
+  const { width: screenWidth } = useWindowDimensions();
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isPhotoPreviewVisible, setIsPhotoPreviewVisible] = useState(false);
+  const [photoAspectRatio, setPhotoAspectRatio] = useState(1);
   const [successMessageVisible, setSuccessMessageVisible] = useState(false);
   const [values, setValues] = useState<ProfileFormValues>(() => createProfileFormValues());
   const [selectedPhotoUri, setSelectedPhotoUri] = useState<string | null>(null);
@@ -266,6 +279,24 @@ export function ProfileScreen() {
   const displayPhotoUrl = selectedPhotoUri ?? profile?.photoUrl;
   const formattedAddress = useMemo(() => formatAddress(profile?.address), [profile?.address]);
 
+  const handleOpenPhotoPreview = useCallback(() => {
+    if (!displayPhotoUrl) return;
+
+    Image.getSize(
+      displayPhotoUrl,
+      (width, height) => {
+        if (width > 0 && height > 0) {
+          setPhotoAspectRatio(width / height);
+        }
+        setIsPhotoPreviewVisible(true);
+      },
+      () => {
+        setPhotoAspectRatio(1);
+        setIsPhotoPreviewVisible(true);
+      },
+    );
+  }, [displayPhotoUrl]);
+
   if (isLoading && !profile) {
     return (
       <SafeAreaView style={styles.safeArea}>
@@ -287,12 +318,16 @@ export function ProfileScreen() {
         <View style={styles.header}>
           <TouchableOpacity
             style={[styles.photoFrame, formErrors.photo ? styles.photoError : null]}
-            onPress={isEditing ? handlePickPhoto : undefined}
-            disabled={!isEditing || isSaving}
-            accessibilityRole={isEditing ? 'button' : 'image'}
-            accessibilityLabel={isEditing ? 'Change profile picture' : 'Profile picture'}
+            onPress={isEditing ? handlePickPhoto : handleOpenPhotoPreview}
+            disabled={isSaving || (!isEditing && !displayPhotoUrl)}
+            accessibilityRole="button"
+            accessibilityLabel={isEditing ? 'Change profile picture' : 'View larger profile picture'}
           >
-            <ProfilePicture photoUrl={displayPhotoUrl} size={100} />
+            <ProfilePicture
+              photoUrl={displayPhotoUrl}
+              photoAccessDenied={profile?.photoAccessDenied && !selectedPhotoUri}
+              size={100}
+            />
             {isEditing ? (
               <View style={styles.cameraBadge}>
                 <MaterialIcons name="photo-camera" size={17} color={COLORS.white} />
@@ -369,6 +404,33 @@ export function ProfileScreen() {
           />
         </View>
       </ScrollView>
+
+      <Modal
+        visible={isPhotoPreviewVisible}
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => setIsPhotoPreviewVisible(false)}
+      >
+        <View style={styles.photoPreview}>
+          <TouchableOpacity
+            style={styles.photoPreviewClose}
+            onPress={() => setIsPhotoPreviewVisible(false)}
+            accessibilityRole="button"
+            accessibilityLabel="Close profile picture"
+          >
+            <MaterialIcons name="close" size={28} color={COLORS.white} />
+          </TouchableOpacity>
+          {displayPhotoUrl ? (
+            <Image
+              source={{ uri: displayPhotoUrl }}
+              style={{ width: screenWidth, height: screenWidth / photoAspectRatio }}
+              resizeMode="contain"
+              accessibilityRole="image"
+              accessibilityLabel="Profile picture preview"
+            />
+          ) : null}
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -414,6 +476,24 @@ const styles = StyleSheet.create({
   },
   photoHint: { marginTop: 9, color: COLORS.primary, fontSize: 13, fontWeight: '600' },
   photoErrorText: { marginTop: 8, color: COLORS.danger, fontSize: 13, fontWeight: '600' },
+  photoPreview: {
+    flex: 1,
+    backgroundColor: COLORS.black,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  photoPreviewClose: {
+    position: 'absolute',
+    top: 44,
+    right: 16,
+    zIndex: 1,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(0, 0, 0, 0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   name: { fontSize: 24, fontWeight: '700', color: COLORS.textPrimary, marginTop: 12 },
   email: { fontSize: 14, color: COLORS.textSecondary, marginTop: 4 },
   centered: { alignItems: 'center', paddingVertical: 24 },

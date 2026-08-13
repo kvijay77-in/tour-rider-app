@@ -2,7 +2,12 @@
  * Unit tests for src/services/api/riderApi.ts
  */
 
-import { createRiderProfile, getRiderProfile, updateRiderProfile } from '../../src/services/api/riderApi';
+import {
+  createRiderProfile,
+  getProfilePictureDownloadUrl,
+  getRiderProfile,
+  updateRiderProfile,
+} from '../../src/services/api/riderApi';
 import { apiClient } from '../../src/services/api/apiClient';
 
 jest.mock('../../src/services/api/apiClient', () => ({
@@ -88,6 +93,45 @@ describe('getRiderProfile', () => {
     const options = mockedGet.mock.calls[0][1] as { isExpectedError?: (error: { statusCode: number }) => boolean };
     expect(options.isExpectedError?.({ statusCode: 404 })).toBe(true);
     expect(options.isExpectedError?.({ statusCode: 500 })).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// getProfilePictureDownloadUrl
+// ---------------------------------------------------------------------------
+
+describe('getProfilePictureDownloadUrl', () => {
+  it('fetches a pre-signed profile picture download URL', async () => {
+    mockedGet.mockResolvedValueOnce({
+      success: true,
+      data: {
+        downloadUrl: 'https://example.test/profile.jpg',
+        photoS3Key: 'profiles/P1/photo.jpg',
+        expiresIn: 300,
+        profileId: 'P1',
+      },
+      timestamp: '',
+    });
+
+    const result = await getProfilePictureDownloadUrl('P/1');
+
+    expect(mockedGet).toHaveBeenCalledWith('/v1/riders/profile/P%2F1/picture', {
+      isExpectedError: expect.any(Function),
+    });
+    expect(result.data?.downloadUrl).toBe('https://example.test/profile.jpg');
+  });
+
+  it('returns an access-denied response instead of throwing on 403', async () => {
+    mockedGet.mockResolvedValueOnce({
+      success: false,
+      error: { code: 'FORBIDDEN', message: 'Access denied' },
+      timestamp: '',
+    });
+
+    await expect(getProfilePictureDownloadUrl('P1')).resolves.toMatchObject({
+      success: false,
+      error: { code: 'FORBIDDEN', message: 'Access denied' },
+    });
   });
 });
 

@@ -13,6 +13,15 @@ import {
 } from '../../src/services/api/apiClient';
 import { logger } from '../../src/utils/logger';
 
+jest.mock('../../src/config/subscription.config', () => ({
+  subscriptionConfig: {
+    organizer: null,
+    auth: { userPoolId: 'test-pool', userPoolClientId: 'test-client' },
+    api: { baseUrl: 'https://api.example.com' },
+  },
+  isSingleSubscriptionMode: () => false,
+}));
+
 // ---------------------------------------------------------------------------
 // Mock fetch globally
 // ---------------------------------------------------------------------------
@@ -284,6 +293,33 @@ describe('apiClient error handling', () => {
       'ApiClient',
       'Request error (attempt 1)',
       expect.anything(),
+    );
+  });
+
+  it('returns configured error statuses without throwing', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: false,
+      status: 403,
+      json: async () => ({
+        success: false,
+        error: { code: 'FORBIDDEN', message: 'Access denied' },
+        timestamp: '2026-01-01T00:00:00Z',
+      }),
+    });
+
+    await expect(
+      apiClient.get('/v1/profile-picture', {
+        returnErrorResponseForStatuses: [403],
+      }),
+    ).resolves.toMatchObject({
+      success: false,
+      error: { code: 'FORBIDDEN', message: 'Access denied' },
+    });
+
+    expect(logger.info).toHaveBeenCalledWith(
+      'ApiClient',
+      'WARN: Expected API error (attempt 1)',
+      expect.objectContaining({ statusCode: 403 }),
     );
   });
 });

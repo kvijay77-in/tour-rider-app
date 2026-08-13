@@ -65,6 +65,8 @@ interface RequestOptions {
    * Expected errors are still thrown, but are not logged as warnings.
    */
   isExpectedError?: (error: ApiError) => boolean;
+  /** Non-retryable HTTP statuses to return as API responses instead of throwing. */
+  returnErrorResponseForStatuses?: readonly number[];
 }
 
 type RequestMethod = 'GET' | 'POST' | 'PUT' | 'DELETE';
@@ -267,6 +269,7 @@ async function request<T>(
     timeoutMs = DEFAULT_TIMEOUT_MS,
     maxRetries = MAX_RETRIES,
     isExpectedError,
+    returnErrorResponseForStatuses = [],
   } = options;
 
   const url = buildUrl(path, params);
@@ -359,12 +362,33 @@ async function request<T>(
       // Non-retryable error
       if (!isRetryable(response.status)) {
         const apiResp = responseBody as ApiResponse<T> | null;
-        throw new ApiError(
-          apiResp?.error?.message || `HTTP ${response.status}`,
+        const errorMessage = apiResp?.error?.message || `HTTP ${response.status}`;
+
+        if (returnErrorResponseForStatuses.includes(response.status)) {
+          logger.info(TAG, `WARN: Expected API error (attempt ${attempt + 1})`, {
+            method,
+            path,
+            statusCode: response.status,
+            errorCode: apiResp?.error?.code,
+            message: errorMessage,
+          });
+          return apiResp ?? {
+            success: false,
+            error: {
+              code: `HTTP_${response.status}`,
+              message: errorMessage,
+            },
+            timestamp: new Date().toISOString(),
+          };
+        }
+
+        const apiError = new ApiError(
+          errorMessage,
           response.status,
           apiResp?.error?.code,
           responseBody,
         );
+        throw apiError;
       }
 
       // Retryable server error

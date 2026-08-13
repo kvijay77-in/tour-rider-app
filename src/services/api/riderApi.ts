@@ -11,6 +11,7 @@ import type {
   CreateRiderProfileRequest,
   UpdateRiderProfileRequest,
   ProfilePictureUploadUrlResponse,
+  ProfilePictureDownloadUrlResponse,
   LinkProfileResponse,
 } from '../../types/rider';
 
@@ -81,6 +82,22 @@ export async function requestProfilePictureUploadUrl(
   return apiClient.post<ProfilePictureUploadUrlResponse>(
     `/v1/riders/profile/${encodeURIComponent(profileId)}/picture`,
     payload,
+  );
+}
+
+/**
+ * Request a pre-signed download URL for a rider profile picture.
+ */
+export async function getProfilePictureDownloadUrl(
+  profileId: string,
+): Promise<ApiResponse<ProfilePictureDownloadUrlResponse>> {
+  logger.debug(TAG, `Requesting profile picture download URL for ${profileId}`);
+  return apiClient.get<ProfilePictureDownloadUrlResponse>(
+    `/v1/riders/profile/${encodeURIComponent(profileId)}/picture`,
+    {
+      isExpectedError: (error) => error.statusCode === 403 || error.statusCode === 404,
+      returnErrorResponseForStatuses: [403],
+    },
   );
 }
 

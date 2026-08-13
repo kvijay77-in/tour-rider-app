@@ -3,7 +3,7 @@
  */
 
 import React from 'react';
-import { TouchableOpacity, Image, View, StyleSheet } from 'react-native';
+import { TouchableOpacity, Image, View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { COLORS } from '../../constants';
@@ -15,6 +15,8 @@ import { COLORS } from '../../constants';
 export interface ProfilePictureProps {
   /** URL of the profile photo (shows placeholder when undefined/empty) */
   photoUrl?: string;
+  /** Whether access to the profile photo was denied */
+  photoAccessDenied?: boolean;
   /** Diameter of the circular image */
   size: number;
   /** Optional press handler (e.g. to change photo) */
@@ -25,17 +27,27 @@ export interface ProfilePictureProps {
 // Component
 // ---------------------------------------------------------------------------
 
-export function ProfilePicture({ photoUrl, size, onPress }: ProfilePictureProps) {
+export function ProfilePicture({ photoUrl, photoAccessDenied, size, onPress }: ProfilePictureProps) {
   const imageStyle = {
     width: size,
     height: size,
     borderRadius: size / 2,
   };
 
-  const content = photoUrl ? (
+  const content = photoAccessDenied ? (
+    <View
+      style={[styles.accessDenied, imageStyle]}
+      accessibilityRole="image"
+      accessibilityLabel="Profile picture access denied"
+    >
+      <Text style={styles.accessDeniedText}>Access denied</Text>
+    </View>
+  ) : photoUrl ? (
     <Image
       source={{ uri: photoUrl }}
       style={[styles.image, imageStyle]}
+      resizeMode="cover"
+      resizeMethod="resize"
       accessibilityRole="image"
       accessibilityLabel="Profile picture"
     />
@@ -69,6 +81,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
+  },
+  accessDenied: {
+    backgroundColor: COLORS.gray[100],
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+    paddingHorizontal: 6,
+  },
+  accessDeniedText: {
+    color: COLORS.textSecondary,
+    fontSize: 12,
+    textAlign: 'center',
   },
 });
 

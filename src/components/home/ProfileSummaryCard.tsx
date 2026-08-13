@@ -9,6 +9,7 @@ import { COLORS } from '../../constants';
 import { Card } from '../common/Card';
 import { ProfilePicture } from '../profile/ProfilePicture';
 import type { RiderProfile } from '../../types/rider';
+import { logger } from '../../utils/logger';
 
 export interface ProfileSummaryCardProps {
   profile: RiderProfile | null;
@@ -20,6 +21,8 @@ function ProfileSummaryCardInner({ profile, onPress }: ProfileSummaryCardProps) 
     ? profile.name
     : 'Profile not available';
 
+    logger.debug('Rendering ProfileSummaryCard - Photo URL', `${profile?.photoUrl}`);
+
   return (
     <TouchableOpacity
       style={styles.touchable}
@@ -30,7 +33,11 @@ function ProfileSummaryCardInner({ profile, onPress }: ProfileSummaryCardProps) 
     >
       <Card style={styles.card}>
         <View style={styles.content}>
-          <ProfilePicture photoUrl={profile?.photoUrl} size={72} />
+          <ProfilePicture
+            photoUrl={profile?.photoUrl}
+            photoAccessDenied={profile?.photoAccessDenied}
+            size={72}
+          />
 
           <View style={styles.textColumn}>
             <Text style={styles.title}>Your Profile</Text>
