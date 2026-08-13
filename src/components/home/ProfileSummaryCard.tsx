@@ -20,9 +20,6 @@ function ProfileSummaryCardInner({ profile, onPress }: ProfileSummaryCardProps) 
   const displayName = profile
     ? profile.name
     : 'Profile not available';
-
-    logger.debug('Rendering ProfileSummaryCard - Photo URL', `${profile?.photoUrl}`);
-
   return (
     <TouchableOpacity
       style={styles.touchable}
