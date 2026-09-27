@@ -159,7 +159,7 @@ export function RiderProvider({ children }: RiderProviderProps) {
   }, [user?.profileId]);
 
   const refreshProfileDefinitions = useCallback(async (): Promise<void> => {
-    if (!user) {
+    if (!user?.userId) {
       setProfileDefinitions(null);
       setDefinitionsError(null);
       return;
@@ -179,7 +179,7 @@ export function RiderProvider({ children }: RiderProviderProps) {
     } finally {
       setIsLoadingDefinitions(false);
     }
-  }, [user]);
+  }, [user?.userId]);
 
   const updateProfileData = useCallback(async (data: UpdateRiderProfileRequest): Promise<void> => {
     if (!user?.profileId) {
@@ -305,13 +305,13 @@ export function RiderProvider({ children }: RiderProviderProps) {
   }, [user?.profileId, loadProfile]);
 
   useEffect(() => {
-    if (user) {
+    if (user?.userId) {
       void refreshProfileDefinitions();
     } else {
       setProfileDefinitions(null);
       setDefinitionsError(null);
     }
-  }, [refreshProfileDefinitions, user]);
+  }, [refreshProfileDefinitions, user?.userId]);
 
   const hasCompleteProfileForAccess = useMemo(() => {
     if (!profile || !profileDefinitions) {

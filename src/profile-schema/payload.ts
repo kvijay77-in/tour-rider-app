@@ -68,6 +68,18 @@ function sanitizeValue(definition: ProfileFieldDefinition, value: unknown): unkn
   }
 }
 
+function getClearedValue(definition: ProfileFieldDefinition): unknown {
+  if (definition.type === 'MULTI_SELECT') {
+    return [];
+  }
+
+  if (definition.type === 'GROUP' && definition.repeatable) {
+    return [];
+  }
+
+  return null;
+}
+
 function sanitizeGroupValue(
   definition: ProfileFieldDefinition,
   value: unknown,
@@ -116,7 +128,21 @@ export function buildProfileSavePayload({
     const sanitizedValue = sanitizeValue(attribute, values[attribute.key]);
     const currentValue = sanitizeValue(attribute, getAttributeValue(profile, attribute));
 
-    if (sanitizedValue === undefined || areValuesEqual(sanitizedValue, currentValue)) {
+    if (sanitizedValue === undefined) {
+      if (!isCreate && currentValue !== undefined) {
+        const clearedValue = getClearedValue(attribute);
+        if (!areValuesEqual(clearedValue, currentValue)) {
+          if (attribute.storage.scope === 'CORE' && attribute.storage.path) {
+            payload[attribute.storage.path] = clearedValue;
+          } else {
+            attributeUpdates[attribute.key] = clearedValue;
+          }
+        }
+      }
+      continue;
+    }
+
+    if (areValuesEqual(sanitizedValue, currentValue)) {
       continue;
     }
 

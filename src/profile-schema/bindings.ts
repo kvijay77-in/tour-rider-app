@@ -199,7 +199,7 @@ export function shouldIncludeAttributeInPayload(
     return false;
   }
 
-  if (handler.readOnly && !isCreate && !handler.allowCreatePayload) {
+  if (handler.readOnly && (!isCreate || !handler.allowCreatePayload)) {
     return false;
   }
 

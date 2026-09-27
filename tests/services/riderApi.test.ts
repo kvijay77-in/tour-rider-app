@@ -127,6 +127,25 @@ describe('profile attribute file endpoints', () => {
       },
     );
   });
+
+  it('encodes reserved characters in profile and attribute identifiers', async () => {
+    mockedGet.mockResolvedValueOnce({ success: true, timestamp: '' });
+    mockedPost.mockResolvedValueOnce({ success: true, timestamp: '' });
+
+    await requestProfileAttributeUploadUrl('P/1', 'medical/certificate');
+    await getProfileAttributeDownloadUrl('P/1', 'medical/certificate');
+
+    expect(mockedPost).toHaveBeenCalledWith(
+      `/v1/riders/profile/${encodeURIComponent('P/1')}/attributes/${encodeURIComponent('medical/certificate')}/upload`,
+      {},
+    );
+    expect(mockedGet).toHaveBeenCalledWith(
+      `/v1/riders/profile/${encodeURIComponent('P/1')}/attributes/${encodeURIComponent('medical/certificate')}/download`,
+      expect.objectContaining({
+        isExpectedError: expect.any(Function),
+      }),
+    );
+  });
 });
 
 describe('updateRiderProfile', () => {

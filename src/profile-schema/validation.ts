@@ -38,7 +38,26 @@ function normalizeDateValue(value: unknown): string | null {
     return null;
   }
 
-  return value.trim();
+  const normalized = value.trim();
+  const [yearString, monthString, dayString] = normalized.split('-');
+  const year = Number(yearString);
+  const month = Number(monthString);
+  const day = Number(dayString);
+
+  if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) {
+    return null;
+  }
+
+  const candidate = new Date(Date.UTC(year, month - 1, day));
+  if (
+    candidate.getUTCFullYear() !== year
+    || candidate.getUTCMonth() !== month - 1
+    || candidate.getUTCDate() !== day
+  ) {
+    return null;
+  }
+
+  return normalized;
 }
 
 function resolveRelativeDate(reference: Date, input: string): string | null {
@@ -49,7 +68,11 @@ function resolveRelativeDate(reference: Date, input: string): string | null {
 
   const amount = Number(match[1]);
   const unit = match[2]?.toLowerCase();
-  const date = new Date(reference.toISOString().split('T')[0] ?? reference.toISOString());
+  const date = new Date(Date.UTC(
+    reference.getUTCFullYear(),
+    reference.getUTCMonth(),
+    reference.getUTCDate(),
+  ));
 
   if (unit === 'd') {
     date.setUTCDate(date.getUTCDate() + amount);

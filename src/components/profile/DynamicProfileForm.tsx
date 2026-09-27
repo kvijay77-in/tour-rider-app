@@ -81,6 +81,12 @@ function buildCountryOptions(): SelectOption[] {
 
 const COUNTRY_SELECT_OPTIONS = buildCountryOptions();
 const INDIA_STATE_OPTIONS: SelectOption[] = INDIA_STATES.map((state) => ({ value: state, label: state }));
+let repeatableGroupItemSeed = 0;
+
+function createRepeatableGroupItemId(): string {
+  repeatableGroupItemSeed += 1;
+  return `repeatable-group-${repeatableGroupItemSeed}`;
+}
 
 function FieldError({ error }: { error?: string }) {
   if (!error) {
@@ -192,6 +198,7 @@ function MultiSelectField({
 }
 
 function BaseFieldRenderer({
+  definitions,
   definition,
   value,
   errors,
@@ -200,6 +207,7 @@ function BaseFieldRenderer({
   groupValues,
   onChange,
 }: {
+  definitions: ProfileDefinitions;
   definition: ProfileFieldDefinition;
   value: unknown;
   errors: ProfileValidationErrors;
@@ -256,6 +264,7 @@ function BaseFieldRenderer({
     case 'SELECT':
       return (
         <SelectField
+          definitions={definitions}
           definition={definition}
           value={typeof value === 'string' ? value : ''}
           disabled={disabled}
@@ -269,7 +278,7 @@ function BaseFieldRenderer({
       return (
         <MultiSelectField
           definition={definition}
-          definitions={rootValues.__definitions as ProfileDefinitions}
+          definitions={definitions}
           values={{ ...rootValues, ...groupValues }}
           selectedValues={Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === 'string') : []}
           disabled={disabled}
@@ -280,6 +289,7 @@ function BaseFieldRenderer({
     case 'GROUP':
       return (
         <GroupField
+          definitions={definitions}
           definition={definition}
           value={value}
           errors={errors}
@@ -303,6 +313,7 @@ function BaseFieldRenderer({
 }
 
 function GroupField({
+  definitions,
   definition,
   value,
   errors,
@@ -310,6 +321,7 @@ function GroupField({
   rootValues,
   onChange,
 }: {
+  definitions: ProfileDefinitions;
   definition: ProfileFieldDefinition;
   value: unknown;
   errors: ProfileValidationErrors;
@@ -318,61 +330,16 @@ function GroupField({
   onChange: (value: unknown) => void;
 }) {
   if (definition.repeatable) {
-    const items = Array.isArray(value) ? value : [];
     return (
-      <View style={styles.repeatableGroupList}>
-        {items.map((entry, index) => {
-          const objectEntry = entry && typeof entry === 'object' && !Array.isArray(entry) ? entry as Record<string, unknown> : {};
-          return (
-            <View key={`${definition.key}-${index}`} style={styles.repeatableGroupCard}>
-              <View style={styles.repeatableGroupHeader}>
-                <Text style={styles.repeatableGroupTitle}>{definition.label} {index + 1}</Text>
-                {!disabled ? (
-                  <Pressable onPress={() => onChange(items.filter((_, itemIndex) => itemIndex !== index))}>
-                    <MaterialIcons name="delete-outline" size={22} color={COLORS.danger} />
-                  </Pressable>
-                ) : null}
-              </View>
-              {definition.fields?.map((field) => {
-                if (!evaluateVisibleWhen(field.visibleWhen, objectEntry)) {
-                  return null;
-                }
-
-                const fieldPath = `${definition.key}.${field.key}`;
-                return (
-                  <View key={fieldPath}>
-                    <FieldLabel label={field.label} required={field.required} />
-                    <FieldHelpText helpText={field.helpText} />
-                    <BaseFieldRenderer
-                      definition={field}
-                      value={objectEntry[field.key]}
-                      errors={{ [field.key]: errors[`${definition.key}.${field.key}`] }}
-                      disabled={disabled}
-                      rootValues={rootValues}
-                      groupValues={objectEntry}
-                      onChange={(nextValue) => {
-                        const nextItems = [...items];
-                        nextItems[index] = updateNestedValue(objectEntry, [field.key], nextValue);
-                        onChange(nextItems);
-                      }}
-                    />
-                    <FieldError error={errors[`${definition.key}.${field.key}`]} />
-                  </View>
-                );
-              })}
-            </View>
-          );
-        })}
-        {!disabled && (!definition.maxItems || items.length < definition.maxItems) ? (
-          <TouchableOpacity
-            style={styles.repeatableAddButton}
-            onPress={() => onChange([...items, {}])}
-          >
-            <MaterialIcons name="add-circle-outline" size={20} color={COLORS.primary} />
-            <Text style={styles.repeatableAddButtonText}>Add {definition.label}</Text>
-          </TouchableOpacity>
-        ) : null}
-      </View>
+      <RepeatableGroupField
+        definitions={definitions}
+        definition={definition}
+        value={value}
+        errors={errors}
+        disabled={disabled}
+        rootValues={rootValues}
+        onChange={onChange}
+      />
     );
   }
 
@@ -390,6 +357,7 @@ function GroupField({
             <FieldLabel label={field.label} required={field.required} />
             <FieldHelpText helpText={field.helpText} />
             <BaseFieldRenderer
+              definitions={definitions}
               definition={field}
               value={objectValue[field.key]}
               errors={{ [field.key]: errors[fieldPath] }}
@@ -406,6 +374,98 @@ function GroupField({
   );
 }
 
+function RepeatableGroupField({
+  definitions,
+  definition,
+  value,
+  errors,
+  disabled,
+  rootValues,
+  onChange,
+}: {
+  definitions: ProfileDefinitions;
+  definition: ProfileFieldDefinition;
+  value: unknown;
+  errors: ProfileValidationErrors;
+  disabled: boolean;
+  rootValues: ProfileDraftValues;
+  onChange: (value: unknown) => void;
+}) {
+  const sourceItems = useMemo(() => (Array.isArray(value) ? value : []), [value]);
+  const items = useMemo(
+    () => sourceItems.map((entry) => {
+      const objectEntry = entry && typeof entry === 'object' && !Array.isArray(entry) ? entry as Record<string, unknown> : {};
+      return typeof objectEntry.__id === 'string'
+        ? objectEntry
+        : { ...objectEntry, __id: createRepeatableGroupItemId() };
+    }),
+    [sourceItems],
+  );
+
+  useEffect(() => {
+    const hasGeneratedKeys = items.some((entry, index) => entry !== sourceItems[index]);
+    if (hasGeneratedKeys) {
+      onChange(items);
+    }
+  }, [items, onChange, sourceItems]);
+
+  return (
+    <View style={styles.repeatableGroupList}>
+      {items.map((entry, index) => {
+        const objectEntry = entry && typeof entry === 'object' && !Array.isArray(entry) ? entry as Record<string, unknown> : {};
+        return (
+          <View key={String(objectEntry.__id ?? `${definition.key}-${index}`)} style={styles.repeatableGroupCard}>
+            <View style={styles.repeatableGroupHeader}>
+              <Text style={styles.repeatableGroupTitle}>{definition.label} {index + 1}</Text>
+              {!disabled ? (
+                <Pressable onPress={() => onChange(items.filter((_, itemIndex) => itemIndex !== index))}>
+                  <MaterialIcons name="delete-outline" size={22} color={COLORS.danger} />
+                </Pressable>
+              ) : null}
+            </View>
+            {definition.fields?.map((field) => {
+              if (!evaluateVisibleWhen(field.visibleWhen, objectEntry)) {
+                return null;
+              }
+
+              const fieldPath = `${definition.key}.${field.key}`;
+              return (
+                <View key={fieldPath}>
+                  <FieldLabel label={field.label} required={field.required} />
+                  <FieldHelpText helpText={field.helpText} />
+                  <BaseFieldRenderer
+                    definitions={definitions}
+                    definition={field}
+                    value={objectEntry[field.key]}
+                    errors={{ [field.key]: errors[`${definition.key}.${field.key}`] }}
+                    disabled={disabled}
+                    rootValues={rootValues}
+                    groupValues={objectEntry}
+                    onChange={(nextValue) => {
+                      const nextItems = [...items];
+                      nextItems[index] = updateNestedValue(objectEntry, [field.key], nextValue);
+                      onChange(nextItems);
+                    }}
+                  />
+                  <FieldError error={errors[`${definition.key}.${field.key}`]} />
+                </View>
+              );
+            })}
+          </View>
+        );
+      })}
+      {!disabled && (!definition.maxItems || items.length < definition.maxItems) ? (
+        <TouchableOpacity
+          style={styles.repeatableAddButton}
+          onPress={() => onChange([...items, { __id: createRepeatableGroupItemId() }])}
+        >
+          <MaterialIcons name="add-circle-outline" size={20} color={COLORS.primary} />
+          <Text style={styles.repeatableAddButtonText}>Add {definition.label}</Text>
+        </TouchableOpacity>
+      ) : null}
+    </View>
+  );
+}
 function DateField({
   definition,
   value,
@@ -524,6 +584,7 @@ function PhoneField({
 }
 
 function SelectField({
+  definitions,
   definition,
   value,
   disabled,
@@ -532,6 +593,7 @@ function SelectField({
   groupValues,
   onChange,
 }: {
+  definitions: ProfileDefinitions;
   definition: ProfileFieldDefinition;
   value: string;
   disabled: boolean;
@@ -540,7 +602,6 @@ function SelectField({
   groupValues: ProfileDraftValues;
   onChange: (value: string) => void;
 }) {
-  const definitions = rootValues.__definitions as ProfileDefinitions;
   const lov = definition.lovId ? definitions.lovsById[definition.lovId] : undefined;
   const parentValues = groupValues[definition.dependsOn ?? ''] ?? rootValues[definition.dependsOn ?? ''];
   const options = getLovItems(lov, typeof parentValues === 'string' ? parentValues : undefined);
@@ -591,8 +652,6 @@ export function DynamicProfileForm({
   showAdminOnly = false,
   onChange,
 }: DynamicProfileFormProps) {
-  const extendedValues = useMemo(() => ({ ...values, __definitions: definitions }), [definitions, values]);
-
   return (
     <View style={styles.form}>
       {definitions.sections.map((section) => {
@@ -628,12 +687,13 @@ export function DynamicProfileForm({
                   <FieldHelpText helpText={attribute.helpText} />
                   {showReadOnlyBadge ? <Text style={styles.readOnlyHint}>Read only</Text> : null}
                   <BaseFieldRenderer
+                    definitions={definitions}
                     definition={attribute}
                     value={value}
                     errors={errors}
                     disabled={fieldDisabled}
-                    rootValues={extendedValues}
-                    groupValues={extendedValues}
+                    rootValues={values}
+                    groupValues={values}
                     onChange={(nextValue) => onChange(attribute.key, nextValue)}
                   />
                   <FieldError error={error} />
