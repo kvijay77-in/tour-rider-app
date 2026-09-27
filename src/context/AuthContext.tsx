@@ -30,6 +30,7 @@ import { setAuthTokenProvider, setAuthInvalidatedCallback } from '../services/ap
 import { ApiError } from '../services/api/apiClient';
 import { getLinkedProfileId } from '../services/api/riderApi';
 import { clearActiveTourCache } from '../services/activeTourStore';
+import { clearProfileDefinitionsCache } from '../services/profileConfigStore';
 import { logger } from '../utils/logger';
 import {
   subscriptionConfig,
@@ -466,6 +467,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       logger.warn(TAG, 'Sign-out API call failed — clearing local state');
     } finally {
       await clearActiveTourCache();
+      await clearProfileDefinitionsCache();
       setUser(null);
       setError(null);
       setPostLoginRedirect(null);

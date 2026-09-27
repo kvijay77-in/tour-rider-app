@@ -53,35 +53,50 @@ The app supports two types of users, collectively referred to as **riders**:
 ## Rider Profile Management
 
 ### Profile Creation
+- Rider profile fields are fully configuration-driven from `GET /v1/config`
+- The rider app uses only enabled `RIDER_PROFILE_SECTION`, `RIDER_PROFILE_ATTRIBUTE`, and `LOV` entries for the current signed-in session
+- The current contract is defined in `kvijay77-in/tour-data-api/docs/rider-profile-attributes-design.md`
 - Riders must complete a profile after account verification and first authenticated sign-in
-- If profile data is missing, app access is gated and the rider is redirected to Profile Creation until completed
-- Required profile information:
-  - Name (single full-name field)
-  - Email address (used for authentication)
+- App access is gated only by required **system** profile attributes, so adding a new non-system required field does not block existing riders until their next save
+- Profile creation shows enabled rider-editable attributes, grouped and ordered by section configuration
+- Required fields are enforced on save
+- Admin-only attributes are never rider-editable
+- Disabled or unknown attributes are never shown, even if legacy values still exist in backend storage
+- Removed attributes are not cleaned up automatically; unsent stored values are retained by backend merge behavior
+- Seeded fields continue to be provided through configuration, including:
+  - Name
+  - Email address (read-only, derived from Cognito)
   - Phone number, entered as a searchable country dialing code and local number
   - Emergency contact object (Name, relationship, and phone number with searchable country dialing code)
   - Date of birth
   - Gender
   - Address object (`Line 1`, `City`, `State`, `Country`, and `Postal Code` are required; `Line 2` is optional)
-- Country defaults to India and is selected from a searchable country list
-- When Country is India, State is selected from the India state and union territory list; other countries use free-text State/Province input
-- Personal code is optional and is assigned/managed only by tour organizers
-- Riders can view personal code when available, but cannot create or modify it in the app
+  - Personal code (read-only, organizer-managed)
+  - Profile photo
+  - Dietary preference, blood group, medical-condition flags, and other configured attributes
+- Country defaults to India for the seeded address configuration
+- When a dependent state/province LOV has no child entries, the field falls back to free text when configured
 
 ### Profile Picture
-- Riders must upload a profile picture during profile creation and may replace it later from profile settings
+- Riders must upload a profile picture during profile creation when the configured `PROFILE_PHOTO` attribute is required and may replace it later from profile settings
 - Supported formats: JPEG, PNG
 - Maximum file size: 5MB
 - Image upload flow:
   - App requests a pre-signed upload URL from `POST /v1/riders/profile/{profileId}/picture`
   - App uploads raw image bytes with `PUT` to the pre-signed URL
   - App updates rider profile with returned `photoS3Key` via profile update endpoint
+- Other configured `FILE` and `IMAGE` attributes use the profile attribute upload/download endpoints
 - Default placeholder avatar shown if no picture uploaded
 
 ### Profile Management
-- Riders can view their complete profile after login
-- Riders can edit profile details (except email and personal code, which are organizer/system-controlled)
+- At sign-in, the app refreshes profile definitions alongside the active-tour snapshot refresh and caches the definitions locally for the session
+- If the config refresh fails, the app uses the last stored copy; if no stored copy exists, the profile screens show an error state with retry
+- Riders can view their complete enabled profile after login
+- Riders can edit rider-editable profile details while admin-only fields remain read-only
+- Sensitive attributes are shown normally to the rider because they are viewing their own data
 - Profile changes sync to tour-data-api backend
+- Save requests include only changed CORE fields, changed dynamic `attributes`, and the active `definitionsVersion`
+- On `PROFILE_DEFINITIONS_CHANGED`, the app reloads definitions, preserves entered values for surviving keys, and prompts the rider to review and save again
 - Profile data persists across tours within the organizer's data infrastructure
 - On successful profile update, app displays a temporary success banner
 
@@ -161,6 +176,7 @@ In this mode, the app supports multiple organizers via invitation-based sign-up:
 - Clear authentication tokens from secure storage
 - Navigate back to login screen
 - Clear the sign-in-refreshed active tour cache from local storage
+- Clear the locally cached rider profile definitions copy
 
 ### Session Management
 - JWT tokens auto-refresh via Amplify SDK
@@ -419,6 +435,7 @@ Each tour organizer has their own dedicated tour-data-api deployment (API Gatewa
 
 | Endpoint | Purpose |
 |----------|---------|
+| `GET /v1/config` | Refresh configuration-driven rider profile definitions and LOVs |
 | `POST /v1/riders/profile` | Create rider profile during sign-up |
 | `POST /v1/riders/link/{cognitoUserName}` | Link Cognito user (`sub`) to rider profile |
 | `GET /v1/riders/link/{cognitoUserName}` | Resolve linked profileId for Cognito user (`sub`) |
@@ -426,6 +443,8 @@ Each tour organizer has their own dedicated tour-data-api deployment (API Gatewa
 | `GET /v1/riders/profile/{profileId}` | Get rider profile |
 | `PUT /v1/riders/profile/{profileId}` | Update rider profile |
 | `POST /v1/riders/profile/{profileId}/picture` | Request pre-signed profile picture upload URL |
+| `POST /v1/riders/profile/{profileId}/attributes/{key}/upload` | Request pre-signed upload URL for a configured file/image attribute |
+| `GET /v1/riders/profile/{profileId}/attributes/{key}/download` | Request pre-signed download URL for a configured file/image attribute |
 | `GET /v1/tours` | List available tours |
 | `GET /v1/tours/{tourId}` | Get tour details |
 | `GET /v1/tours/{tourId}/riders/{riderId}` | Get tour rider details (enrollment status) |

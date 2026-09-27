@@ -7,7 +7,7 @@
  * See docs/SolutionDesign.md § Rider Profile.
  */
 
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 
 import { useAuth } from './AuthContext';
 import { ApiError } from '../services/api/apiClient';
@@ -17,52 +17,49 @@ import {
   updateRiderProfile,
   requestProfilePictureUploadUrl,
 } from '../services/api/riderApi';
+import { loadProfileDefinitionsWithFallback } from '../services/profileDefinitionsService';
 import { logger } from '../utils/logger';
 import type { RiderProfile, UpdateRiderProfileRequest } from '../types/rider';
+import type { ProfileDefinitions } from '../profile-schema';
+import { createProfileDraftValues, hasRequiredSystemProfileValues } from '../profile-schema';
 
 const TAG = 'RiderContext';
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
 interface RiderContextValue {
-  /** The rider's profile, or null if not yet loaded */
   profile: RiderProfile | null;
-  /** True when a complete rider profile exists */
   hasProfile: boolean;
-  /** True while loading the profile */
+  hasCompleteProfileForAccess: boolean;
+  profileDefinitions: ProfileDefinitions | null;
   isLoading: boolean;
-  /** Error message from the last profile operation */
+  isLoadingDefinitions: boolean;
   error: string | null;
-  /** Load (or reload) the rider profile from the API */
+  definitionsError: string | null;
   loadProfile: () => Promise<void>;
-  /** Update the rider profile with the given data */
   updateProfile: (data: UpdateRiderProfileRequest) => Promise<void>;
-  /** Upload and attach a profile picture to the rider profile */
   uploadProfilePicture: (
     localUri: string | null,
     mimeType?: string,
     profileId?: string,
     base64Data?: string,
   ) => Promise<void>;
-  /** Alias for loadProfile — refreshes profile from the API */
   refreshProfile: () => Promise<void>;
+  refreshProfileDefinitions: () => Promise<void>;
 }
-
-// ---------------------------------------------------------------------------
-// Context
-// ---------------------------------------------------------------------------
 
 const RiderContext = createContext<RiderContextValue>({
   profile: null,
   hasProfile: false,
+  hasCompleteProfileForAccess: false,
+  profileDefinitions: null,
   isLoading: false,
+  isLoadingDefinitions: false,
   error: null,
+  definitionsError: null,
   loadProfile: async () => {},
   updateProfile: async () => {},
   uploadProfilePicture: async () => {},
   refreshProfile: async () => {},
+  refreshProfileDefinitions: async () => {},
 });
 
 export function useRider(): RiderContextValue {
@@ -94,7 +91,7 @@ async function resolveProfilePicture(profile: RiderProfile): Promise<RiderProfil
   try {
     const response = await getProfilePictureDownloadUrl(profile.profileId);
     if (response.success && response.data?.downloadUrl) {
-      return { ...profile, photoUrl: response.data.downloadUrl };
+      return { ...profile, photoUrl: response.data.downloadUrl, photoAccessDenied: false };
     }
 
     if (response.error?.message.includes('Access denied')) {
@@ -109,10 +106,6 @@ async function resolveProfilePicture(profile: RiderProfile): Promise<RiderProfil
   return profile;
 }
 
-// ---------------------------------------------------------------------------
-// Provider
-// ---------------------------------------------------------------------------
-
 interface RiderProviderProps {
   children: React.ReactNode;
 }
@@ -120,8 +113,11 @@ interface RiderProviderProps {
 export function RiderProvider({ children }: RiderProviderProps) {
   const { user } = useAuth();
   const [profile, setProfile] = useState<RiderProfile | null>(null);
+  const [profileDefinitions, setProfileDefinitions] = useState<ProfileDefinitions | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingDefinitions, setIsLoadingDefinitions] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [definitionsError, setDefinitionsError] = useState<string | null>(null);
   const hasProfile = profile !== null;
 
   const loadProfile = useCallback(async (): Promise<void> => {
@@ -162,7 +158,30 @@ export function RiderProvider({ children }: RiderProviderProps) {
     }
   }, [user?.profileId]);
 
-  const updateProfile = useCallback(async (data: UpdateRiderProfileRequest): Promise<void> => {
+  const refreshProfileDefinitions = useCallback(async (): Promise<void> => {
+    if (!user) {
+      setProfileDefinitions(null);
+      setDefinitionsError(null);
+      return;
+    }
+
+    setIsLoadingDefinitions(true);
+    setDefinitionsError(null);
+    try {
+      const loadedDefinitions = await loadProfileDefinitionsWithFallback();
+      setProfileDefinitions(loadedDefinitions.definitions);
+      logger.info(TAG, `Profile definitions loaded from ${loadedDefinitions.source}`);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to load profile definitions';
+      setProfileDefinitions(null);
+      setDefinitionsError(message);
+      logger.error(TAG, 'Error loading profile definitions', err);
+    } finally {
+      setIsLoadingDefinitions(false);
+    }
+  }, [user]);
+
+  const updateProfileData = useCallback(async (data: UpdateRiderProfileRequest): Promise<void> => {
     if (!user?.profileId) {
       const msg = 'Cannot update profile — no profileId available';
       logger.warn(TAG, msg);
@@ -213,12 +232,18 @@ export function RiderProvider({ children }: RiderProviderProps) {
       throw new Error(msg);
     }
 
+    if (!profileDefinitions?.definitionsVersion) {
+      const msg = 'Cannot upload profile picture — profile definitions are unavailable';
+      logger.error(TAG, msg);
+      setError(msg);
+      throw new Error(msg);
+    }
+
     setIsLoading(true);
     setError(null);
 
     try {
       const uploadUrlResponse = await requestProfilePictureUploadUrl(targetProfileId, mimeType);
-      logger.debug(TAG, `Upload URL response for ${targetProfileId}:`, uploadUrlResponse);
       const uploadData = uploadUrlResponse.data;
 
       if (!uploadUrlResponse.success || !uploadData) {
@@ -249,6 +274,7 @@ export function RiderProvider({ children }: RiderProviderProps) {
 
       const profileUpdateResponse = await updateRiderProfile(targetProfileId, {
         photoS3Key: uploadData.photoS3Key,
+        definitionsVersion: profileDefinitions.definitionsVersion,
       });
 
       if (profileUpdateResponse.success && profileUpdateResponse.data) {
@@ -267,27 +293,49 @@ export function RiderProvider({ children }: RiderProviderProps) {
     } finally {
       setIsLoading(false);
     }
-  }, [user?.profileId]);
+  }, [profileDefinitions?.definitionsVersion, user?.profileId]);
 
-  // Load profile when user authenticates (or profileId changes)
   useEffect(() => {
     if (user?.profileId) {
-      loadProfile();
+      void loadProfile();
     } else {
       setProfile(null);
       setError(null);
     }
   }, [user?.profileId, loadProfile]);
 
+  useEffect(() => {
+    if (user) {
+      void refreshProfileDefinitions();
+    } else {
+      setProfileDefinitions(null);
+      setDefinitionsError(null);
+    }
+  }, [refreshProfileDefinitions, user]);
+
+  const hasCompleteProfileForAccess = useMemo(() => {
+    if (!profile || !profileDefinitions) {
+      return false;
+    }
+
+    const draftValues = createProfileDraftValues(profile, profileDefinitions, user);
+    return hasRequiredSystemProfileValues(profileDefinitions, draftValues);
+  }, [profile, profileDefinitions, user]);
+
   const value: RiderContextValue = {
     profile,
     hasProfile,
+    hasCompleteProfileForAccess,
+    profileDefinitions,
     isLoading,
+    isLoadingDefinitions,
     error,
+    definitionsError,
     loadProfile,
-    updateProfile,
+    updateProfile: updateProfileData,
     uploadProfilePicture,
     refreshProfile: loadProfile,
+    refreshProfileDefinitions,
   };
 
   return <RiderContext.Provider value={value}>{children}</RiderContext.Provider>;

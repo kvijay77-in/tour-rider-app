@@ -233,6 +233,19 @@ The app bootstrap flow wraps the full provider and navigation tree in a root `Er
 
 `TourContext` is the single owner of active-tour bootstrap. After a rider with a completed profile signs in, it refreshes the active tour snapshot once by calling `GET /v1/tours/active`, `GET /v1/tours/{tourId}/riders?profileId=...`, and `GET /v1/tours/{tourId}/rides`, replaces any previously cached active snapshot in SQLite, and then exposes active tour, active rides, and derived today's ride from that local cache to the rest of the app.
 
+`RiderContext` owns the configuration-driven profile bootstrap. At sign-in it refreshes `GET /v1/config`, extracts enabled rider profile sections/attributes/LOVs, caches the raw config locally, and keeps a session-scoped `ProfileDefinitions` snapshot in memory for the profile screens and the home summary card. If the refresh fails, it falls back to the cached copy; if no cached copy exists, the profile screens show a retryable error state.
+
+### Dynamic Rider Profile Engine
+
+The rider profile is driven by a dedicated schema layer under `src/profile-schema/` that mirrors the backend contract in `kvijay77-in/tour-data-api/docs/rider-profile-attributes-design.md`.
+
+- **Definitions builder**: converts enabled AppConfig entries into ordered sections, attribute lookup maps, LOV lookup maps, and a deterministic `definitionsVersion`
+- **Binding helpers**: read/write configured values through CORE paths (for example `name`, `phone`, `address`, `photoS3Key`) or through `profile.attributes.<key>`
+- **Visibility and validation**: evaluates `visibleWhen`, applies backend-aligned validation for the supported field types, and enforces rider-facing required checks on save
+- **Payload builder**: sends only changed CORE fields plus changed `attributes`, never sends disabled/unknown/admin-only keys, and always includes `definitionsVersion`
+- **Handler registry**: isolates special frontend behavior such as `PROFILE_PHOTO`, `COGNITO_EMAIL`, and `PERSONAL_CODE`
+- **Field registry**: renders each configured field type through reusable dynamic form/view components while preserving the existing screen styling patterns
+
 ### Local State
 
 Screen-specific and component-specific state uses `useState` and `useReducer` hooks. Examples:
@@ -405,6 +418,7 @@ RootNavigator
 
 - **Unauthenticated users** are restricted to the AuthNavigator
 - **Profile gate**: authenticated users without a rider profile are restricted to ProfileCreationScreen until profile completion
+- **Profile gate** uses only required system attributes from the current profile definitions, so new rider-editable required attributes are enforced on the next save rather than blocking access immediately
 - **Home** shows a rider-first dashboard layout (profile summary, quick cards, announcements placeholder)
 - **Tour** menu entry opens a nested stack for active-tour ride list and ride details
 - **Drawer content** provides a dedicated Sign Out action

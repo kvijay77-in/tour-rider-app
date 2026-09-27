@@ -206,6 +206,12 @@ Follow the guidelines in:
 
 - Test on at least one mobile platform (iOS or Android)
 - Test with different user types (General Rider, Registered Rider)
+- For rider profile changes, seed or verify `RIDER_PROFILE_SECTION`, `RIDER_PROFILE_ATTRIBUTE`, and `LOV` entries in the paired `tour-data-api` environment before manual testing
+- Use the backend contract in `kvijay77-in/tour-data-api/docs/rider-profile-attributes-design.md` as the source of truth for seeded definitions and handlers
+- Verify both the fresh-config path and the cached-config fallback path by:
+  1. Signing in with network access so `GET /v1/config` refreshes and populates the local cache
+  2. Signing out, then signing back in after temporarily breaking config access to confirm the cached profile definitions still render
+  3. Clearing app data or logging out to confirm the cached definitions copy is removed and the profile screens show the retry state when no config can be loaded
 
 ### 4. Lint Your Code
 

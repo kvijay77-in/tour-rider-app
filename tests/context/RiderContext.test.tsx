@@ -1,13 +1,11 @@
 import React from 'react';
 import TestRenderer, { act } from 'react-test-renderer';
 
-globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 jest.mock('../../src/config/subscription.config', () => ({
   subscriptionConfig: {
     organizer: null,
-    auth: { userPoolId: 'test-pool', userPoolClientId: 'test-client' },
-    api: { baseUrl: 'https://example.test' },
   },
   isSingleSubscriptionMode: () => false,
 }));
@@ -25,6 +23,10 @@ jest.mock('../../src/services/api/riderApi', () => ({
   updateRiderProfile: jest.fn(),
 }));
 
+jest.mock('../../src/services/profileDefinitionsService', () => ({
+  loadProfileDefinitionsWithFallback: jest.fn(),
+}));
+
 jest.mock('../../src/utils/logger', () => ({
   logger: { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() },
 }));
@@ -40,10 +42,26 @@ const { getProfilePictureDownloadUrl, getRiderProfile } = jest.requireMock(
   getRiderProfile: jest.Mock;
 };
 
+const { loadProfileDefinitionsWithFallback } = jest.requireMock('../../src/services/profileDefinitionsService') as {
+  loadProfileDefinitionsWithFallback: jest.Mock;
+};
+
 describe('RiderContext profile picture', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    useAuth.mockReturnValue({ user: { profileId: 'P1' } });
+    useAuth.mockReturnValue({ user: { profileId: 'P1', userId: 'U1', email: 'jane@example.com' } });
+    loadProfileDefinitionsWithFallback.mockResolvedValue({
+      definitions: {
+        definitionsVersion: 'defs-v1',
+        sections: [],
+        orderedAttributes: [],
+        attributesByKey: {},
+        lovsById: {},
+        rawEntries: [],
+      },
+      source: 'remote',
+      refreshedAt: '2026-09-27T00:00:00.000Z',
+    });
   });
 
   it('adds the pre-signed picture download URL to the loaded profile', async () => {
