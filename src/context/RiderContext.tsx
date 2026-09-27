@@ -112,6 +112,7 @@ interface RiderProviderProps {
 
 export function RiderProvider({ children }: RiderProviderProps) {
   const { user } = useAuth();
+  const definitionsSessionKey = user?.userId ?? user?.profileId ?? user?.email ?? null;
   const [profile, setProfile] = useState<RiderProfile | null>(null);
   const [profileDefinitions, setProfileDefinitions] = useState<ProfileDefinitions | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -159,7 +160,7 @@ export function RiderProvider({ children }: RiderProviderProps) {
   }, [user?.profileId]);
 
   const refreshProfileDefinitions = useCallback(async (): Promise<void> => {
-    if (!user?.userId) {
+    if (!definitionsSessionKey) {
       setProfileDefinitions(null);
       setDefinitionsError(null);
       return;
@@ -179,7 +180,7 @@ export function RiderProvider({ children }: RiderProviderProps) {
     } finally {
       setIsLoadingDefinitions(false);
     }
-  }, [user?.userId]);
+  }, [definitionsSessionKey]);
 
   const updateProfileData = useCallback(async (data: UpdateRiderProfileRequest): Promise<void> => {
     if (!user?.profileId) {
@@ -305,13 +306,13 @@ export function RiderProvider({ children }: RiderProviderProps) {
   }, [user?.profileId, loadProfile]);
 
   useEffect(() => {
-    if (user?.userId) {
+    if (definitionsSessionKey) {
       void refreshProfileDefinitions();
     } else {
       setProfileDefinitions(null);
       setDefinitionsError(null);
     }
-  }, [refreshProfileDefinitions, user?.userId]);
+  }, [definitionsSessionKey, refreshProfileDefinitions]);
 
   const hasCompleteProfileForAccess = useMemo(() => {
     if (!profile || !profileDefinitions) {

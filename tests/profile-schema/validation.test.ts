@@ -1,4 +1,4 @@
-import { buildProfileDefinitions, validateProfileDraftValues } from '../../src/profile-schema';
+import { buildProfileDefinitions, getVisibleEditableAttributes, validateProfileDraftValues } from '../../src/profile-schema';
 import type { AppConfigEntry } from '../../src/profile-schema';
 
 function entry(configType: string, configId: string, config: Record<string, unknown>, enabled = true, version = 1): AppConfigEntry {
@@ -79,5 +79,48 @@ describe('validateProfileDraftValues', () => {
     expect(errors.height).toContain('decimal places');
     expect(errors.gender).toContain('selected from the list');
     expect(errors.dietaryPreference).toContain('at least 1');
+  });
+
+  it('excludes hidden and rider read-only attributes from visible editable attributes', () => {
+    const definitions = buildProfileDefinitions([
+      entry('RIDER_PROFILE_SECTION', 'personal', { label: 'Personal', order: 10 }),
+      entry('RIDER_PROFILE_ATTRIBUTE', 'name', {
+        label: 'Name',
+        sectionId: 'personal',
+        order: 10,
+        type: 'TEXT',
+        storage: { scope: 'CORE', path: 'name' },
+      }),
+      entry('RIDER_PROFILE_ATTRIBUTE', 'email', {
+        label: 'Email',
+        sectionId: 'personal',
+        order: 20,
+        type: 'EMAIL',
+        storage: { scope: 'CORE', path: 'email' },
+        handler: 'COGNITO_EMAIL',
+      }),
+      entry('RIDER_PROFILE_ATTRIBUTE', 'personalCode', {
+        label: 'Personal code',
+        sectionId: 'personal',
+        order: 30,
+        type: 'TEXT',
+        storage: { scope: 'CORE', path: 'personalCode' },
+        adminOnly: true,
+      }),
+      entry('RIDER_PROFILE_ATTRIBUTE', 'medicalConditions', {
+        label: 'Medical conditions',
+        sectionId: 'personal',
+        order: 40,
+        type: 'TEXTAREA',
+        storage: { scope: 'ATTRIBUTES' },
+        visibleWhen: { attribute: 'hasMedicalCondition', op: 'EQ', value: true },
+      }),
+    ]);
+
+    const visibleEditableAttributes = getVisibleEditableAttributes(definitions, {
+      hasMedicalCondition: false,
+    });
+
+    expect(visibleEditableAttributes.map((attribute) => attribute.key)).toEqual(['name']);
   });
 });

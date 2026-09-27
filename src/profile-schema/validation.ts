@@ -101,19 +101,18 @@ function validateFieldValue(
 
   if (definition.type === 'GROUP') {
     const objectValue = (value && typeof value === 'object' ? value : {}) as Record<string, unknown>;
+    const visibleFields = definition.fields?.filter((field) => evaluateVisibleWhen(field.visibleWhen, objectValue)) ?? [];
+    const hasGroupContent = visibleFields.some((field) => !isEmptyValue(objectValue[field.key]));
+    const hasRequiredVisibleChildren = visibleFields.some((field) => Boolean(field.required));
 
-    if (isRequired && definition.fields?.some((field) => !isEmptyValue(objectValue[field.key]))) {
-      // fall through to child validation
+    if (isRequired && !hasGroupContent && !hasRequiredVisibleChildren) {
+      errors[path] = `${definition.label} is required.`;
+      return;
     }
 
-    if (definition.fields?.length) {
-      for (const field of definition.fields) {
-        const childPath = `${path}.${field.key}`;
-        if (!evaluateVisibleWhen(field.visibleWhen, objectValue)) {
-          continue;
-        }
-        validateFieldValue(field, objectValue[field.key], definitions, objectValue, childPath, errors);
-      }
+    for (const field of visibleFields) {
+      const childPath = `${path}.${field.key}`;
+      validateFieldValue(field, objectValue[field.key], definitions, objectValue, childPath, errors);
     }
 
     return;

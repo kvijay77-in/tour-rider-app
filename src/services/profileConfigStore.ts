@@ -45,20 +45,11 @@ export async function cacheProfileDefinitions(entries: AppConfigEntry[]): Promis
   try {
     const db = await getDatabase();
     const refreshedAt = new Date().toISOString();
-
-    await db.execAsync('BEGIN');
-    try {
-      await db.execAsync('DELETE FROM cached_profile_definitions;');
-      await db.runAsync(
-        'INSERT INTO cached_profile_definitions (singletonId, payload, refreshedAt) VALUES (1, ?, ?)',
-        JSON.stringify(entries),
-        refreshedAt,
-      );
-      await db.execAsync('COMMIT');
-    } catch (error) {
-      await db.execAsync('ROLLBACK');
-      throw error;
-    }
+    await db.runAsync(
+      'INSERT OR REPLACE INTO cached_profile_definitions (singletonId, payload, refreshedAt) VALUES (1, ?, ?)',
+      JSON.stringify(entries),
+      refreshedAt,
+    );
   } catch (error) {
     logger.warn(TAG, 'Failed to cache profile definitions');
     logger.debug(TAG, 'Profile definitions cache write failure', error);
