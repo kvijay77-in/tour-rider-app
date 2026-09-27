@@ -21,13 +21,13 @@
 
 ## Overview
 
-The Tour Rider App supports two operating modes to accommodate different deployment scenarios:
+The Tour Rider App is built primarily for a single organizer-specific deployment using Expo public environment variables. A multi-organizer SaaS mode is documented as a future extension.
 
-1. **Single Subscription Mode**: App is tied to a specific organizer's subscription at build time. Users can directly sign up and login without providing invitation codes.
+1. **Single Subscription Mode**: Default mode. App is tied to a specific organizer's subscription at build time. Users can directly sign up and login without providing invitation codes.
 
-2. **Multi Subscription Mode**: App supports multiple organizers via invitation-based sign-up. Users must provide an invitation code to identify their organizer.
+2. **Multi Subscription Mode**: Future mode. App supports multiple organizers via invitation-based sign-up. Users must provide an invitation code to identify their organizer.
 
-This guide focuses on configuring and building the app for **single subscription mode**, which is ideal for individual tour operators who want a dedicated app for their riders.
+This guide focuses on configuring and building the app for **single subscription mode**, which is the default and recommended setup.
 
 ---
 
@@ -44,7 +44,7 @@ Use single subscription mode when:
 
 ### When to Use Multi Subscription Mode
 
-Use multi subscription mode when:
+Use multi subscription mode only when:
 - You are building a SaaS platform supporting multiple organizers
 - You want one app to serve riders from different tour operators
 - You need dynamic organizer switching
@@ -66,7 +66,7 @@ EXPO_PUBLIC_SUBSCRIPTION_MODE=single
 
 #### 2. Configure Organizer Details
 
-Add your organizer-specific AWS and API configuration:
+Add your organizer-specific AWS and API configuration using Expo public env vars:
 
 ```bash
 # Organizer Identification
@@ -90,7 +90,7 @@ EXPO_PUBLIC_LOG_LEVEL=WARN
 - `ORGANIZER_NAME`: Display name shown to users in the app
 - AWS Cognito settings come from your subscription's Cognito User Pool
 - API base URL points to your subscription's tour-data-api deployment
-- Use `LOG_LEVEL=WARN` or `ERROR` for production builds
+- Use `EXPO_PUBLIC_LOG_LEVEL=WARN` or `ERROR` for production builds
 
 #### 3. Customize App Branding (Optional)
 
@@ -229,7 +229,7 @@ In this mode:
 - App can switch between organizers (if user has multiple)
 - Requires invitation URL implementation (future feature, see `docs/design-signup-approach.md`)
 
-**Note**: Multi-subscription mode requires additional development work for invitation code validation and organizer discovery. See issue #5 and PR #7 for the invitation-based sign-up implementation.
+**Note**: Multi-subscription mode requires additional development work for invitation code validation and organizer discovery. It is not the default app mode.
 
 ---
 

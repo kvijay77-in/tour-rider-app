@@ -6,7 +6,7 @@
 > **Related Issue**: Sign Up approach (#5)  
 > **Last Updated**: 2026-04-26
 
-> **Scope note (per issue #8)**: The app supports two packaging modes — **Single Subscription Mode** (default, app tied to one organizer at build time; see [Subscription Packaging Guide](subscription-packaging-guide.md)) and **Multi Subscription Mode** (SaaS, one app serving many organizers). This document is the detailed design for the **Multi Subscription Mode** sign-up flow, where the rider's organizer is not known until runtime and must be discovered via an invitation. In Single Subscription Mode, the organizer's Cognito pool and tour-data-api endpoint are embedded at build time, so invitation-based discovery is not needed; account creation in that mode is handled per the flow described in [Requirements.md → App Packaging Modes](Requirements.md#app-packaging-modes). The two modes are complementary — both honor the per-organizer isolation principle that nothing is shared across organizer subscriptions at any level.
+> **Scope note (per issue #8)**: The app now defaults to **Single Subscription Mode** (one organizer per build; see [Subscription Packaging Guide](subscription-packaging-guide.md)). This document remains the detailed design for the **future Multi Subscription Mode** sign-up flow, where the rider's organizer is not known until runtime and must be discovered via an invitation. In Single Subscription Mode, the organizer's Cognito pool and tour-data-api endpoint are loaded from Expo public environment variables at build/startup time, so invitation-based discovery is not needed; account creation in that mode is handled per the flow described in [Requirements.md → App Packaging Modes](Requirements.md#app-packaging-modes). The two modes are complementary, but only single mode is the default supported packaging path.
 
 ## Table of Contents
 
@@ -287,8 +287,7 @@ Step 2: Registration Form (shown after valid code)
   │  Registering with:              │
   │  🚴 [Organizer Name]            │
   │                                 │
-  │  First Name: ________________   │
-  │  Last Name:  ________________   │
+  │  Name:       ________________   │
   │  Email:      ________________   │
   │  Phone:      ________________   │
   │  Password:   ________________   │

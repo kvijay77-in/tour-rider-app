@@ -83,14 +83,20 @@ cp .env.example .env
 Edit `.env` and add your AWS and API configuration:
 
 ```
+EXPO_PUBLIC_SUBSCRIPTION_MODE=single
+EXPO_PUBLIC_ORGANIZER_ID=<your-organizer-id>
+EXPO_PUBLIC_ORGANIZER_NAME=<your-organizer-name>
 EXPO_PUBLIC_AWS_USER_POOL_ID=<your-cognito-user-pool-id>
 EXPO_PUBLIC_AWS_USER_POOL_WEB_CLIENT_ID=<your-cognito-client-id>
 EXPO_PUBLIC_AWS_IDENTITY_POOL_ID=<your-cognito-identity-pool-id>
 EXPO_PUBLIC_TOUR_DATA_API_BASE_URL=<your-tour-data-api-url>
 EXPO_PUBLIC_LOG_LEVEL=DEBUG
+EXPO_PUBLIC_API_DEBUG_GET=false
 ```
 
 > **Important**: All environment variables must use the `EXPO_PUBLIC_` prefix. This is an Expo requirement for bundling variables into the app.
+
+> **Optional debug toggle**: Set `EXPO_PUBLIC_API_DEBUG_GET=true` when you need verbose API debug logging for GET requests. Keep it `false` during normal development to reduce log noise.
 
 ### 3. Obtain AWS Credentials
 
@@ -145,6 +151,44 @@ npx expo start --web
 
 ## Development Workflow
 
+### Architecture Change Guardrails
+
+Before starting any architecture, navigation, bootstrap, or API client uplift work:
+
+- Re-read [Requirements.md](Requirements.md) and [SolutionDesign.md](SolutionDesign.md) and keep those documents as the controlling references for scope and behavior.
+- Limit scope to reusable technical architecture patterns only. Do not change rider business workflows, rider-facing validation behavior, enrollment rules, role or group behavior, or any admin or staff flows unless requirements are updated first.
+- Capture and preserve baseline behavior for the affected area before editing. At minimum, keep the following regression checklist current for auth, navigation, and API work.
+- If a phase changes structure or architecture, update the relevant documentation in the same phase. Do not defer documentation to a later standalone pass.
+
+#### Baseline Regression Checklist
+
+Use this checklist before and after architecture-focused changes to confirm no behavioral regression:
+
+**Auth flow**
+- App startup configures Amplify before rendering providers.
+- Provider order remains `AuthProvider -> RiderProvider -> TourProvider` unless an approved architecture change updates the design docs in the same phase.
+- While auth state is loading, the app shows a loading spinner instead of navigation content.
+- Unauthenticated users land in the auth stack with `Login`, `SignUp`, and `ForgotPassword` routes available.
+- Authenticated users are routed into the main app navigation.
+
+**Navigation flow**
+- `NavigationContainer` remains the single root navigation container.
+- Route names remain stable unless a compatibility layer or documented migration is introduced.
+- The main tab navigator always exposes `Home` and `Profile`.
+- `Check-In` and `Notifications` tabs appear only when the rider is enrolled.
+- Navigation changes must preserve the current rider journeys for login, logout, enrolled rider access, and general rider access.
+
+**API request behavior**
+- API base URL resolution continues to support configured single-subscription mode and runtime multi-subscription mode.
+- Requests keep `Content-Type: application/json` and `Accept: application/json` headers by default.
+- Authorization headers continue to include the bearer token when available.
+- Requests continue to use timeout protection, retry eligible failures, and exponential backoff.
+- A `401` response still attempts one token refresh path before auth invalidation is triggered.
+- Non-retryable API failures continue to surface as `ApiError` instances with backend error details when available.
+- Expected first-time rider `404` responses (missing Cognito link or missing rider profile) are treated as informational states and handled in auth/profile bootstrap flows.
+- Active tour loading must not run until rider profile creation is complete.
+- Active tour bootstrap should perform a single refresh path through `TourContext`, reseed the SQLite active snapshot, and keep active-tour screens on local cached reads until the next explicit refresh or sign-in.
+
 ### 1. Create a Feature Branch
 
 ```bash
@@ -170,6 +214,15 @@ npm run lint
 ```
 
 Fix any linting errors before committing.
+
+### 4.1 API Debug Logging Workflow
+
+Use these settings when troubleshooting API behavior:
+
+- Default: keep `EXPO_PUBLIC_API_DEBUG_GET=false` so GET request debug logs stay gated.
+- Enable temporarily: set `EXPO_PUBLIC_API_DEBUG_GET=true` to include GET request debug traces.
+- Combine with `EXPO_PUBLIC_LOG_LEVEL=DEBUG` to capture full API request/retry diagnostics.
+- Revert the toggle after troubleshooting to keep logs concise.
 
 ### 5. Commit Your Changes
 
@@ -229,6 +282,9 @@ Follow the ESLint configuration from tour-mgmt-app for consistent formatting.
 
 **Issue**: Cannot connect to tour-data-api
 - **Solution**: Check `EXPO_PUBLIC_TOUR_DATA_API_BASE_URL` is correct
+
+**Issue**: New rider sees "not found" logs after sign-up verification
+- **Solution**: Confirm app is on latest flow where missing rider link/profile during first-time bootstrap is informational; rider should be directed to Profile Creation before any tour API fetches.
 
 **Issue**: App crashes on startup
 - **Solution**: Check the logs in Expo Go or terminal for error details

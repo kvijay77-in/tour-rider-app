@@ -1,176 +1,103 @@
 /**
- * Home screen — conditional rendering based on tour enrollment.
- *
- * Enrolled riders see a tour dashboard view; unenrolled riders see a
- * browse-tours prompt.
+ * Home screen with profile summary, quick navigation cards, and announcements placeholder.
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
-import {
-  View,
-  Text,
-  ScrollView,
-  RefreshControl,
-  StyleSheet,
-} from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { StyleSheet, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { COLORS } from '../../constants';
-import { useTour } from '../../hooks/useTour';
-import { LoadingSpinner } from '../../components/common/LoadingSpinner';
 import { Card } from '../../components/common/Card';
-import { Button } from '../../components/common/Button';
-import { TourInfoBanner } from '../../components/tour/TourInfoBanner';
-import { getTodaysRide } from '../../services/api/rideApi';
-import { computeTourDay } from '../../utils/dateFormatter';
+import { LoadingSpinner } from '../../components/common/LoadingSpinner';
+import { ProfileSummaryCard } from '../../components/home/ProfileSummaryCard';
+import { HomeSectionCard } from '../../components/home/HomeSectionCard';
+import { useRider } from '../../hooks/useRider';
 import { logger } from '../../utils/logger';
-import type { Ride } from '../../types/ride';
 
-const TAG = 'HomeScreen';
+interface HomeNavigation {
+  navigate: (screen: string, params?: Record<string, unknown>) => void;
+  setParams?: (params: { successMessage?: string }) => void;
+}
 
-export function HomeScreen({ navigation }: { navigation: { navigate: (screen: string, params?: Record<string, unknown>) => void } }) {
-  const { activeTour, isEnrolled, isLoading: tourLoading, loadActiveTour } = useTour();
+interface HomeRoute {
+  params?: {
+    successMessage?: string;
+  };
+}
 
-  const [todaysRide, setTodaysRide] = useState<Ride | null>(null);
-  const [rideLoading, setRideLoading] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+interface Props {
+  navigation: HomeNavigation;
+  route?: HomeRoute;
+}
 
-  const fetchTodaysRide = useCallback(async () => {
-    if (!activeTour) return;
-    setRideLoading(true);
-    setError(null);
-    try {
-      const response = await getTodaysRide(activeTour.tourId);
-      if (response.success && response.data) {
-        setTodaysRide(response.data);
-      } else {
-        setTodaysRide(null);
-      }
-    } catch (err) {
-      logger.error(TAG, 'Error fetching today\'s ride', err);
-      setTodaysRide(null);
-      setError('Unable to load today\'s ride.');
-    } finally {
-      setRideLoading(false);
-    }
-  }, [activeTour]);
+export function HomeScreen({ navigation, route }: Props) {
+  const { profile, isLoading } = useRider();
+
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    if (isEnrolled && activeTour) {
-      fetchTodaysRide();
+    const incomingMessage = route.params?.successMessage;
+    if (!incomingMessage) {
+      return;
     }
-  }, [isEnrolled, activeTour, fetchTodaysRide]);
 
-  const handleRefresh = async () => {
-    setRefreshing(true);
-    await loadActiveTour();
-    if (activeTour) {
-      await fetchTodaysRide();
-    }
-    setRefreshing(false);
-  };
+    setSuccessMessage(incomingMessage);
+    navigation.setParams?.({ successMessage: undefined });
 
-  if (tourLoading && !refreshing) {
-    return (
-      <SafeAreaView style={styles.safeArea}>
-        <LoadingSpinner message="Loading tour data..." />
-      </SafeAreaView>
-    );
+    const timer = setTimeout(() => {
+      setSuccessMessage(null);
+    }, 3000);
+
+    return () => clearTimeout(timer);
+  }, [navigation, route.params?.successMessage]);
+
+  if (isLoading && !profile) {
+    return <LoadingSpinner message="Loading home..." />;
   }
 
-  // Enrolled rider — tour dashboard view
-  if (isEnrolled && activeTour) {
-    return (
-      <SafeAreaView style={styles.safeArea}>
-        <ScrollView
-          contentContainerStyle={styles.container}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
-          }
-        >
-          <TourInfoBanner
-            tour={activeTour}
-            currentDay={computeTourDay(activeTour.startDate)}
-            totalDays={activeTour.rideCount ?? 1}
-          />
-
-          {/* Today's ride summary */}
-          <Card style={styles.sectionCard}>
-            <Text style={styles.sectionTitle}>Today&apos;s Ride</Text>
-            {rideLoading ? (
-              <Text style={styles.infoText}>Loading ride info...</Text>
-            ) : todaysRide ? (
-              <View>
-                <Text style={styles.rideName}>{todaysRide.name}</Text>
-                <Text style={styles.rideDetail}>
-                  {todaysRide.startLocation} → {todaysRide.finishLocation}
-                </Text>
-                <Text style={styles.rideDetail}>
-                  {todaysRide.totalDistance} km • {todaysRide.stages.length} stages
-                </Text>
-              </View>
-            ) : (
-              <Text style={styles.infoText}>No ride scheduled for today.</Text>
-            )}
-          </Card>
-
-          {error ? (
-            <View style={styles.errorContainer}>
-              <Text style={styles.errorText}>{error}</Text>
-            </View>
-          ) : null}
-
-          {/* Quick actions */}
-          <Card style={styles.sectionCard}>
-            <Text style={styles.sectionTitle}>Quick Actions</Text>
-            <View style={styles.actionRow}>
-              <View style={styles.actionButton}>
-                <Button
-                  title="Check-In Status"
-                  onPress={() => navigation.navigate('CheckInTab')}
-                  variant="secondary"
-                />
-              </View>
-              <View style={styles.actionButton}>
-                <Button
-                  title="Notifications"
-                  onPress={() => navigation.navigate('NotificationsTab')}
-                  variant="secondary"
-                />
-              </View>
-            </View>
-          </Card>
-        </ScrollView>
-      </SafeAreaView>
-    );
-  }
-
-  // Unenrolled rider — browse tours
   return (
     <SafeAreaView style={styles.safeArea}>
-      <ScrollView
-        contentContainerStyle={styles.centeredContainer}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
-        }
-      >
-        <Text style={styles.welcomeTitle}>Welcome to Tour Rider</Text>
-        <Text style={styles.welcomeText}>
-          You are not currently enrolled in a tour. Browse available tours to get started.
-        </Text>
-        <Button
-          title="Browse Tours"
-          onPress={() => navigation.navigate('TourList')}
-        />
-      </ScrollView>
+      <View style={styles.container}>
+        {successMessage ? (
+          <View style={styles.banner}>
+            <Text style={styles.bannerText}>{successMessage}</Text>
+          </View>
+        ) : null}
+
+        <View style={styles.rowOne}>
+          <ProfileSummaryCard
+            profile={profile}
+            onPress={() => navigation.navigate('ViewProfile')}
+          />
+        </View>
+
+        <View style={styles.rowTwo}>
+          <HomeSectionCard
+            title="Training Challenge"
+            subtitle="Track your prep journey"
+            imageSource={require('../../../assets/TC_2026.jpg')}
+            onPress={() => navigation.navigate('TrainingChallenge')}
+          />
+          <HomeSectionCard
+            title="Tour"
+            subtitle="ToT 2026"
+            imageSource={require('../../../assets/rideplan-2026.png')}
+            onPress={() => navigation.navigate('Tour')}
+          />
+        </View>
+
+        <View style={styles.rowThree}>
+          <Card style={styles.newsCard}>
+            <Ionicons name="construct-outline" size={48} color={COLORS.textSecondary} />
+            <Text style={styles.newsTitle}>Announcements & News</Text>
+            <Text style={styles.newsSubtitle}>Under Construction</Text>
+          </Card>
+        </View>
+      </View>
     </SafeAreaView>
   );
 }
-
-// ---------------------------------------------------------------------------
-// Styles
-// ---------------------------------------------------------------------------
 
 const styles = StyleSheet.create({
   safeArea: {
@@ -178,69 +105,54 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.background,
   },
   container: {
+    flex: 1,
     padding: 16,
+    gap: 12,
   },
-  centeredContainer: {
-    flexGrow: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 24,
+  banner: {
+    backgroundColor: COLORS.success,
+    borderRadius: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
   },
-  sectionCard: {
-    marginTop: 16,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: COLORS.textPrimary,
-    marginBottom: 12,
-  },
-  rideName: {
-    fontSize: 16,
+  bannerText: {
+    color: COLORS.white,
+    textAlign: 'center',
     fontWeight: '600',
-    color: COLORS.textPrimary,
-    marginBottom: 4,
   },
-  rideDetail: {
-    fontSize: 14,
-    color: COLORS.textSecondary,
-    marginBottom: 2,
+  rowOne: {
+    flex: 3,
+    minHeight: 150,
   },
-  infoText: {
-    fontSize: 14,
-    color: COLORS.textSecondary,
-  },
-  actionRow: {
+  rowTwo: {
+    flex: 2,
+    minHeight: 130,
     flexDirection: 'row',
     gap: 12,
   },
-  actionButton: {
+  rowThree: {
+    flex: 5,
+    minHeight: 220,
+  },
+  newsCard: {
     flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderStyle: 'dashed',
+    gap: 10,
   },
-  errorContainer: {
-    backgroundColor: COLORS.danger,
-    padding: 12,
-    borderRadius: 8,
-    marginTop: 16,
-  },
-  errorText: {
-    color: COLORS.white,
-    fontSize: 14,
-    textAlign: 'center',
-  },
-  welcomeTitle: {
-    fontSize: 24,
-    fontWeight: '700',
+  newsTitle: {
+    fontSize: 22,
     color: COLORS.textPrimary,
-    marginBottom: 12,
+    fontWeight: '700',
     textAlign: 'center',
   },
-  welcomeText: {
+  newsSubtitle: {
     fontSize: 16,
     color: COLORS.textSecondary,
     textAlign: 'center',
-    marginBottom: 24,
-    lineHeight: 22,
   },
 });
 

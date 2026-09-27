@@ -53,28 +53,37 @@ The app supports two types of users, collectively referred to as **riders**:
 ## Rider Profile Management
 
 ### Profile Creation
-- Riders must complete a profile during initial sign-up
+- Riders must complete a profile after account verification and first authenticated sign-in
+- If profile data is missing, app access is gated and the rider is redirected to Profile Creation until completed
 - Required profile information:
-  - Full name (First name, Last name)
+  - Name (single full-name field)
   - Email address (used for authentication)
-  - Phone number (for emergency contact and notifications)
-  - Emergency contact details (Name, relationship, phone number)
+  - Phone number, entered as a searchable country dialing code and local number
+  - Emergency contact object (Name, relationship, and phone number with searchable country dialing code)
   - Date of birth
   - Gender
-  - Address (optional)
+  - Address object (`Line 1`, `City`, `State`, `Country`, and `Postal Code` are required; `Line 2` is optional)
+- Country defaults to India and is selected from a searchable country list
+- When Country is India, State is selected from the India state and union territory list; other countries use free-text State/Province input
+- Personal code is optional and is assigned/managed only by tour organizers
+- Riders can view personal code when available, but cannot create or modify it in the app
 
 ### Profile Picture
-- Riders can upload a profile picture during sign-up or later from profile settings
+- Riders must upload a profile picture during profile creation and may replace it later from profile settings
 - Supported formats: JPEG, PNG
 - Maximum file size: 5MB
-- Image stored in backend S3 storage via tour-data-api
+- Image upload flow:
+  - App requests a pre-signed upload URL from `POST /v1/riders/profile/{profileId}/picture`
+  - App uploads raw image bytes with `PUT` to the pre-signed URL
+  - App updates rider profile with returned `photoS3Key` via profile update endpoint
 - Default placeholder avatar shown if no picture uploaded
 
 ### Profile Management
 - Riders can view their complete profile after login
-- Riders can edit profile details (except email, which is the primary identifier)
+- Riders can edit profile details (except email and personal code, which are organizer/system-controlled)
 - Profile changes sync to tour-data-api backend
 - Profile data persists across tours within the organizer's data infrastructure
+- On successful profile update, app displays a temporary success banner
 
 ## Authentication & Authorization
 
@@ -91,27 +100,30 @@ In this mode, the app is tied to a specific organizer's subscription at build ti
 **Sign-Up Flow:**
 1. Rider opens the app (no invitation code needed)
 2. Rider directly accesses sign-up screen
-3. Rider provides email, password, and basic profile information
+3. Rider provides email and password only
 4. App creates account in the pre-configured organizer's Cognito User Pool
 5. Verification code sent to email
 6. Rider verifies email to activate account
-7. Profile data stored in tour-data-api RiderProfile table (within organizer scope)
-8. Rider can now log in and access the app
+7. App auto-signs in the rider
+8. App links Cognito `sub` to rider profile identity using `POST /v1/riders/link/{cognitoUserName}`
+9. Rider is routed to profile creation to complete required profile details
 
 **Login Flow:**
 1. Rider enters email and password
 2. App authenticates via AWS Amplify Auth SDK → pre-configured Cognito User Pool
 3. Cognito returns JWT tokens (ID token, Access token, Refresh token)
-4. App stores tokens securely via expo-secure-store
-5. JWT token included in all API requests to the organizer's tour-data-api instance
-6. Rider navigated to appropriate home screen based on tour enrollment status
+4. App optionally stores remembered credentials in expo-secure-store when Remember Me is enabled
+5. App resolves linked `profileId` using `GET /v1/riders/link/{cognitoUserName}` (Cognito `sub`)
+6. JWT token included in all API requests to the organizer's tour-data-api instance
+7. Rider navigated to appropriate home screen based on tour enrollment status
 
 **Configuration:**
 - Organizer details (Cognito pool, API URL) embedded at build time
 - Set via `EXPO_PUBLIC_SUBSCRIPTION_MODE=single` environment variable
+- `EXPO_PUBLIC_ORGANIZER_ID` and `EXPO_PUBLIC_ORGANIZER_NAME` are optional labels/logging metadata only
 - See [Subscription Packaging Guide](subscription-packaging-guide.md) for setup
 
-#### Multi Subscription Mode (For SaaS Platforms)
+#### Multi Subscription Mode (Future SaaS Extension)
 
 In this mode, the app supports multiple organizers via invitation-based sign-up:
 
@@ -120,19 +132,19 @@ In this mode, the app supports multiple organizers via invitation-based sign-up:
 2. Rider enters the invitation code in the app
 3. App validates the code via tour-data-api and retrieves the organizer's Cognito pool configuration
 4. App dynamically configures authentication with the organizer's Cognito User Pool
-5. Rider provides email, password, and basic profile information
+5. Rider provides email and password
 6. App validates input and creates account in the organizer's Cognito User Pool
 7. Verification code sent to email
 8. Rider verifies email to activate account
-9. Profile data stored in tour-data-api RiderProfile table (within organizer scope)
-10. Rider can now log in and access the app
+9. App auto-signs in rider and links Cognito `sub` to rider profile identity
+10. Rider completes profile creation after authentication
 
 **Configuration:**
-- Set via `EXPO_PUBLIC_SUBSCRIPTION_MODE=multi` environment variable
+- Set via `EXPO_PUBLIC_SUBSCRIPTION_MODE=multi` only for a future SaaS deployment
 - Requires invitation code validation implementation
 - See [Sign-Up Approach Design](design-signup-approach.md) for detailed design
 
-> **Note**: Single subscription mode is the recommended approach for individual tour operators who want a dedicated app for their riders. Multi subscription mode is designed for SaaS platforms that serve multiple organizers with a single app deployment.
+> **Note**: Single subscription mode is the default and recommended approach for dedicated organizer builds. Multi subscription mode is a future extension for SaaS platforms that serve multiple organizers with a single app deployment.
 
 ### Password Reset
 - Rider can initiate password reset from login screen
@@ -140,10 +152,15 @@ In this mode, the app supports multiple organizers via invitation-based sign-up:
 - Rider enters code and new password
 - Password updated in Cognito
 
+### Change Password
+- Authenticated rider can change password from the in-app Change Password screen
+- Rider provides current password and new password
+- Password updated in Cognito via Amplify Auth SDK
+
 ### Logout
 - Clear authentication tokens from secure storage
 - Navigate back to login screen
-- Clear any cached tour data from local storage
+- Clear the sign-in-refreshed active tour cache from local storage
 
 ### Session Management
 - JWT tokens auto-refresh via Amplify SDK
@@ -182,6 +199,9 @@ In this model, riders can browse available tours and submit registration request
 
 The Tour Dashboard is the home screen for registered riders during an active tour.
 
+- When the authenticated rider reaches the home/dashboard flow and a rider profile exists, the app must refresh the current active tour snapshot once for that sign-in.
+- The active snapshot refresh must fetch the active tour and the active tour ride list, replace any previously cached active snapshot in SQLite, and serve subsequent active-tour reads from that local cache until the rider explicitly refreshes or signs in again.
+
 #### Dashboard Features
 - Current tour information banner:
   - Tour name
@@ -204,6 +224,21 @@ The Tour Dashboard is the home screen for registered riders during an active tou
   - Tour notifications
   - Self-service options
   - Tour schedule/calendar
+
+### Tour Ride Plan View
+
+The app provides a dedicated Tour page in the authenticated menu for viewing ride plans of the active tour.
+
+#### Tour Page Features
+- Reads the active tour and active ride list from the SQLite-backed active snapshot populated during sign-in
+- Pull-to-refresh refreshes the active snapshot from `GET /v1/tours/active` plus `GET /v1/tours/{tourId}/rides`, replaces the cached active snapshot, and then serves the updated data locally
+- Shows each ride's date, route summary, distance, and stage count
+- Historical tours and their rides continue using the separate long-lived historical cache
+
+#### Ride Details Features
+- Rider can open a ride details page by selecting any ride from the Tour page
+- Ride details are fetched from `GET /v1/tours/{tourId}/rides/{rideId}`
+- Screen displays route, distance, status, flag-off time (if available), and stage list
 
 ### Daily Check-In Information
 
@@ -331,6 +366,31 @@ Registered riders can manage their participation status for the current ride usi
 
 ## General Rider Features
 
+### App Navigation Menu
+
+Authenticated users navigate through a side drawer menu (hamburger menu) with the following entries:
+- Home
+- View Profile
+- Training Challenge
+- Tour
+- Change Password
+- Sign Out
+
+Sign Out is presented as an explicit drawer action and ends the current authenticated session.
+
+### Home Screen Layout
+
+Home uses a three-row layout for authenticated riders:
+- Row 1 (30%): profile summary card with photo, name, email, and phone; tapping opens View Profile
+- Row 2 (20%): two cards side-by-side for Training Challenge and Tour
+- Row 3 (50%): Announcements/News placeholder with "Under Construction" state
+
+If Home is opened after profile creation, the screen shows a temporary success banner.
+
+### Training Challenge
+
+Training Challenge is currently a placeholder page and displays "Coming soon...." with a themed image.
+
 Features available to all riders, regardless of tour enrollment status:
 
 ### App Settings
@@ -360,8 +420,12 @@ Each tour organizer has their own dedicated tour-data-api deployment (API Gatewa
 | Endpoint | Purpose |
 |----------|---------|
 | `POST /v1/riders/profile` | Create rider profile during sign-up |
+| `POST /v1/riders/link/{cognitoUserName}` | Link Cognito user (`sub`) to rider profile |
+| `GET /v1/riders/link/{cognitoUserName}` | Resolve linked profileId for Cognito user (`sub`) |
+| `DELETE /v1/riders/link/{cognitoUserName}` | Remove link between Cognito user (`sub`) and rider profile |
 | `GET /v1/riders/profile/{profileId}` | Get rider profile |
 | `PUT /v1/riders/profile/{profileId}` | Update rider profile |
+| `POST /v1/riders/profile/{profileId}/picture` | Request pre-signed profile picture upload URL |
 | `GET /v1/tours` | List available tours |
 | `GET /v1/tours/{tourId}` | Get tour details |
 | `GET /v1/tours/{tourId}/riders/{riderId}` | Get tour rider details (enrollment status) |
@@ -377,6 +441,8 @@ The tour-data-api may need to be extended to support:
 1. **Rider-Initiated Registration**: Endpoint for riders to submit tour registration requests
 2. **Notifications System**: Endpoints for creating, listing, and managing rider notifications
 3. **Rider Statistics**: Aggregated statistics for rider's tour participation
+4. **Profile Creation With Existing Link**: `POST /v1/riders/profile` should accept optional `profileId` in request body for pre-linked users
+5. **Profile Link Lookup**: `GET /v1/riders/link/{cognitoUserName}` endpoint is required to resolve `profileId` from Cognito `sub` on returning logins
 
 > **Note**: Any new backend requirements should be documented and submitted to the tour-data-api team for implementation. The tour-rider-app should not deviate from tour-data-api design patterns.
 

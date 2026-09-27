@@ -30,8 +30,12 @@ tour-rider-app/
 │   │   ├── common/            # Shared components
 │   │   │   ├── Button.tsx
 │   │   │   ├── Card.tsx
+│   │   │   ├── ErrorBoundary.tsx
 │   │   │   ├── LoadingSpinner.tsx
 │   │   │   └── StatusBadge.tsx
+│   │   ├── home/              # Home screen components
+│   │   │   ├── ProfileSummaryCard.tsx
+│   │   │   └── HomeSectionCard.tsx
 │   │   ├── tour/              # Tour-specific components
 │   │   │   ├── TourCard.tsx
 │   │   │   └── TourInfoBanner.tsx
@@ -39,7 +43,9 @@ tour-rider-app/
 │   │   │   ├── StageIndicator.tsx
 │   │   │   └── CheckInCard.tsx
 │   │   └── profile/           # Profile-specific components
-│   │       └── ProfilePicture.tsx
+│   │       ├── ProfilePicture.tsx
+│   │       ├── ProfileFormFields.tsx
+│   │       └── SearchableSelectField.tsx
 │   ├── config/                 # Configuration files
 │   │   └── amplify.ts         # AWS Amplify configuration
 │   ├── constants/              # Application constants
@@ -55,9 +61,13 @@ tour-rider-app/
 │   │   ├── useRider.ts        # Rider profile hook
 │   │   └── useTour.ts         # Tour data hook
 │   ├── navigation/             # Navigation configuration
-│   │   ├── AppNavigator.tsx   # Root navigator
+│   │   ├── RootNavigator.tsx  # Root auth/app subtree switch
+│   │   ├── AppNavigator.tsx   # Authenticated app subtree
 │   │   ├── AuthNavigator.tsx  # Authentication flow
-│   │   └── MainNavigator.tsx  # Main app navigation
+│   │   ├── MainDrawerNavigator.tsx # Main drawer navigation
+│   │   ├── TourStackNavigator.tsx  # Tour stack inside drawer
+│   │   ├── DrawerContent.tsx   # Custom drawer content and sign out
+│   │   └── MainNavigator.tsx  # Deferred bottom-tab navigation (unused)
 │   ├── screens/                # Screen components
 │   │   ├── auth/              # Authentication screens
 │   │   │   ├── LoginScreen.tsx
@@ -65,11 +75,15 @@ tour-rider-app/
 │   │   │   └── ForgotPasswordScreen.tsx
 │   │   ├── home/              # Home screens
 │   │   │   └── HomeScreen.tsx
+│   │   ├── training/          # Training challenge screens
+│   │   │   └── TrainingChallengeScreen.tsx
 │   │   ├── tour/              # Tour screens
 │   │   │   ├── TourListScreen.tsx
 │   │   │   ├── TourDetailsScreen.tsx
 │   │   │   ├── TourDashboardScreen.tsx
-│   │   │   └── TourRegistrationScreen.tsx
+│   │   │   ├── TourRegistrationScreen.tsx
+│   │   │   ├── TourScreen.tsx
+│   │   │   └── RideDetailsScreen.tsx
 │   │   ├── checkin/           # Check-in screens
 │   │   │   ├── CheckInStatusScreen.tsx
 │   │   │   └── CheckInHistoryScreen.tsx
@@ -86,6 +100,8 @@ tour-rider-app/
 │   │   │   ├── rideApi.ts     # Ride API
 │   │   │   ├── checkInApi.ts  # Check-in API
 │   │   │   └── notificationApi.ts # Notification API
+│   │   ├── activeTourStore.ts # SQLite cache for the sign-in refreshed active snapshot
+│   │   ├── tourHistoryStore.ts # SQLite cache for long-lived historical tours and rides
 │   │   └── config/            # Runtime configuration
 │   │       └── orgConfigService.ts # Org config secure storage
 │   ├── types/                  # TypeScript type definitions
@@ -94,16 +110,20 @@ tour-rider-app/
 │   │   ├── ride.ts            # Ride types
 │   │   ├── checkin.ts         # Check-in types
 │   │   ├── notification.ts    # Notification types
+│   │   ├── navigation.ts      # Navigation param list types
+│   │   ├── api.ts             # API envelope/pagination types
 │   │   └── index.ts           # Exports
 │   └── utils/                  # Utility functions
 │       ├── logger.ts          # Logging utility
 │       ├── dateFormatter.ts   # Date formatting
+│       ├── profileForm.ts     # Shared profile form defaults and validation
 │       ├── validation.ts      # Input validation
 │       └── permissions.ts     # Permission checks
 ├── .env.example                # Environment variables template
 ├── .gitignore                  # Git ignore rules
 ├── App.tsx                     # App entry point
 ├── app.json                    # Expo configuration
+├── babel.config.js             # Babel config (includes reanimated plugin)
 ├── eslint.config.js            # ESLint configuration
 ├── index.ts                    # Metro bundler entry
 ├── package.json                # Dependencies and scripts
@@ -124,6 +144,7 @@ All project documentation following the format defined in tour-mgmt-app and tour
 ### `/src/components`
 Reusable UI components organized by scope:
 - **common/**: Shared components used across multiple screens
+- **ErrorBoundary.tsx** provides the root crash fallback UI for unhandled render errors
 - **tour/**: Tour-specific components
 - **checkin/**: Check-in-specific components
 - **profile/**: Profile-specific components
@@ -162,9 +183,13 @@ Custom React hooks for reusable stateful logic:
 
 ### `/src/navigation`
 React Navigation configuration:
-- **AppNavigator.tsx**: Root navigator, handles auth flow
+- **RootNavigator.tsx**: Root navigator, handles auth flow
+- **AppNavigator.tsx**: Authenticated app subtree with rider/tour providers
 - **AuthNavigator.tsx**: Login, sign-up, password reset
-- **MainNavigator.tsx**: Bottom tab navigation for authenticated users
+- **MainDrawerNavigator.tsx**: Primary authenticated drawer navigation (Home, View Profile, Training Challenge, Tour, Change Password)
+- **TourStackNavigator.tsx**: Nested stack for Tour rides list and ride details
+- **DrawerContent.tsx**: Custom drawer content with explicit Sign Out action
+- **MainNavigator.tsx**: Legacy bottom tabs (deferred and currently unused)
 
 ### `/src/screens`
 Screen-level components, one per screen. Organized by feature area.
@@ -188,6 +213,10 @@ HTTP client and API service layer for tour-data-api integration:
 - Handle errors consistently
 - Return typed responses
 - Log API calls at DEBUG level
+
+#### Local SQLite caches
+- **activeTourStore.ts**: Replaces the rider's active-tour snapshot at sign-in and serves active tour and active rides locally during the session
+- **tourHistoryStore.ts**: Stores immutable historical tour catalog and ride data for reuse across later visits to the Tour page
 
 ### `/src/types`
 TypeScript type definitions and interfaces:

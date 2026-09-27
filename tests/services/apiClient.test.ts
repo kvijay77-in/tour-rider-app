@@ -6,10 +6,21 @@ import {
   ApiError,
   isNetworkError,
   setApiBaseUrl,
+  setApiRequestLoggingControls,
   setAuthTokenProvider,
   setAuthInvalidatedCallback,
   apiClient,
 } from '../../src/services/api/apiClient';
+import { logger } from '../../src/utils/logger';
+
+jest.mock('../../src/config/subscription.config', () => ({
+  subscriptionConfig: {
+    organizer: null,
+    auth: { userPoolId: 'test-pool', userPoolClientId: 'test-client' },
+    api: { baseUrl: 'https://api.example.com' },
+  },
+  isSingleSubscriptionMode: () => false,
+}));
 
 // ---------------------------------------------------------------------------
 // Mock fetch globally
@@ -30,8 +41,10 @@ jest.mock('../../src/utils/logger', () => ({
 
 beforeEach(() => {
   mockFetch.mockReset();
+  jest.clearAllMocks();
   setApiBaseUrl('https://api.example.com');
   setAuthTokenProvider(async () => 'test-jwt-token');
+  setApiRequestLoggingControls({ enabled: true, debugGetRequests: false });
 });
 
 // ---------------------------------------------------------------------------
@@ -143,6 +156,23 @@ describe('apiClient.post', () => {
     expect(fetchOptions.method).toBe('POST');
     expect(fetchOptions.body).toBe(JSON.stringify(body));
   });
+
+  it('logs the request payload for POST requests', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 201,
+      json: async () => ({ success: true, data: { id: 'new' }, timestamp: '2026-01-01T00:00:00Z' }),
+    });
+
+    const body = { name: 'Test', count: 1 };
+    await apiClient.post('/v1/resource', body);
+
+    expect(logger.debug).toHaveBeenCalledWith(
+      'ApiClient',
+      'POST payload (normalized)',
+      expect.objectContaining({ payload: body }),
+    );
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -213,6 +243,142 @@ describe('apiClient error handling', () => {
     // Clean up
     setAuthTokenProvider(async () => 'test-jwt-token');
     setAuthInvalidatedCallback(() => {});
+  });
+
+  it('times out and throws when request exceeds timeout', async () => {
+    mockFetch.mockImplementation((_url: string, options?: RequestInit) => {
+      return new Promise((_resolve, reject) => {
+        const signal = options?.signal;
+        if (!signal) {
+          return;
+        }
+
+        signal.addEventListener('abort', () => {
+          const abortError = new Error('The operation was aborted');
+          abortError.name = 'AbortError';
+          reject(abortError);
+        });
+      });
+    });
+
+    await expect(
+      apiClient.get('/v1/slow', { timeoutMs: 10, maxRetries: 0 }),
+    ).rejects.toThrow(ApiError);
+  });
+
+  it('logs expected API errors at info level and not warn', async () => {
+    mockFetch.mockResolvedValue({
+      ok: false,
+      status: 404,
+      json: async () => ({
+        success: false,
+        error: { code: 'NOT_FOUND', message: 'Resource not found' },
+        timestamp: '2026-01-01T00:00:00Z',
+      }),
+    });
+
+    await expect(
+      apiClient.get('/v1/missing', {
+        isExpectedError: (error) => error.statusCode === 404,
+        maxRetries: 0,
+      }),
+    ).rejects.toThrow(ApiError);
+
+    expect(logger.info).toHaveBeenCalledWith(
+      'ApiClient',
+      'Expected API error (attempt 1)',
+      expect.objectContaining({ statusCode: 404, errorCode: 'NOT_FOUND' }),
+    );
+    expect(logger.warn).not.toHaveBeenCalledWith(
+      'ApiClient',
+      'Request error (attempt 1)',
+      expect.anything(),
+    );
+  });
+
+  it('returns configured error statuses without throwing', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: false,
+      status: 403,
+      json: async () => ({
+        success: false,
+        error: { code: 'FORBIDDEN', message: 'Access denied' },
+        timestamp: '2026-01-01T00:00:00Z',
+      }),
+    });
+
+    await expect(
+      apiClient.get('/v1/profile-picture', {
+        returnErrorResponseForStatuses: [403],
+      }),
+    ).resolves.toMatchObject({
+      success: false,
+      error: { code: 'FORBIDDEN', message: 'Access denied' },
+    });
+
+    expect(logger.info).toHaveBeenCalledWith(
+      'ApiClient',
+      'WARN: Expected API error (attempt 1)',
+      expect.objectContaining({ statusCode: 403 }),
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// apiClient — debug gating and request logging controls
+// ---------------------------------------------------------------------------
+
+describe('apiClient debug logging controls', () => {
+  it('does not emit debug logs for GET by default', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ success: true, timestamp: '2026-01-01T00:00:00Z' }),
+    });
+
+    await apiClient.get('/v1/no-debug');
+
+    expect(logger.debug).not.toHaveBeenCalled();
+  });
+
+  it('emits debug logs for POST by default', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 201,
+      json: async () => ({ success: true, data: { id: 'new' }, timestamp: '2026-01-01T00:00:00Z' }),
+    });
+
+    await apiClient.post('/v1/resource', { name: 'Test' });
+
+    expect(logger.debug).toHaveBeenCalled();
+  });
+
+  it('can enable debug logs for GET requests', async () => {
+    setApiRequestLoggingControls({ debugGetRequests: true });
+
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ success: true, timestamp: '2026-01-01T00:00:00Z' }),
+    });
+
+    await apiClient.get('/v1/debug-get');
+
+    expect(logger.debug).toHaveBeenCalled();
+  });
+
+  it('can disable request debug logs for all methods', async () => {
+    setApiRequestLoggingControls({ enabled: false, debugGetRequests: true });
+
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 201,
+      json: async () => ({ success: true, data: { id: 'new' }, timestamp: '2026-01-01T00:00:00Z' }),
+    });
+
+    await apiClient.post('/v1/resource', { name: 'Test' });
+
+    expect(logger.debug).not.toHaveBeenCalled();
   });
 });
 

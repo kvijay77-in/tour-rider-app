@@ -21,6 +21,21 @@ import type { Tour } from '../../types/tour';
 
 const TAG = 'TourListScreen';
 
+function extractTourItems(payload: unknown): Tour[] {
+  if (Array.isArray(payload)) {
+    return payload as Tour[];
+  }
+
+  if (payload && typeof payload === 'object' && 'items' in payload) {
+    const items = (payload as { items?: unknown }).items;
+    if (Array.isArray(items)) {
+      return items as Tour[];
+    }
+  }
+
+  return [];
+}
+
 export function TourListScreen({ navigation }: { navigation: { navigate: (screen: string, params?: Record<string, unknown>) => void } }) {
   const [tours, setTours] = useState<Tour[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -31,8 +46,10 @@ export function TourListScreen({ navigation }: { navigation: { navigate: (screen
     setError(null);
     try {
       const response = await getTours();
-      if (response.success && response.data) {
-        setTours(response.data.items);
+      const items = extractTourItems(response.data);
+
+      if (response.success || items.length > 0) {
+        setTours(items);
       } else {
         const msg = response.error?.message ?? 'Failed to load tours.';
         setError(msg);

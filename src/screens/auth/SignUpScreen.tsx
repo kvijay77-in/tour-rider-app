@@ -2,8 +2,9 @@
  * Sign-up screen — two-step registration (form → verification code).
  */
 
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
+  findNodeHandle,
   View,
   Text,
   TextInput,
@@ -19,14 +20,14 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { COLORS } from '../../constants';
 import { useAuth } from '../../hooks/useAuth';
 import { Button } from '../../components/common/Button';
+import { PasswordInput } from '../../components/common/PasswordInput';
 import {
   isValidEmail,
-  isValidName,
-  isValidPhone,
   isValidPassword,
   getPasswordErrors,
   isNotEmpty,
 } from '../../utils/validation';
+import { linkCognitoUser } from '../../services/api/riderApi';
 import { logger } from '../../utils/logger';
 import type { AuthStackParamList } from '../../types/navigation';
 
@@ -37,37 +38,49 @@ type Props = NativeStackScreenProps<AuthStackParamList, 'SignUp'>;
 type Step = 'registration' | 'verification';
 
 export function SignUpScreen({ navigation }: Props) {
-  const { signUp, confirmSignUpCode, error, isAuthenticating } = useAuth();
+  const {
+    signUp,
+    confirmSignUpCode,
+    login,
+    setLinkedProfileId,
+    setPostLoginRedirect,
+    error,
+    isAuthenticating,
+  } = useAuth();
+  const scrollViewRef = useRef<ScrollView>(null);
+  const emailInputRef = useRef<TextInput>(null);
+  const passwordInputRef = useRef<TextInput>(null);
+  const confirmPasswordInputRef = useRef<TextInput>(null);
+  const verificationCodeInputRef = useRef<TextInput>(null);
 
   const [step, setStep] = useState<Step>('registration');
   const [validationError, setValidationError] = useState<string | null>(null);
 
   // Registration fields
-  const [firstName, setFirstName] = useState('');
-  const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
-  const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
 
   // Verification field
   const [verificationCode, setVerificationCode] = useState('');
 
+  const scrollInputIntoView = (inputRef: React.RefObject<TextInput | null>) => {
+    const inputNode = findNodeHandle(inputRef.current);
+
+    if (!inputNode || !scrollViewRef.current) {
+      return;
+    }
+
+    scrollViewRef.current.scrollResponderScrollNativeHandleToKeyboard(
+      inputNode,
+      96,
+      true,
+    );
+  };
+
   const validateRegistration = (): boolean => {
-    if (!isValidName(firstName)) {
-      setValidationError('Please enter a valid first name (at least 2 characters).');
-      return false;
-    }
-    if (!isValidName(lastName)) {
-      setValidationError('Please enter a valid last name (at least 2 characters).');
-      return false;
-    }
     if (!isValidEmail(email)) {
       setValidationError('Please enter a valid email address.');
-      return false;
-    }
-    if (phone && !isValidPhone(phone)) {
-      setValidationError('Please enter a valid phone number.');
       return false;
     }
     if (!isValidPassword(password)) {
@@ -87,11 +100,11 @@ export function SignUpScreen({ navigation }: Props) {
     if (!validateRegistration()) return;
 
     try {
-      await signUp(email.trim(), password, {
-        given_name: firstName.trim(),
-        family_name: lastName.trim(),
-        ...(phone ? { phone_number: phone.trim() } : {}),
-      });
+      const wasSignedUp = await signUp(email.trim(), password);
+      if (!wasSignedUp) {
+        return;
+      }
+
       setStep('verification');
       logger.info(TAG, 'Sign-up initiated — verification code sent');
     } catch {
@@ -107,9 +120,26 @@ export function SignUpScreen({ navigation }: Props) {
     }
 
     try {
-      await confirmSignUpCode(email.trim(), verificationCode.trim());
-      logger.info(TAG, 'Account verified successfully');
-      navigation.navigate('Login');
+      const normalizedEmail = email.trim();
+      await confirmSignUpCode(normalizedEmail, verificationCode.trim());
+
+      const authUser = await login(normalizedEmail, password, {
+        skipProfileLookup: true,
+      });
+      if (!authUser) {
+        return;
+      }
+
+      const linkResponse = await linkCognitoUser(authUser.userId);
+      const linkedProfileId = linkResponse.data?.profileId;
+
+      if (linkedProfileId) {
+        setLinkedProfileId(linkedProfileId);
+      }
+
+      setPostLoginRedirect('ProfileCreation');
+
+      logger.info(TAG, 'Account verified and linked successfully');
     } catch {
       logger.debug(TAG, 'Verification attempt failed');
     }
@@ -121,10 +151,12 @@ export function SignUpScreen({ navigation }: Props) {
     <SafeAreaView style={styles.safeArea}>
       <KeyboardAvoidingView
         style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
         <ScrollView
+          ref={scrollViewRef}
           contentContainerStyle={styles.container}
+          keyboardDismissMode="on-drag"
           keyboardShouldPersistTaps="handled"
         >
           <Text style={styles.title}>
@@ -132,7 +164,7 @@ export function SignUpScreen({ navigation }: Props) {
           </Text>
           <Text style={styles.subtitle}>
             {step === 'registration'
-              ? 'Fill in your details to get started'
+              ? 'Enter your email and password to create your account'
               : `Enter the verification code sent to ${email}`}
           </Text>
 
@@ -144,34 +176,9 @@ export function SignUpScreen({ navigation }: Props) {
 
           {step === 'registration' ? (
             <View style={styles.form}>
-              <Text style={styles.label}>First Name</Text>
-              <TextInput
-                style={styles.input}
-                value={firstName}
-                onChangeText={setFirstName}
-                placeholder="First name"
-                placeholderTextColor={COLORS.textDisabled}
-                autoCapitalize="words"
-                textContentType="givenName"
-                editable={!isAuthenticating}
-                accessibilityLabel="First name"
-              />
-
-              <Text style={styles.label}>Last Name</Text>
-              <TextInput
-                style={styles.input}
-                value={lastName}
-                onChangeText={setLastName}
-                placeholder="Last name"
-                placeholderTextColor={COLORS.textDisabled}
-                autoCapitalize="words"
-                textContentType="familyName"
-                editable={!isAuthenticating}
-                accessibilityLabel="Last name"
-              />
-
               <Text style={styles.label}>Email</Text>
               <TextInput
+                ref={emailInputRef}
                 style={styles.input}
                 value={email}
                 onChangeText={setEmail}
@@ -183,45 +190,33 @@ export function SignUpScreen({ navigation }: Props) {
                 textContentType="emailAddress"
                 editable={!isAuthenticating}
                 accessibilityLabel="Email address"
-              />
-
-              <Text style={styles.label}>Phone (optional)</Text>
-              <TextInput
-                style={styles.input}
-                value={phone}
-                onChangeText={setPhone}
-                placeholder="+1 234 567 8900"
-                placeholderTextColor={COLORS.textDisabled}
-                keyboardType="phone-pad"
-                textContentType="telephoneNumber"
-                editable={!isAuthenticating}
-                accessibilityLabel="Phone number"
+                onFocus={() => scrollInputIntoView(emailInputRef)}
               />
 
               <Text style={styles.label}>Password</Text>
-              <TextInput
-                style={styles.input}
+              <PasswordInput
+                ref={passwordInputRef}
                 value={password}
                 onChangeText={setPassword}
                 placeholder="Min 8 chars, uppercase, lowercase, number"
                 placeholderTextColor={COLORS.textDisabled}
-                secureTextEntry
                 textContentType="newPassword"
                 editable={!isAuthenticating}
                 accessibilityLabel="Password"
+                onFocus={() => scrollInputIntoView(passwordInputRef)}
               />
 
               <Text style={styles.label}>Confirm Password</Text>
-              <TextInput
-                style={styles.input}
+              <PasswordInput
+                ref={confirmPasswordInputRef}
                 value={confirmPassword}
                 onChangeText={setConfirmPassword}
                 placeholder="Re-enter your password"
                 placeholderTextColor={COLORS.textDisabled}
-                secureTextEntry
                 textContentType="newPassword"
                 editable={!isAuthenticating}
                 accessibilityLabel="Confirm password"
+                onFocus={() => scrollInputIntoView(confirmPasswordInputRef)}
               />
 
               <Button
@@ -235,6 +230,7 @@ export function SignUpScreen({ navigation }: Props) {
             <View style={styles.form}>
               <Text style={styles.label}>Verification Code</Text>
               <TextInput
+                ref={verificationCodeInputRef}
                 style={styles.input}
                 value={verificationCode}
                 onChangeText={setVerificationCode}
@@ -244,6 +240,7 @@ export function SignUpScreen({ navigation }: Props) {
                 autoComplete="one-time-code"
                 editable={!isAuthenticating}
                 accessibilityLabel="Verification code"
+                onFocus={() => scrollInputIntoView(verificationCodeInputRef)}
               />
 
               <Button

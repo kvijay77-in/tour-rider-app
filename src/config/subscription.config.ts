@@ -34,10 +34,10 @@ export type SubscriptionMode = 'single' | 'multi';
  * In multi-subscription mode, these are resolved dynamically from invitation validation.
  */
 export interface OrganizerConfig {
-  /** Unique identifier for the organizer */
-  organizerId: string;
-  /** Display name of the organizer */
-  organizerName: string;
+  /** Unique identifier for the organizer (optional in single-subscription mode) */
+  organizerId?: string;
+  /** Display name of the organizer (optional in single-subscription mode) */
+  organizerName?: string;
   /** AWS Cognito User Pool ID for the organizer's riders */
   cognitoPoolId: string;
   /** AWS Cognito User Pool Web Client ID */
@@ -66,57 +66,54 @@ export interface SubscriptionConfig {
  * Load subscription configuration from environment variables.
  *
  * Environment Variables:
- * - EXPO_PUBLIC_SUBSCRIPTION_MODE: 'single' or 'multi' (default: 'multi')
+ * - EXPO_PUBLIC_SUBSCRIPTION_MODE: 'single' or 'multi' (default: 'single')
  *
- * For single-subscription mode, also requires:
- * - EXPO_PUBLIC_ORGANIZER_ID: Unique organizer identifier
- * - EXPO_PUBLIC_ORGANIZER_NAME: Display name for the organizer
+ * For single-subscription mode, also supports:
+ * - EXPO_PUBLIC_ORGANIZER_ID: Optional organizer identifier for labels/logging
+ * - EXPO_PUBLIC_ORGANIZER_NAME: Optional display name for labels/logging
  * - EXPO_PUBLIC_AWS_USER_POOL_ID: Cognito User Pool ID
  * - EXPO_PUBLIC_AWS_USER_POOL_WEB_CLIENT_ID: Cognito Client ID
  * - EXPO_PUBLIC_AWS_IDENTITY_POOL_ID: (Optional) Cognito Identity Pool ID
  * - EXPO_PUBLIC_TOUR_DATA_API_BASE_URL: API base URL
  */
 function loadSubscriptionConfig(): SubscriptionConfig {
-  const mode = (process.env.EXPO_PUBLIC_SUBSCRIPTION_MODE || 'multi') as SubscriptionMode;
+  const mode = (process.env.EXPO_PUBLIC_SUBSCRIPTION_MODE || 'single') as SubscriptionMode;
 
   if (mode !== 'single' && mode !== 'multi') {
     logger.warn(
       TAG,
-      `Invalid SUBSCRIPTION_MODE '${mode}'. Defaulting to 'multi'.`,
+      `Invalid SUBSCRIPTION_MODE '${mode}'. Defaulting to 'single'.`,
     );
-    return { mode: 'multi' };
+    return { mode: 'single' };
   }
 
   if (mode === 'single') {
     // Single-subscription mode: load organizer config from env vars
-    const organizerId = process.env.EXPO_PUBLIC_ORGANIZER_ID ?? '';
-    const organizerName = process.env.EXPO_PUBLIC_ORGANIZER_NAME ?? '';
+    const organizerId = process.env.EXPO_PUBLIC_ORGANIZER_ID?.trim();
+    const organizerName = process.env.EXPO_PUBLIC_ORGANIZER_NAME?.trim();
     const cognitoPoolId = process.env.EXPO_PUBLIC_AWS_USER_POOL_ID ?? '';
     const cognitoClientId = process.env.EXPO_PUBLIC_AWS_USER_POOL_WEB_CLIENT_ID ?? '';
     const identityPoolId = process.env.EXPO_PUBLIC_AWS_IDENTITY_POOL_ID ?? '';
     const apiBaseUrl = process.env.EXPO_PUBLIC_TOUR_DATA_API_BASE_URL ?? '';
 
     // Validate required fields
-    if (!organizerId || !organizerName || !cognitoPoolId || !cognitoClientId || !apiBaseUrl) {
+    if (!cognitoPoolId || !cognitoClientId || !apiBaseUrl) {
       logger.error(
         TAG,
-        'Single-subscription mode requires ORGANIZER_ID, ORGANIZER_NAME, AWS_USER_POOL_ID, AWS_USER_POOL_WEB_CLIENT_ID, and TOUR_DATA_API_BASE_URL',
+        'Single-subscription mode requires AWS_USER_POOL_ID, AWS_USER_POOL_WEB_CLIENT_ID, and TOUR_DATA_API_BASE_URL',
       );
       throw new Error(
         'Incomplete subscription configuration. Check environment variables for single-subscription mode.',
       );
     }
 
-    logger.info(
-      TAG,
-      `Loaded single-subscription config for organizer: ${organizerName} (${organizerId})`,
-    );
+    logger.info(TAG, 'Loaded single-subscription config from Expo public env vars');
 
     return {
       mode: 'single',
       organizer: {
-        organizerId,
-        organizerName,
+        ...(organizerId ? { organizerId } : {}),
+        ...(organizerName ? { organizerName } : {}),
         cognitoPoolId,
         cognitoClientId,
         ...(identityPoolId ? { identityPoolId } : {}),

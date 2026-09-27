@@ -2,8 +2,10 @@
  * Login screen — email/password authentication.
  */
 
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
+  Alert,
+  findNodeHandle,
   View,
   Text,
   TextInput,
@@ -13,26 +15,128 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import * as SecureStore from 'expo-secure-store';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 import { COLORS } from '../../constants';
 import { useAuth } from '../../hooks/useAuth';
 import { Button } from '../../components/common/Button';
+import { PasswordInput } from '../../components/common/PasswordInput';
 import { isValidEmail, isNotEmpty } from '../../utils/validation';
 import { logger } from '../../utils/logger';
 import type { AuthStackParamList } from '../../types/navigation';
 
 const TAG = 'LoginScreen';
+const REMEMBERED_CREDENTIALS_KEY = 'auth.rememberedCredentials';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'Login'>;
 
 export function LoginScreen({ navigation }: Props) {
-  const { login, error, isAuthenticating } = useAuth();
+  const {
+    login,
+    error,
+    isAuthenticating,
+    pendingAuthChallenge,
+    cancelPendingAuthChallenge,
+  } = useAuth();
+  const scrollViewRef = useRef<ScrollView>(null);
+  const emailInputRef = useRef<TextInput>(null);
+  const passwordInputRef = useRef<TextInput>(null);
+  const challengeAlertShownRef = useRef(false);
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [rememberMe, setRememberMe] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadRememberedCredentials = async () => {
+      try {
+        const rawValue = await SecureStore.getItemAsync(REMEMBERED_CREDENTIALS_KEY);
+        if (!rawValue || !isMounted) {
+          return;
+        }
+
+        const credentials = JSON.parse(rawValue) as { email?: string; password?: string };
+        if (credentials.email && credentials.password) {
+          setEmail(credentials.email);
+          setPassword(credentials.password);
+          setRememberMe(true);
+        }
+      } catch (error) {
+        logger.warn(TAG, 'Failed to load remembered credentials', error);
+      }
+    };
+
+    loadRememberedCredentials().catch((error) => {
+      logger.warn(TAG, 'Remembered credentials loading failed', error);
+    });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!pendingAuthChallenge || challengeAlertShownRef.current) {
+      if (!pendingAuthChallenge) {
+        challengeAlertShownRef.current = false;
+      }
+      return;
+    }
+
+    challengeAlertShownRef.current = true;
+    Alert.alert(
+      'Password Change Required',
+      'Password change has been enforced. Change password to login.',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+          onPress: () => {
+            void (async () => {
+              await cancelPendingAuthChallenge();
+              setEmail('');
+              setPassword('');
+              setRememberMe(false);
+              setValidationError(null);
+              navigation.reset({
+                index: 0,
+                routes: [{ name: 'Login' }],
+              });
+            })();
+          },
+        },
+        {
+          text: 'OK',
+          onPress: () => {
+            navigation.navigate('EnforcedPasswordChange', {
+              email: pendingAuthChallenge.email,
+            });
+          },
+        },
+      ],
+      { cancelable: false },
+    );
+  }, [pendingAuthChallenge, cancelPendingAuthChallenge, navigation]);
+
+  const scrollInputIntoView = (inputRef: React.RefObject<TextInput | null>) => {
+    const inputNode = findNodeHandle(inputRef.current);
+
+    if (!inputNode || !scrollViewRef.current) {
+      return;
+    }
+
+    scrollViewRef.current.scrollResponderScrollNativeHandleToKeyboard(
+      inputNode,
+      96,
+      true,
+    );
+  };
 
   const handleLogin = async () => {
     setValidationError(null);
@@ -47,7 +151,21 @@ export function LoginScreen({ navigation }: Props) {
     }
 
     try {
-      await login(email.trim(), password);
+      const authenticatedUser = await login(email.trim(), password);
+      if (!authenticatedUser) {
+        return;
+      }
+
+      if (rememberMe) {
+        // Accepted tradeoff: credentials are persisted in SecureStore for convenience.
+        await SecureStore.setItemAsync(
+          REMEMBERED_CREDENTIALS_KEY,
+          JSON.stringify({ email: email.trim(), password }),
+        );
+      } else {
+        await SecureStore.deleteItemAsync(REMEMBERED_CREDENTIALS_KEY);
+      }
+
       logger.info(TAG, 'Login successful');
     } catch {
       // Error is handled by AuthContext and exposed via `error`
@@ -61,10 +179,12 @@ export function LoginScreen({ navigation }: Props) {
     <SafeAreaView style={styles.safeArea}>
       <KeyboardAvoidingView
         style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
         <ScrollView
+          ref={scrollViewRef}
           contentContainerStyle={styles.container}
+          keyboardDismissMode="on-drag"
           keyboardShouldPersistTaps="handled"
         >
           <View style={styles.header}>
@@ -81,6 +201,7 @@ export function LoginScreen({ navigation }: Props) {
           <View style={styles.form}>
             <Text style={styles.label}>Email</Text>
             <TextInput
+              ref={emailInputRef}
               style={styles.input}
               value={email}
               onChangeText={setEmail}
@@ -92,21 +213,37 @@ export function LoginScreen({ navigation }: Props) {
               textContentType="emailAddress"
               editable={!isAuthenticating}
               accessibilityLabel="Email address"
+              onFocus={() => scrollInputIntoView(emailInputRef)}
             />
 
             <Text style={styles.label}>Password</Text>
-            <TextInput
-              style={styles.input}
+            <PasswordInput
+              ref={passwordInputRef}
               value={password}
               onChangeText={setPassword}
               placeholder="Enter your password"
               placeholderTextColor={COLORS.textDisabled}
-              secureTextEntry
               autoComplete="password"
               textContentType="password"
               editable={!isAuthenticating}
               accessibilityLabel="Password"
+              onFocus={() => scrollInputIntoView(passwordInputRef)}
             />
+
+            <TouchableOpacity
+              style={styles.rememberMeRow}
+              onPress={() => setRememberMe((previousValue) => !previousValue)}
+              disabled={isAuthenticating}
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: rememberMe, disabled: isAuthenticating }}
+            >
+              <Ionicons
+                name={rememberMe ? 'checkbox-outline' : 'square-outline'}
+                size={20}
+                color={COLORS.primary}
+              />
+              <Text style={styles.rememberMeText}>Remember Me</Text>
+            </TouchableOpacity>
 
             <Button
               title="Sign In"
@@ -205,6 +342,17 @@ const styles = StyleSheet.create({
   links: {
     alignItems: 'center',
     gap: 12,
+  },
+  rememberMeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+    gap: 8,
+  },
+  rememberMeText: {
+    color: COLORS.textPrimary,
+    fontSize: 14,
+    fontWeight: '500',
   },
   linkText: {
     fontSize: 14,

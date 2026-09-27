@@ -1,26 +1,62 @@
 /**
- * Root app navigator — switches between Auth and Main stacks
- * based on authentication state.
+ * Authenticated app subtree.
+ *
+ * Mounts authenticated-only providers and renders the main tab navigator.
  */
 
-import React from 'react';
-import { NavigationContainer } from '@react-navigation/native';
+import React, { useEffect } from 'react';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
+import { RiderProvider } from '../context/RiderContext';
+import { TourProvider } from '../context/TourContext';
 import { useAuth } from '../hooks/useAuth';
-import { LoadingSpinner } from '../components/common/LoadingSpinner';
-import { AuthNavigator } from './AuthNavigator';
-import { MainNavigator } from './MainNavigator';
+import { useRider } from '../hooks/useRider';
+import { MainDrawerNavigator } from './MainDrawerNavigator';
+import { ProfileCreationScreen } from '../screens/profile/ProfileCreationScreen';
+import { ChangePasswordScreen } from '../screens/auth/ChangePasswordScreen';
+import type { AppStackParamList } from '../types/navigation';
 
-export function AppNavigator() {
-  const { user, isLoading } = useAuth();
+const Stack = createNativeStackNavigator<AppStackParamList>();
 
-  if (isLoading) {
-    return <LoadingSpinner message="Loading..." />;
-  }
+function AuthenticatedStack() {
+  const { user, postLoginRedirect, clearPostLoginRedirect } = useAuth();
+  const { hasProfile, isLoading: isLoadingProfile } = useRider();
+
+  const shouldForceProfileCreation = Boolean(user)
+    && postLoginRedirect === 'ProfileCreation'
+    && !isLoadingProfile
+    && !hasProfile;
+
+  useEffect(() => {
+    if (postLoginRedirect) {
+      clearPostLoginRedirect();
+    }
+  }, [postLoginRedirect, clearPostLoginRedirect]);
+
+  const initialRouteName: keyof AppStackParamList = shouldForceProfileCreation
+    ? 'ProfileCreation'
+    : (postLoginRedirect ?? 'MainTabs');
 
   return (
-    <NavigationContainer>
-      {user ? <MainNavigator /> : <AuthNavigator />}
-    </NavigationContainer>
+    <Stack.Navigator
+      initialRouteName={initialRouteName}
+      screenOptions={{ headerShown: false }}
+    >
+      {!shouldForceProfileCreation ? (
+        <Stack.Screen name="MainTabs" component={MainDrawerNavigator} />
+      ) : null}
+      <Stack.Screen name="ProfileCreation" component={ProfileCreationScreen} />
+      <Stack.Screen name="ChangePassword" component={ChangePasswordScreen} />
+    </Stack.Navigator>
+  );
+}
+
+export function AppNavigator() {
+  return (
+    <RiderProvider>
+      <TourProvider>
+        <AuthenticatedStack />
+      </TourProvider>
+    </RiderProvider>
   );
 }

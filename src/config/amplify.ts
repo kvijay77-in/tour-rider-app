@@ -25,6 +25,28 @@ import {
 
 const TAG = 'Amplify';
 
+interface EnvCognitoConfig {
+  userPoolId: string;
+  userPoolClientId: string;
+  identityPoolId?: string;
+}
+
+function getEnvCognitoConfig(): EnvCognitoConfig | null {
+  const userPoolId = process.env.EXPO_PUBLIC_AWS_USER_POOL_ID ?? '';
+  const userPoolClientId = process.env.EXPO_PUBLIC_AWS_USER_POOL_WEB_CLIENT_ID ?? '';
+  const identityPoolId = process.env.EXPO_PUBLIC_AWS_IDENTITY_POOL_ID ?? '';
+
+  if (!userPoolId || !userPoolClientId) {
+    return null;
+  }
+
+  return {
+    userPoolId,
+    userPoolClientId,
+    ...(identityPoolId ? { identityPoolId } : {}),
+  };
+}
+
 /**
  * Configure Amplify Auth with Cognito User Pool settings.
  *
@@ -55,7 +77,24 @@ export function configureAmplify(): void {
       `Configured for ${organizer.organizerName} (single-subscription mode)`,
     );
   } else {
-    // Multi-subscription mode: log that dynamic configuration is expected
+    const envCognitoConfig = getEnvCognitoConfig();
+
+    if (envCognitoConfig) {
+      // Dev/test fallback: allow direct auth in multi mode when env values are present.
+      Amplify.configure({
+        Auth: {
+          Cognito: envCognitoConfig,
+        },
+      });
+
+      logger.warn(
+        TAG,
+        'Running in multi-subscription mode with env fallback Cognito config. This is intended for local development/testing only.',
+      );
+      return;
+    }
+
+    // Multi-subscription mode: dynamic configuration is expected before auth calls
     logger.info(
       TAG,
       'Running in multi-subscription mode. Amplify will be configured dynamically after invitation validation.',

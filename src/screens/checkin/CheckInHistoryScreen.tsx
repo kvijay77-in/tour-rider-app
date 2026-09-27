@@ -18,13 +18,9 @@ import { LoadingSpinner } from '../../components/common/LoadingSpinner';
 import { Card } from '../../components/common/Card';
 import { StatusBadge } from '../../components/common/StatusBadge';
 import { useTour } from '../../hooks/useTour';
-import { getTourRides } from '../../services/api/rideApi';
 import { formatDate } from '../../utils/dateFormatter';
-import { logger } from '../../utils/logger';
 import type { Ride } from '../../types/ride';
 import { RideStatus } from '../../types/ride';
-
-const TAG = 'CheckInHistoryScreen';
 
 const STATUS_COLOR_MAP: Record<RideStatus, string> = {
   [RideStatus.PLANNED]: COLORS.gray[400],
@@ -36,46 +32,31 @@ const STATUS_COLOR_MAP: Record<RideStatus, string> = {
 export function CheckInHistoryScreen({ navigation }: {
   navigation: { navigate: (screen: string, params?: Record<string, unknown>) => void };
 }) {
-  const { activeTour } = useTour();
+  const { activeTour, activeRides, isLoading: isLoadingActiveTour, loadActiveTour } = useTour();
 
   const [rides, setRides] = useState<Ride[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
-  const fetchRides = useCallback(async () => {
+  const syncRides = useCallback(() => {
     if (!activeTour) {
-      setIsLoading(false);
+      setRides([]);
       return;
     }
 
-    setError(null);
-    try {
-      const response = await getTourRides(activeTour.tourId);
-      if (response.success && response.data) {
-        setRides(response.data.items);
-      } else {
-        setError(response.error?.message ?? 'Failed to load ride history.');
-      }
-    } catch (err) {
-      logger.error(TAG, 'Error fetching ride history', err);
-      setError('Unable to load ride history. Please try again.');
-    } finally {
-      setIsLoading(false);
-      setRefreshing(false);
-    }
-  }, [activeTour]);
+    setRides(activeRides);
+  }, [activeRides, activeTour]);
 
   useEffect(() => {
-    fetchRides();
-  }, [fetchRides]);
+    syncRides();
+  }, [syncRides]);
 
-  const handleRefresh = () => {
+  const handleRefresh = async () => {
     setRefreshing(true);
-    fetchRides();
+    await loadActiveTour();
+    setRefreshing(false);
   };
 
-  if (isLoading && !refreshing) {
+  if (isLoadingActiveTour && !refreshing) {
     return (
       <SafeAreaView style={styles.safeArea}>
         <LoadingSpinner message="Loading ride history..." />
@@ -98,12 +79,6 @@ export function CheckInHistoryScreen({ navigation }: {
       <View style={styles.header}>
         <Text style={styles.title}>Ride History</Text>
       </View>
-
-      {error ? (
-        <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>{error}</Text>
-        </View>
-      ) : null}
 
       <FlatList
         data={rides}

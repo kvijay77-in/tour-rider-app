@@ -1,89 +1,301 @@
 /**
- * Profile screen — view/edit rider profile and sign out.
+ * View/edit profile screen.
  */
 
-import React, { useState, useCallback } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  View,
-  Text,
-  TextInput,
   Alert,
+  Image,
+  Modal,
   ScrollView,
   StyleSheet,
-  KeyboardAvoidingView,
-  Platform,
+  Text,
+  TouchableOpacity,
+  View,
+  useWindowDimensions,
 } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
+import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { COLORS } from '../../constants';
-import { LoadingSpinner } from '../../components/common/LoadingSpinner';
 import { Button } from '../../components/common/Button';
+import { LoadingSpinner } from '../../components/common/LoadingSpinner';
+import { ProfileFormFields } from '../../components/profile/ProfileFormFields';
 import { ProfilePicture } from '../../components/profile/ProfilePicture';
+import { COLORS } from '../../constants';
 import { useAuth } from '../../hooks/useAuth';
 import { useRider } from '../../hooks/useRider';
+import { formatDate } from '../../utils/dateFormatter';
 import { logger } from '../../utils/logger';
+import {
+  combinePhoneNumber,
+  createProfileFormValues,
+  validateProfileForm,
+  type ProfileFormErrors,
+  type ProfileFormField,
+  type ProfileFormValues,
+} from '../../utils/profileForm';
+import type { RiderAddress, RiderEmergencyContact, UpdateRiderProfileRequest } from '../../types/rider';
 
 const TAG = 'ProfileScreen';
 
+function formatDateForApi(date: Date): string {
+  return date.toISOString().split('T')[0] ?? '';
+}
+
+function formatAddress(address?: RiderAddress): string {
+  if (!address) return '—';
+  const segments = [
+    address.line1,
+    address.line2,
+    address.city,
+    address.state,
+    address.country,
+    address.postalCode,
+  ].filter((segment): segment is string => Boolean(segment?.trim()));
+  return segments.length ? segments.join(', ') : '—';
+}
+
+function buildProfileUpdatePayload(
+  profile: NonNullable<ReturnType<typeof useRider>['profile']>,
+  values: ProfileFormValues,
+): UpdateRiderProfileRequest {
+  const payload: UpdateRiderProfileRequest = {};
+  const name = values.name.trim();
+  const phone = combinePhoneNumber(values.phoneCallingCode, values.phoneNumber);
+  const dateOfBirth = formatDateForApi(values.dateOfBirth as Date);
+  const gender = values.gender ?? undefined;
+  const address: RiderAddress = {
+    line1: values.addressLine1.trim(),
+    city: values.city.trim(),
+    state: values.state.trim(),
+    country: values.country,
+    postalCode: values.postalCode.trim(),
+  };
+  const addressLine2 = values.addressLine2.trim();
+  if (addressLine2) {
+    address.line2 = addressLine2;
+  }
+
+  const emergencyContact: RiderEmergencyContact = {
+    name: values.emergencyContactName.trim(),
+    relation: values.emergencyContactRelationship.trim(),
+    phone: combinePhoneNumber(values.emergencyPhoneCallingCode, values.emergencyContactPhone),
+  };
+
+  if (name !== profile.name) {
+    payload.name = name;
+  }
+
+  if (phone !== (profile.phone ?? '')) {
+    payload.phone = phone;
+  }
+
+  if (dateOfBirth !== (profile.dateOfBirth ?? '')) {
+    payload.dateOfBirth = dateOfBirth;
+  }
+
+  if (gender !== profile.gender) {
+    payload.gender = gender;
+  }
+
+  const currentAddress: RiderAddress = {
+    line1: profile.address?.line1 ?? '',
+    city: profile.address?.city ?? '',
+    state: profile.address?.state ?? '',
+    country: profile.address?.country ?? '',
+    postalCode: profile.address?.postalCode ?? '',
+  };
+  if (profile.address?.line2?.trim()) {
+    currentAddress.line2 = profile.address.line2.trim();
+  }
+
+  if (JSON.stringify(address) !== JSON.stringify(currentAddress)) {
+    payload.address = address;
+  }
+
+  const currentEmergencyContact: RiderEmergencyContact = {
+    name: profile.emergencyContact?.name ?? '',
+    relation: profile.emergencyContact?.relation ?? '',
+    phone: profile.emergencyContact?.phone ?? '',
+  };
+
+  if (JSON.stringify(emergencyContact) !== JSON.stringify(currentEmergencyContact)) {
+    payload.emergencyContact = emergencyContact;
+  }
+
+  return payload;
+}
+
 export function ProfileScreen() {
   const { logout, isAuthenticating } = useAuth();
-  const { profile, isLoading, error, updateProfile, refreshProfile } = useRider();
-
+  const { profile, isLoading, error, updateProfile, uploadProfilePicture, refreshProfile } = useRider();
+  const { width: screenWidth } = useWindowDimensions();
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isPhotoPreviewVisible, setIsPhotoPreviewVisible] = useState(false);
+  const [photoAspectRatio, setPhotoAspectRatio] = useState(1);
+  const [successMessageVisible, setSuccessMessageVisible] = useState(false);
+  const [values, setValues] = useState<ProfileFormValues>(() => createProfileFormValues());
+  const [selectedPhotoUri, setSelectedPhotoUri] = useState<string | null>(null);
+  const [selectedPhotoMimeType, setSelectedPhotoMimeType] = useState<string | undefined>();
+  const [selectedPhotoBase64, setSelectedPhotoBase64] = useState<string | null>(null);
+  const [formErrors, setFormErrors] = useState<ProfileFormErrors>({});
 
-  // Editable fields
-  const [firstName, setFirstName] = useState(profile?.firstName ?? '');
-  const [lastName, setLastName] = useState(profile?.lastName ?? '');
-  const [phone, setPhone] = useState(profile?.phone ?? '');
-  const [address, setAddress] = useState(profile?.address ?? '');
-  const [emergencyName, setEmergencyName] = useState(profile?.emergencyContactName ?? '');
-  const [emergencyPhone, setEmergencyPhone] = useState(profile?.emergencyContactPhone ?? '');
+  useEffect(() => {
+    if (!successMessageVisible) return;
+    const timer = setTimeout(() => setSuccessMessageVisible(false), 3000);
+    return () => clearTimeout(timer);
+  }, [successMessageVisible]);
 
-  const handleEdit = useCallback(() => {
-    // Sync local state with current profile before editing
-    setFirstName(profile?.firstName ?? '');
-    setLastName(profile?.lastName ?? '');
-    setPhone(profile?.phone ?? '');
-    setAddress(profile?.address ?? '');
-    setEmergencyName(profile?.emergencyContactName ?? '');
-    setEmergencyPhone(profile?.emergencyContactPhone ?? '');
-    setIsEditing(true);
+  const resetEditor = useCallback(() => {
+    setValues(createProfileFormValues(profile));
+    setSelectedPhotoUri(null);
+    setSelectedPhotoMimeType(undefined);
+    setSelectedPhotoBase64(null);
+    setFormErrors({});
   }, [profile]);
 
-  const handleCancel = useCallback(() => {
-    setIsEditing(false);
+  const handleFieldChange = <Key extends keyof ProfileFormValues>(
+    field: Key,
+    value: ProfileFormValues[Key],
+    errorField?: ProfileFormField,
+  ) => {
+    setValues((previous) => ({ ...previous, [field]: value }));
+    if (errorField) setFormErrors((previous) => ({ ...previous, [errorField]: undefined }));
+  };
+
+  const handlePickPhoto = useCallback(async () => {
+    try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert('Permission required', 'Media library permission is required to select a profile photo.');
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.85,
+        base64: true,
+      });
+      const asset = result.canceled ? undefined : result.assets[0];
+      if (!asset?.uri) return;
+      if (!asset.base64) {
+        Alert.alert('Invalid photo', 'Unable to read image data. Please select another photo.');
+        return;
+      }
+
+      if (asset.fileSize && asset.fileSize > 5 * 1024 * 1024) {
+        Alert.alert('Invalid photo', 'Profile picture must be 5MB or smaller.');
+        return;
+      }
+
+      setSelectedPhotoUri(asset.uri);
+      setSelectedPhotoMimeType(asset.mimeType ?? 'image/jpeg');
+      setSelectedPhotoBase64(asset.base64);
+      setFormErrors((previous) => ({ ...previous, photo: undefined }));
+      logger.info(TAG, 'Profile photo selected for profile update');
+    } catch (pickError) {
+      logger.error(TAG, 'Error selecting profile photo', pickError);
+      Alert.alert('Error', 'Unable to select photo. Please try again.');
+    }
   }, []);
 
+  const handleEdit = useCallback(() => {
+    resetEditor();
+    setIsEditing(true);
+  }, [resetEditor]);
+
+  const handleCancel = useCallback(() => {
+    resetEditor();
+    setIsEditing(false);
+  }, [resetEditor]);
+
   const handleSave = useCallback(async () => {
+    if (!profile) {
+      return;
+    }
+
+    const hasPhoto = Boolean(selectedPhotoUri || profile?.photoUrl || profile?.photoS3Key);
+    const errors = validateProfileForm(values, hasPhoto);
+    setFormErrors(errors);
+    if (Object.keys(errors).length > 0) return;
+
     setIsSaving(true);
     try {
-      await updateProfile({
-        firstName: firstName.trim(),
-        lastName: lastName.trim(),
-        phone: phone.trim() || undefined,
-        address: address.trim() || undefined,
-        emergencyContactName: emergencyName.trim() || undefined,
-        emergencyContactPhone: emergencyPhone.trim() || undefined,
-      });
+      const profileUpdates = buildProfileUpdatePayload(profile, values);
+      const hasProfileUpdates = Object.keys(profileUpdates).length > 0;
+      const hasPhotoUpdate = Boolean(selectedPhotoUri);
+
+      if (!hasProfileUpdates && !hasPhotoUpdate) {
+        logger.info(TAG, 'Profile save skipped because no changes were detected');
+        setIsEditing(false);
+        return;
+      }
+
+      if (hasProfileUpdates) {
+        await updateProfile(profileUpdates);
+      }
+
+      if (hasPhotoUpdate) {
+        await uploadProfilePicture(
+          selectedPhotoUri,
+          selectedPhotoMimeType,
+          profile?.profileId,
+          selectedPhotoBase64 ?? undefined,
+        );
+      }
+
       setIsEditing(false);
+      setSuccessMessageVisible(true);
       logger.info(TAG, 'Profile updated');
-    } catch (err) {
-      logger.error(TAG, 'Error updating profile', err);
+    } catch (saveError) {
+      logger.error(TAG, 'Error updating profile', saveError);
       Alert.alert('Error', 'Failed to save profile. Please try again.');
     } finally {
       setIsSaving(false);
     }
-  }, [firstName, lastName, phone, address, emergencyName, emergencyPhone, updateProfile]);
+  }, [
+    profile,
+    selectedPhotoBase64,
+    selectedPhotoMimeType,
+    selectedPhotoUri,
+    updateProfile,
+    uploadProfilePicture,
+    values,
+  ]);
 
   const handleLogout = useCallback(async () => {
     try {
       await logout();
       logger.info(TAG, 'User logged out');
-    } catch (err) {
-      logger.error(TAG, 'Error logging out', err);
+    } catch (logoutError) {
+      logger.error(TAG, 'Error logging out', logoutError);
     }
   }, [logout]);
+
+  const displayPhotoUrl = selectedPhotoUri ?? profile?.photoUrl;
+  const formattedAddress = useMemo(() => formatAddress(profile?.address), [profile?.address]);
+
+  const handleOpenPhotoPreview = useCallback(() => {
+    if (!displayPhotoUrl) return;
+
+    Image.getSize(
+      displayPhotoUrl,
+      (width, height) => {
+        if (width > 0 && height > 0) {
+          setPhotoAspectRatio(width / height);
+        }
+        setIsPhotoPreviewVisible(true);
+      },
+      () => {
+        setPhotoAspectRatio(1);
+        setIsPhotoPreviewVisible(true);
+      },
+    );
+  }, [displayPhotoUrl]);
 
   if (isLoading && !profile) {
     return (
@@ -95,156 +307,133 @@ export function ProfileScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
-        <ScrollView contentContainerStyle={styles.container}>
-          <View style={styles.header}>
+      <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
+        {successMessageVisible ? (
+          <View style={styles.successBanner}>
+            <MaterialIcons name="check-circle" size={19} color={COLORS.white} />
+            <Text style={styles.successBannerText}>Profile updated successfully</Text>
+          </View>
+        ) : null}
+
+        <View style={styles.header}>
+          <TouchableOpacity
+            style={[styles.photoFrame, formErrors.photo ? styles.photoError : null]}
+            onPress={isEditing ? handlePickPhoto : handleOpenPhotoPreview}
+            disabled={isSaving || (!isEditing && !displayPhotoUrl)}
+            accessibilityRole="button"
+            accessibilityLabel={isEditing ? 'Change profile picture' : 'View larger profile picture'}
+          >
             <ProfilePicture
-              photoUrl={profile?.photoUrl}
-              size={96}
+              photoUrl={displayPhotoUrl}
+              photoAccessDenied={profile?.photoAccessDenied && !selectedPhotoUri}
+              size={100}
             />
-            {profile ? (
-              <Text style={styles.name}>
-                {profile.firstName} {profile.lastName}
-              </Text>
+            {isEditing ? (
+              <View style={styles.cameraBadge}>
+                <MaterialIcons name="photo-camera" size={17} color={COLORS.white} />
+              </View>
             ) : null}
-            {profile?.email ? (
+          </TouchableOpacity>
+          {isEditing ? <Text style={styles.photoHint}>Tap the photo to change it</Text> : null}
+          {isEditing && formErrors.photo ? <Text style={styles.photoErrorText}>Profile picture is required.</Text> : null}
+          {profile && !isEditing ? (
+            <>
+              <Text style={styles.name}>{profile.name}</Text>
               <Text style={styles.email}>{profile.email}</Text>
-            ) : null}
-          </View>
-
-          {error ? (
-            <View style={styles.errorContainer}>
-              <Text style={styles.errorText}>{error}</Text>
-            </View>
+            </>
           ) : null}
+        </View>
 
-          {!profile ? (
-            <View style={styles.centered}>
-              <Text style={styles.infoText}>Profile not available.</Text>
-              <Button title="Retry" onPress={refreshProfile} variant="secondary" />
-            </View>
-          ) : isEditing ? (
-            <View style={styles.form}>
-              <Text style={styles.label}>First Name</Text>
-              <TextInput
-                style={styles.input}
-                value={firstName}
-                onChangeText={setFirstName}
-                placeholderTextColor={COLORS.textDisabled}
-                editable={!isSaving}
-                accessibilityLabel="First name"
-              />
-
-              <Text style={styles.label}>Last Name</Text>
-              <TextInput
-                style={styles.input}
-                value={lastName}
-                onChangeText={setLastName}
-                placeholderTextColor={COLORS.textDisabled}
-                editable={!isSaving}
-                accessibilityLabel="Last name"
-              />
-
-              <Text style={styles.label}>Phone</Text>
-              <TextInput
-                style={styles.input}
-                value={phone}
-                onChangeText={setPhone}
-                placeholder="Phone number"
-                placeholderTextColor={COLORS.textDisabled}
-                keyboardType="phone-pad"
-                editable={!isSaving}
-                accessibilityLabel="Phone number"
-              />
-
-              <Text style={styles.label}>Address</Text>
-              <TextInput
-                style={styles.input}
-                value={address}
-                onChangeText={setAddress}
-                placeholder="Address"
-                placeholderTextColor={COLORS.textDisabled}
-                editable={!isSaving}
-                accessibilityLabel="Address"
-              />
-
-              <Text style={styles.label}>Emergency Contact Name</Text>
-              <TextInput
-                style={styles.input}
-                value={emergencyName}
-                onChangeText={setEmergencyName}
-                placeholder="Emergency contact name"
-                placeholderTextColor={COLORS.textDisabled}
-                editable={!isSaving}
-                accessibilityLabel="Emergency contact name"
-              />
-
-              <Text style={styles.label}>Emergency Contact Phone</Text>
-              <TextInput
-                style={styles.input}
-                value={emergencyPhone}
-                onChangeText={setEmergencyPhone}
-                placeholder="Emergency contact phone"
-                placeholderTextColor={COLORS.textDisabled}
-                keyboardType="phone-pad"
-                editable={!isSaving}
-                accessibilityLabel="Emergency contact phone"
-              />
-
-              <View style={styles.buttonRow}>
-                <View style={styles.buttonHalf}>
-                  <Button
-                    title="Cancel"
-                    onPress={handleCancel}
-                    variant="secondary"
-                    disabled={isSaving}
-                  />
-                </View>
-                <View style={styles.buttonHalf}>
-                  <Button
-                    title="Save"
-                    onPress={handleSave}
-                    loading={isSaving}
-                    disabled={isSaving}
-                  />
-                </View>
-              </View>
-            </View>
-          ) : (
-            <View style={styles.profileSection}>
-              <ProfileRow label="Email" value={profile.email} />
-              <ProfileRow label="Phone" value={profile.phone ?? '—'} />
-              <ProfileRow label="Address" value={profile.address ?? '—'} />
-              <ProfileRow label="Emergency Contact" value={profile.emergencyContactName ?? '—'} />
-              <ProfileRow label="Emergency Phone" value={profile.emergencyContactPhone ?? '—'} />
-
-              <View style={styles.editButtonContainer}>
-                <Button title="Edit Profile" onPress={handleEdit} variant="secondary" />
-              </View>
-            </View>
-          )}
-
-          <View style={styles.logoutContainer}>
-            <Button
-              title="Sign Out"
-              onPress={handleLogout}
-              variant="danger"
-              loading={isAuthenticating}
-              disabled={isAuthenticating || isSaving}
-            />
+        {error ? (
+          <View style={styles.errorContainer}>
+            <Text style={styles.errorText}>{error}</Text>
           </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
+        ) : null}
+
+        {!profile ? (
+          <View style={styles.centered}>
+            <Text style={styles.infoText}>Profile not available.</Text>
+            <Button title="Retry" onPress={refreshProfile} variant="secondary" />
+          </View>
+        ) : isEditing ? (
+          <>
+            <ProfileFormFields
+              email={profile.email}
+              values={values}
+              errors={formErrors}
+              disabled={isSaving}
+              onChange={handleFieldChange}
+            />
+            <View style={styles.buttonRow}>
+              <View style={styles.buttonHalf}>
+                <Button title="Cancel" onPress={handleCancel} variant="secondary" disabled={isSaving} />
+              </View>
+              <View style={styles.buttonHalf}>
+                <Button title="Save Profile" onPress={handleSave} loading={isSaving} disabled={isSaving} />
+              </View>
+            </View>
+          </>
+        ) : (
+          <View style={styles.profileSection}>
+            <ProfileRow label="Personal Code" value={profile.personalCode ?? 'Not assigned'} />
+            <ProfileRow label="Email" value={profile.email} />
+            <ProfileRow label="Phone" value={profile.phone ?? '—'} />
+            <ProfileRow label="Date of Birth" value={profile.dateOfBirth ? formatDate(profile.dateOfBirth) : '—'} />
+            <ProfileRow label="Gender" value={profile.gender ?? '—'} />
+            <ProfileRow label="Address" value={formattedAddress} />
+            <View style={styles.subheadingRow}>
+              <MaterialIcons name="contact-phone" size={19} color={COLORS.primary} />
+              <Text style={styles.subheading}>Emergency contact</Text>
+            </View>
+            <ProfileRow label="Name" value={profile.emergencyContact?.name ?? '—'} />
+            <ProfileRow label="Relation" value={profile.emergencyContact?.relation ?? '—'} />
+            <ProfileRow label="Phone" value={profile.emergencyContact?.phone ?? '—'} />
+            <View style={styles.editButtonContainer}>
+              <Button title="Edit Profile" onPress={handleEdit} />
+            </View>
+          </View>
+        )}
+
+        <View style={styles.logoutContainer}>
+          <Button
+            title="Sign Out"
+            onPress={handleLogout}
+            variant="danger"
+            loading={isAuthenticating}
+            disabled={isAuthenticating || isSaving}
+          />
+        </View>
+      </ScrollView>
+
+      <Modal
+        visible={isPhotoPreviewVisible}
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => setIsPhotoPreviewVisible(false)}
+      >
+        <View style={styles.photoPreview}>
+          <TouchableOpacity
+            style={styles.photoPreviewClose}
+            onPress={() => setIsPhotoPreviewVisible(false)}
+            accessibilityRole="button"
+            accessibilityLabel="Close profile picture"
+          >
+            <MaterialIcons name="close" size={28} color={COLORS.white} />
+          </TouchableOpacity>
+          {displayPhotoUrl ? (
+            <Image
+              source={{ uri: displayPhotoUrl }}
+              style={{ width: screenWidth, height: screenWidth / photoAspectRatio }}
+              resizeMode="contain"
+              accessibilityRole="image"
+              accessibilityLabel="Profile picture preview"
+            />
+          ) : null}
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
-
-// ---------------------------------------------------------------------------
-// Profile row helper
-// ---------------------------------------------------------------------------
 
 function ProfileRow({ label, value }: { label: string; value: string }) {
   return (
@@ -255,114 +444,79 @@ function ProfileRow({ label, value }: { label: string; value: string }) {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Styles
-// ---------------------------------------------------------------------------
-
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: COLORS.background,
-  },
-  flex: {
-    flex: 1,
-  },
-  container: {
-    padding: 16,
-  },
-  header: {
+  safeArea: { flex: 1, backgroundColor: COLORS.background },
+  container: { paddingHorizontal: 18, paddingBottom: 36 },
+  successBanner: {
+    flexDirection: 'row',
+    justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 24,
-    paddingTop: 16,
-  },
-  name: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: COLORS.textPrimary,
+    gap: 8,
+    backgroundColor: COLORS.success,
+    borderRadius: 8,
+    padding: 12,
     marginTop: 12,
   },
-  email: {
-    fontSize: 14,
-    color: COLORS.textSecondary,
-    marginTop: 4,
-  },
-  centered: {
+  successBannerText: { color: COLORS.white, fontSize: 14, fontWeight: '700' },
+  header: { alignItems: 'center', paddingTop: 22, paddingBottom: 22 },
+  photoFrame: { borderRadius: 54, borderWidth: 4, borderColor: COLORS.surface, padding: 2 },
+  photoError: { borderColor: COLORS.danger },
+  cameraBadge: {
+    position: 'absolute',
+    right: 0,
+    bottom: 2,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: COLORS.primary,
     alignItems: 'center',
-    paddingVertical: 24,
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: COLORS.white,
   },
-  errorContainer: {
-    backgroundColor: COLORS.danger,
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 16,
+  photoHint: { marginTop: 9, color: COLORS.primary, fontSize: 13, fontWeight: '600' },
+  photoErrorText: { marginTop: 8, color: COLORS.danger, fontSize: 13, fontWeight: '600' },
+  photoPreview: {
+    flex: 1,
+    backgroundColor: COLORS.black,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  errorText: {
-    color: COLORS.white,
-    fontSize: 14,
-    textAlign: 'center',
+  photoPreviewClose: {
+    position: 'absolute',
+    top: 44,
+    right: 16,
+    zIndex: 1,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(0, 0, 0, 0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  infoText: {
-    fontSize: 14,
-    color: COLORS.textSecondary,
-    marginBottom: 12,
-  },
-  profileSection: {
-    marginBottom: 16,
-  },
+  name: { fontSize: 24, fontWeight: '700', color: COLORS.textPrimary, marginTop: 12 },
+  email: { fontSize: 14, color: COLORS.textSecondary, marginTop: 4 },
+  centered: { alignItems: 'center', paddingVertical: 24 },
+  errorContainer: { backgroundColor: COLORS.danger, padding: 12, borderRadius: 8, marginBottom: 16 },
+  errorText: { color: COLORS.white, fontSize: 14, textAlign: 'center' },
+  infoText: { fontSize: 14, color: COLORS.textSecondary, marginBottom: 12 },
+  profileSection: { marginBottom: 16 },
   profileRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingVertical: 12,
+    gap: 16,
+    paddingVertical: 14,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.borderLight,
   },
-  profileLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: COLORS.textSecondary,
-  },
-  profileValue: {
-    fontSize: 14,
-    color: COLORS.textPrimary,
-    flex: 1,
-    textAlign: 'right',
-  },
-  editButtonContainer: {
-    marginTop: 16,
-  },
-  form: {
-    marginBottom: 16,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: COLORS.textPrimary,
-    marginBottom: 6,
-  },
-  input: {
-    backgroundColor: COLORS.surface,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 16,
-    color: COLORS.textPrimary,
-    marginBottom: 16,
-  },
-  buttonRow: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  buttonHalf: {
-    flex: 1,
-  },
-  logoutContainer: {
-    marginTop: 24,
-    paddingTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.border,
-  },
+  profileLabel: { fontSize: 14, fontWeight: '700', color: COLORS.textSecondary, flex: 1 },
+  profileValue: { fontSize: 14, lineHeight: 20, color: COLORS.textPrimary, flex: 1.4, textAlign: 'right' },
+  subheadingRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 24, marginBottom: 4 },
+  subheading: { fontSize: 18, fontWeight: '700', color: COLORS.textPrimary },
+  editButtonContainer: { marginTop: 22 },
+  buttonRow: { flexDirection: 'row', gap: 12, marginTop: 24 },
+  buttonHalf: { flex: 1 },
+  logoutContainer: { marginTop: 24, paddingTop: 18, borderTopWidth: 1, borderTopColor: COLORS.border },
 });
 
 export default ProfileScreen;

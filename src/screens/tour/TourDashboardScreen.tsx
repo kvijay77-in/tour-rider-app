@@ -5,7 +5,7 @@
  * and Not Riding / Quit Riding self-service actions.
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -22,55 +22,34 @@ import { Card } from '../../components/common/Card';
 import { Button } from '../../components/common/Button';
 import { TourInfoBanner } from '../../components/tour/TourInfoBanner';
 import { useTour } from '../../hooks/useTour';
-import { getTodaysRide } from '../../services/api/rideApi';
 import { submitNotRiding, submitQuitRiding } from '../../services/api/checkInApi';
 import { computeTourDay } from '../../utils/dateFormatter';
 import { logger } from '../../utils/logger';
-import type { Ride } from '../../types/ride';
 
 const TAG = 'TourDashboardScreen';
 
 export function TourDashboardScreen() {
-  const { activeTour, enrollment, loadActiveTour } = useTour();
+  const {
+    activeTour,
+    enrollment,
+    activeTodaysRide,
+    isLoading: isLoadingActiveTour,
+    loadActiveTour,
+  } = useTour();
 
-  const [todaysRide, setTodaysRide] = useState<Ride | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchTodaysRide = useCallback(async () => {
-    if (!activeTour) return;
-    setError(null);
-    try {
-      const response = await getTodaysRide(activeTour.tourId);
-      if (response.success && response.data) {
-        setTodaysRide(response.data);
-      } else {
-        setTodaysRide(null);
-      }
-    } catch (err) {
-      logger.error(TAG, 'Error fetching today\'s ride', err);
-      setTodaysRide(null);
-      setError('Unable to load today\'s ride.');
-    } finally {
-      setIsLoading(false);
-    }
-  }, [activeTour]);
-
-  useEffect(() => {
-    fetchTodaysRide();
-  }, [fetchTodaysRide]);
-
   const handleRefresh = async () => {
     setRefreshing(true);
     await loadActiveTour();
-    await fetchTodaysRide();
+    setError(null);
     setRefreshing(false);
   };
 
   const handleNotRiding = () => {
-    if (!activeTour || !enrollment || !todaysRide) return;
+    if (!activeTour || !enrollment || !activeTodaysRide) return;
 
     Alert.alert(
       'Not Riding Today',
@@ -85,10 +64,10 @@ export function TourDashboardScreen() {
             try {
               await submitNotRiding(activeTour.tourId, {
                 riderId: enrollment.riderId,
-                rideId: todaysRide.rideId,
+                rideId: activeTodaysRide.rideId,
               });
               logger.info(TAG, 'Not Riding submitted');
-              await fetchTodaysRide();
+              await loadActiveTour();
             } catch (err) {
               logger.error(TAG, 'Error submitting Not Riding', err);
               Alert.alert('Error', 'Failed to submit Not Riding. Please try again.');
@@ -102,7 +81,7 @@ export function TourDashboardScreen() {
   };
 
   const handleQuitRiding = () => {
-    if (!activeTour || !enrollment || !todaysRide) return;
+    if (!activeTour || !enrollment || !activeTodaysRide) return;
 
     Alert.alert(
       'Quit Riding',
@@ -127,10 +106,10 @@ export function TourDashboardScreen() {
                     try {
                       await submitQuitRiding(activeTour.tourId, {
                         riderId: enrollment.riderId,
-                        rideId: todaysRide.rideId,
+                        rideId: activeTodaysRide.rideId,
                       });
                       logger.info(TAG, 'Quit Riding submitted');
-                      await fetchTodaysRide();
+                      await loadActiveTour();
                     } catch (err) {
                       logger.error(TAG, 'Error submitting Quit Riding', err);
                       Alert.alert('Error', 'Failed to submit Quit Riding. Please try again.');
@@ -157,7 +136,7 @@ export function TourDashboardScreen() {
     );
   }
 
-  if (isLoading && !refreshing) {
+  if (isLoadingActiveTour && !refreshing) {
     return (
       <SafeAreaView style={styles.safeArea}>
         <LoadingSpinner message="Loading dashboard..." />
@@ -188,14 +167,14 @@ export function TourDashboardScreen() {
         {/* Today's ride summary */}
         <Card style={styles.sectionCard}>
           <Text style={styles.sectionTitle}>Today&apos;s Ride</Text>
-          {todaysRide ? (
+          {activeTodaysRide ? (
             <View>
-              <Text style={styles.rideName}>{todaysRide.name}</Text>
+              <Text style={styles.rideName}>{activeTodaysRide.name}</Text>
               <Text style={styles.rideDetail}>
-                {todaysRide.startLocation} → {todaysRide.finishLocation}
+                {activeTodaysRide.startLocation} → {activeTodaysRide.finishLocation}
               </Text>
               <Text style={styles.rideDetail}>
-                {todaysRide.totalDistance} km • {todaysRide.stages.length} stages
+                {activeTodaysRide.totalDistance} km • {activeTodaysRide.stages.length} stages
               </Text>
             </View>
           ) : (
@@ -218,7 +197,7 @@ export function TourDashboardScreen() {
                 title="Not Riding Today"
                 onPress={handleNotRiding}
                 variant="secondary"
-                disabled={actionLoading || !todaysRide}
+                disabled={actionLoading || !activeTodaysRide}
                 loading={actionLoading}
               />
             </View>
@@ -227,7 +206,7 @@ export function TourDashboardScreen() {
                 title="Quit Riding"
                 onPress={handleQuitRiding}
                 variant="danger"
-                disabled={actionLoading || !todaysRide}
+                disabled={actionLoading || !activeTodaysRide}
                 loading={actionLoading}
               />
             </View>

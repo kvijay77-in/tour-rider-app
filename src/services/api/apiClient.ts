@@ -2,7 +2,7 @@
  * Base API client for tour-data-api backend communication.
  *
  * Responsibilities:
- * - Base URL configuration (static in single-subscription mode, dynamic in multi-subscription mode)
+ * - Base URL configuration (Expo public env config in single-subscription mode, dynamic in future multi-subscription mode)
  * - JWT token injection from Amplify Auth session
  * - Automatic token refresh on 401 responses
  * - Standardised error handling matching backend error format
@@ -43,6 +43,7 @@ export function setApiBaseUrl(url: string): void {
 const DEFAULT_TIMEOUT_MS = 15_000;
 const MAX_RETRIES = 3;
 const INITIAL_RETRY_DELAY_MS = 2_000;
+const DEBUG_GET_REQUESTS_DEFAULT = process.env.EXPO_PUBLIC_API_DEBUG_GET === 'true';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -59,6 +60,20 @@ interface RequestOptions {
   timeoutMs?: number;
   /** Override default max retries */
   maxRetries?: number;
+  /**
+   * Marks API errors that are expected and handled by caller flows.
+   * Expected errors are still thrown, but are not logged as warnings.
+   */
+  isExpectedError?: (error: ApiError) => boolean;
+  /** Non-retryable HTTP statuses to return as API responses instead of throwing. */
+  returnErrorResponseForStatuses?: readonly number[];
+}
+
+type RequestMethod = 'GET' | 'POST' | 'PUT' | 'DELETE';
+
+interface ApiRequestLoggingControls {
+  enabled?: boolean;
+  debugGetRequests?: boolean;
 }
 
 /** Errors thrown by the API client */
@@ -72,6 +87,10 @@ export class ApiError extends Error {
     super(message);
     this.name = 'ApiError';
   }
+}
+
+export function isValidationApiError(error: unknown): error is ApiError {
+  return error instanceof ApiError && error.statusCode === 422;
 }
 
 // ---------------------------------------------------------------------------
@@ -96,6 +115,9 @@ export const setAuthTokenProvider = (
  */
 let _onAuthInvalidated: (() => void) | null = null;
 
+let _requestLoggingEnabled = true;
+let _debugGetRequests = DEBUG_GET_REQUESTS_DEFAULT;
+
 /**
  * Register a callback for unrecoverable 401 errors.
  */
@@ -103,6 +125,20 @@ export const setAuthInvalidatedCallback = (
   callback: () => void,
 ): void => {
   _onAuthInvalidated = callback;
+};
+
+/**
+ * Override API request debug logging controls at runtime.
+ */
+export const setApiRequestLoggingControls = (
+  controls: ApiRequestLoggingControls,
+): void => {
+  if (typeof controls.enabled === 'boolean') {
+    _requestLoggingEnabled = controls.enabled;
+  }
+  if (typeof controls.debugGetRequests === 'boolean') {
+    _debugGetRequests = controls.debugGetRequests;
+  }
 };
 
 // ---------------------------------------------------------------------------
@@ -148,6 +184,52 @@ function isRetryable(status: number): boolean {
   return status >= 500 || status === 429;
 }
 
+function shouldDebugMethod(method: RequestMethod): boolean {
+  return _requestLoggingEnabled && (method !== 'GET' || _debugGetRequests);
+}
+
+function hasRequestBody(method: RequestMethod): boolean {
+  return method === 'POST' || method === 'PUT';
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    !Array.isArray(value) &&
+    Object.getPrototypeOf(value) === Object.prototype
+  );
+}
+
+function toCamelCaseKey(key: string): string {
+  return key.replace(/_([a-z0-9])/g, (_match, ch: string) => ch.toUpperCase());
+}
+
+function normalizePayloadKeysToCamelCase(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map((item) => normalizePayloadKeysToCamelCase(item));
+  }
+
+  if (!isPlainObject(value)) {
+    return value;
+  }
+
+  const normalized: Record<string, unknown> = {};
+  for (const [key, nestedValue] of Object.entries(value)) {
+    normalized[toCamelCaseKey(key)] = normalizePayloadKeysToCamelCase(nestedValue);
+  }
+
+  return normalized;
+}
+
+function isDevelopmentRuntime(): boolean {
+  const maybeDev = (globalThis as { __DEV__?: unknown }).__DEV__;
+  if (typeof maybeDev === 'boolean') {
+    return maybeDev;
+  }
+  return process.env.NODE_ENV !== 'production';
+}
+
 /**
  * Determine whether an error represents a network connectivity failure.
  */
@@ -175,7 +257,7 @@ async function delay(ms: number): Promise<void> {
 // ---------------------------------------------------------------------------
 
 async function request<T>(
-  method: 'GET' | 'POST' | 'PUT' | 'DELETE',
+  method: RequestMethod,
   path: string,
   body?: unknown,
   options: RequestOptions = {},
@@ -186,12 +268,27 @@ async function request<T>(
     signal,
     timeoutMs = DEFAULT_TIMEOUT_MS,
     maxRetries = MAX_RETRIES,
+    isExpectedError,
+    returnErrorResponseForStatuses = [],
   } = options;
 
   const url = buildUrl(path, params);
   const headers = await buildHeaders(extraHeaders);
+  const debugMethod = shouldDebugMethod(method);
 
-  logger.debug(TAG, `${method} ${url}`);
+  if (debugMethod) {
+    logger.debug(TAG, `Request init ${method}`, {
+      path,
+      params,
+      hasAuthHeader: Boolean(headers.Authorization),
+      timeoutMs,
+      maxRetries,
+    });
+  }
+
+  if (debugMethod) {
+    logger.debug(TAG, `${method} ${url}`);
+  }
 
   let lastError: unknown;
 
@@ -210,14 +307,34 @@ async function request<T>(
         signal: mergedSignal,
       };
 
-      if (body !== undefined && method !== 'GET') {
-        fetchOptions.body = JSON.stringify(body);
+      if (body !== undefined && hasRequestBody(method)) {
+        const normalizedBody = normalizePayloadKeysToCamelCase(body);
+        if (debugMethod && isDevelopmentRuntime() && attempt === 0) {
+          logger.debug(TAG, `${method} payload (normalized)`, {
+            path,
+            payload: normalizedBody,
+          });
+        }
+        fetchOptions.body = JSON.stringify(normalizedBody);
+      }
+
+      if (debugMethod) {
+        logger.debug(TAG, `Request attempt ${attempt + 1}/${maxRetries + 1}`, {
+          method,
+          path,
+        });
       }
 
       const response = await fetch(url, fetchOptions);
       clearTimeout(timeoutId);
 
-      logger.debug(TAG, `Response ${response.status} (attempt ${attempt})`);
+      if (debugMethod) {
+        logger.debug(TAG, `Response ${response.status} (attempt ${attempt + 1})`, {
+          method,
+          path,
+          ok: response.ok,
+        });
+      }
 
       // Handle 401 — attempt token refresh once
       if (response.status === 401 && attempt === 0) {
@@ -245,12 +362,33 @@ async function request<T>(
       // Non-retryable error
       if (!isRetryable(response.status)) {
         const apiResp = responseBody as ApiResponse<T> | null;
-        throw new ApiError(
-          apiResp?.error?.message || `HTTP ${response.status}`,
+        const errorMessage = apiResp?.error?.message || `HTTP ${response.status}`;
+
+        if (returnErrorResponseForStatuses.includes(response.status)) {
+          logger.info(TAG, `WARN: Expected API error (attempt ${attempt + 1})`, {
+            method,
+            path,
+            statusCode: response.status,
+            errorCode: apiResp?.error?.code,
+            message: errorMessage,
+          });
+          return apiResp ?? {
+            success: false,
+            error: {
+              code: `HTTP_${response.status}`,
+              message: errorMessage,
+            },
+            timestamp: new Date().toISOString(),
+          };
+        }
+
+        const apiError = new ApiError(
+          errorMessage,
           response.status,
           apiResp?.error?.code,
           responseBody,
         );
+        throw apiError;
       }
 
       // Retryable server error
@@ -263,7 +401,25 @@ async function request<T>(
     } catch (error) {
       clearTimeout(timeoutId);
 
-      logger.warn(TAG, `Request error (attempt ${attempt})`, error);
+      if (debugMethod) {
+        logger.debug(TAG, `Request error (attempt ${attempt + 1})`, {
+          method,
+          path,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+
+      if (error instanceof ApiError && isExpectedError?.(error)) {
+        logger.info(TAG, `Expected API error (attempt ${attempt + 1})`, {
+          method,
+          path,
+          statusCode: error.statusCode,
+          errorCode: error.errorCode,
+          message: error.message,
+        });
+      } else {
+        logger.warn(TAG, `Request error (attempt ${attempt + 1})`, error);
+      }
 
       if (signal?.aborted) {
         throw error;
@@ -285,6 +441,13 @@ async function request<T>(
     // Exponential backoff before retry
     if (attempt < maxRetries) {
       const backoffMs = INITIAL_RETRY_DELAY_MS * Math.pow(2, attempt);
+      if (debugMethod) {
+        logger.debug(TAG, `Retry backoff ${backoffMs}ms`, {
+          method,
+          path,
+          nextAttempt: attempt + 2,
+        });
+      }
       await delay(backoffMs);
     }
   }

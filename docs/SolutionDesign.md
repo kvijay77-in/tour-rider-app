@@ -92,7 +92,8 @@ While the technology stack is identical, there are functional differences:
 │                                                          │
 │  ┌─────────────────────────────────────────────────────┐ │
 │  │              Context Providers                       │ │
-│  │  AuthContext → RiderContext → TourContext           │ │
+│  │  AuthContext (always mounted)                        │ │
+│  │  RiderContext → TourContext (authenticated only)     │ │
 │  │                                                      │ │
 │  │  ┌───────────────────────────────────────────────┐  │ │
 │  │  │            Navigation (React Navigation)       │  │ │
@@ -164,6 +165,7 @@ src/screens/
 │   ├── CheckInStatusScreen.tsx   # Daily check-in progress
 │   └── CheckInHistoryScreen.tsx  # Historical check-ins
 ├── profile/
+│   ├── ProfileCreationScreen.tsx # First-time profile completion flow
 │   └── ProfileScreen.tsx         # View/edit rider profile
 └── notifications/
     └── NotificationsScreen.tsx   # Notification center
@@ -192,7 +194,7 @@ src/components/
 
 ### Component Guidelines
 
-1. **Functional components only** — use hooks for state and effects
+1. **Functional components only** — use hooks for state and effects. The only approved exception is the root Error Boundary, which must remain a class component unless the app adopts a dedicated boundary library.
 2. **Props over context** where possible — prefer explicit data flow
 3. **Memoize expensive renders** — use `React.memo`, `useMemo`, `useCallback` appropriately
 4. **Separate concerns** — keep styling in `StyleSheet.create()`, logic in hooks/services
@@ -209,16 +211,27 @@ The app uses React Context for global state:
 | Context | Purpose | Key State |
 |---------|---------|-----------|
 | **AuthContext** | Authentication state | User info, JWT tokens, login/logout |
-| **RiderContext** | Rider profile state | Profile data, statistics, preferences |
-| **TourContext** | Tour enrollment state | Active tour, enrollment status, tour details |
+| **RiderContext** | Rider profile state | Profile data, profile-exists flag, picture upload flow |
+| **TourContext** | Tour enrollment state | Active tour, enrollment status, cached active rides, derived today's ride |
 
-**Provider Order** (in `App.tsx`):
+**Provider Order** (in `App.tsx` and navigation subtree):
 ```
-AuthContext
-  → RiderContext (depends on auth for profile loading)
-    → TourContext (depends on rider for enrollment check)
-      → Navigation
+ErrorBoundary
+  → AuthContext
+    → NavigationContainer
+      → RootNavigator
+        → AuthNavigator (unauthenticated)
+        → AppNavigator (authenticated)
+          → RiderContext (depends on auth for profile loading)
+            → TourContext (depends on rider for enrollment check)
+              → MainNavigator
 ```
+
+The app bootstrap flow wraps the full provider and navigation tree in a root `ErrorBoundary`. This prevents a blank screen on unhandled render-time failures and routes boundary diagnostics through the centralized logger.
+
+`RiderContext` and `TourContext` mount only when a user session is active. This keeps authenticated state lifecycle scoped to the authenticated subtree and avoids unnecessary provider work before login.
+
+`TourContext` is the single owner of active-tour bootstrap. After a rider with a completed profile signs in, it refreshes the active tour snapshot once by calling `GET /v1/tours/active`, `GET /v1/tours/{tourId}/riders?profileId=...`, and `GET /v1/tours/{tourId}/rides`, replaces any previously cached active snapshot in SQLite, and then exposes active tour, active rides, and derived today's ride from that local cache to the rest of the app.
 
 ### Local State
 
@@ -226,13 +239,14 @@ Screen-specific and component-specific state uses `useState` and `useReducer` ho
 - TourListScreen: filter state, search query
 - CheckInStatusScreen: selected ride date
 - ProfileScreen: form state, edit mode
+- ProfileCreationScreen: first-time profile form state and upload state
 
 ### Derived State
 
 State that can be computed from other state should not be stored separately. Examples:
 - Rider's current enrollment status (derived from TourContext)
 - Unread notification count (derived from notifications array)
-- Today's ride (derived from rides array + current date)
+- Today's ride (derived from the cached active rides array + current UTC date)
 
 ---
 
@@ -246,17 +260,30 @@ State that can be computed from other state should not be stored separately. Exa
    - **Sign Up**: Create new rider account
    - **Login**: Authenticate with existing credentials
 4. On sign-up:
-   - User provides email, password, and profile details
+  - User provides email and password only
    - App creates Cognito account via `Amplify.Auth.signUp()`
    - Verification code sent to email
-   - User verifies email
-   - Profile created in organizer's RiderProfile table (within organizer's data infrastructure)
+  - User verifies email
+  - App auto-signs in rider with the same credentials
+  - During this first sign-in, linked-profile lookup is deferred until after link creation
+  - App links Cognito `sub` to rider profile identity via `POST /v1/riders/link/{cognitoUserName}`
+  - App routes rider to profile creation flow
 5. On login:
    - User authenticates via `Amplify.Auth.signIn()` → Cognito returns JWT tokens
+  - Optional Remember Me pre-fills and stores credentials in `expo-secure-store`
+  - `AuthContext` resolves `profileId` from `GET /v1/riders/link/{cognitoUserName}`
    - `AuthContext` stores auth state
    - `RiderContext` loads rider profile
-   - `TourContext` checks for active tour enrollment
+  - If profile is missing, profile gate redirects to Profile Creation and blocks main app navigation
+  - `TourContext` checks for active tour enrollment only after rider profile exists, refreshes the active snapshot once for that sign-in, and persists it to SQLite before active-tour screens consume it
    - Navigation routes user to appropriate home screen
+
+### First-Time Rider Not-Found Handling
+
+- `GET /v1/riders/link/{cognitoUserName}` may return `404` for a newly verified rider before link creation.
+- `GET /v1/riders/profile/{profileId}` may return `404` until profile creation is completed.
+- These first-time rider `404` responses are expected states and are handled as informational logs instead of warning/error conditions.
+6. Authenticated users can change password via `Amplify.Auth.updatePassword()` from the Change Password screen
 
 ### Token Management
 
@@ -264,6 +291,7 @@ State that can be computed from other state should not be stored separately. Exa
 - **Token injection**: `apiClient.ts` retrieves the current token from Amplify session and includes it as `Authorization: Bearer <token>` in every API request
 - **401 handling**: If the API returns 401, the API client attempts token refresh and retries once
 - **Secure storage**: Amplify uses `expo-secure-store` for token persistence
+- **Remember Me**: Optional credential persistence in `expo-secure-store` for login convenience
 
 ### Cognito Integration
 
@@ -276,24 +304,20 @@ Each tour organizer has their own **dedicated Cognito User Pool** for riders, pr
 Configuration is **dynamic** — resolved at runtime after the rider provides an invitation code or the app loads a saved organizer context:
 
 ```typescript
-// src/config/amplify.ts — dynamic configuration
-// Cognito pool details are resolved per organizer, not from static env vars.
-// On first use: invitation code validation returns pool details.
-// On subsequent use: saved organizer context provides pool details.
+// src/config/amplify.ts — default single-subscription configuration
+// Cognito pool details are loaded from EXPO_PUBLIC env vars for the organizer-specific build.
 
-const configureAmplifyForOrganizer = (cognitoPoolId: string, cognitoClientId: string) => {
-  Amplify.configure({
-    Auth: {
-      Cognito: {
-        userPoolId: cognitoPoolId,
-        userPoolClientId: cognitoClientId,
-      },
+Amplify.configure({
+  Auth: {
+    Cognito: {
+      userPoolId: process.env.EXPO_PUBLIC_AWS_USER_POOL_ID,
+      userPoolClientId: process.env.EXPO_PUBLIC_AWS_USER_POOL_WEB_CLIENT_ID,
     },
-  });
-};
+  },
+});
 ```
 
-> **Note**: Static environment variables (`EXPO_PUBLIC_AWS_USER_POOL_ID`, `EXPO_PUBLIC_AWS_USER_POOL_WEB_CLIENT_ID`, `EXPO_PUBLIC_TOUR_DATA_API_BASE_URL`) are no longer sufficient for production configuration since all details vary per organizer. These env vars may still be used for development/testing with a specific organizer's infrastructure, but the production app must support dynamic configuration.
+> **Note**: Expo public environment variables are the supported configuration mechanism for the default organizer-specific build (`EXPO_PUBLIC_SUBSCRIPTION_MODE=single`). The optional multi-subscription flow remains a future extension and must be explicitly enabled.
 
 > **Important**: Each organizer has their own complete infrastructure (Cognito User Pool, DynamoDB tables, API Gateway, Lambda, S3) provisioned as part of their subscription. Nothing is shared across organizers. The tour-data-api API Gateway authorizer for each organizer trusts only that organizer's Cognito pool.
 
@@ -303,8 +327,9 @@ const configureAmplifyForOrganizer = (cognitoPoolId: string, cognitoClientId: st
 
 All users in an organizer's Cognito User Pool are that organizer's riders. Differentiation between General Riders and Registered Riders is determined by tour enrollment status (stored in tour-data-api), not by Cognito groups.
 
-1. **Custom Attributes** (in each organizer's Rider User Pool):
-   - `custom:profileId` attribute: links to the organizer's RiderProfile table
+1. **Profile Identity Link**:
+  - Cognito `sub` is mapped to `profileId` using rider link endpoints (`POST/GET /v1/riders/link/{cognitoUserName}`)
+  - App does not rely on Cognito `custom:profileId` for runtime profile resolution
 
 2. **App-Level Differentiation**:
    - **General Rider**: User exists in Cognito but has no active tour enrollment in tour-data-api
@@ -330,12 +355,15 @@ Each tour organizer has their own dedicated tour-data-api deployment as part of 
 
 ### API Client Features
 
-- **Base URL**: Configured dynamically per organizer (from saved organizer context). Static `EXPO_PUBLIC_TOUR_DATA_API_BASE_URL` used for dev/test only.
+- **Base URL**: Configured from Expo public env vars for the default single-organizer build. Future multi-organizer support may replace it dynamically.
 - **Authentication**: JWT token injected from Amplify Auth session
 - **Auto-retry**: Exponential backoff for network failures (3 retries)
+- **Timeout protection**: Requests are aborted when timeout elapses (default 15s, overridable per request)
 - **Token refresh**: Automatic on 401 responses (retry once)
 - **Error standardization**: Backend errors mapped to consistent frontend error types
 - **Logging**: Structured, level-gated logging via the app logger (see [Logging](#logging))
+- **Debug gating**: GET request debug logs are disabled by default and can be enabled with `EXPO_PUBLIC_API_DEBUG_GET=true`
+- **Request logging controls**: Runtime controls can override debug logging behavior for targeted troubleshooting without changing request/response contracts
 
 ### Data Flow: API → UI
 
@@ -354,33 +382,33 @@ The app does not support offline mode. All features require an active internet c
 ### Navigation Hierarchy
 
 ```
-AppNavigator
+RootNavigator
 ├── AuthNavigator (unauthenticated)
 │   ├── LoginScreen
 │   ├── SignUpScreen
 │   └── ForgotPasswordScreen
-└── MainNavigator (authenticated)
-    └── BottomTabNavigator
-        ├── HomeTab
-        │   ├── HomeScreen (General Rider: Tour List)
-        │   └── TourDashboardScreen (Registered Rider: Active Tour)
-        ├── CheckInTab (Registered Riders only)
-        │   ├── CheckInStatusScreen
-        │   └── CheckInHistoryScreen
-        ├── NotificationsTab (Registered Riders only)
-        │   └── NotificationsScreen
-        └── ProfileTab
-            └── ProfileScreen
+└── AppNavigator (authenticated subtree)
+  └── AuthenticatedStack
+    ├── ProfileCreationScreen (forced when profile is missing)
+    └── MainDrawerNavigator
+      ├── Home → HomeScreen
+      ├── ViewProfile → ProfileScreen
+      ├── TrainingChallenge → TrainingChallengeScreen
+      ├── Tour → TourStackNavigator
+      │   ├── TourRides → TourScreen
+      │   └── RideDetails → RideDetailsScreen
+      ├── ChangePassword → ChangePasswordScreen
+      └── SignOut (drawer action, not a route)
 ```
 
 ### Navigation Rules
 
 - **Unauthenticated users** are restricted to the AuthNavigator
-- **General Riders** (not enrolled in tour) see Home as Tour List
-- **Registered Riders** (enrolled in active tour) see Home as Tour Dashboard
-- **Bottom tabs** dynamically show/hide based on enrollment status:
-  - CheckIn tab only visible if enrolled in active tour
-  - Notifications tab only visible if enrolled in active tour
+- **Profile gate**: authenticated users without a rider profile are restricted to ProfileCreationScreen until profile completion
+- **Home** shows a rider-first dashboard layout (profile summary, quick cards, announcements placeholder)
+- **Tour** menu entry opens a nested stack for active-tour ride list and ride details
+- **Drawer content** provides a dedicated Sign Out action
+- **Legacy bottom tabs** remain in code (`MainNavigator.tsx`) but are deferred and not wired to active navigation
 
 ---
 
@@ -428,6 +456,8 @@ Stage-specific colors (for check-in status):
 
 The app uses a centralized, structured logger (`src/utils/logger.ts`) for all diagnostic and operational output. Direct `console.log` / `console.warn` / `console.error` calls must not be used in application code.
 
+The logger is responsible for level gating, consistent message formatting, and safe serialization of structured metadata. Log payloads must never crash logging because of circular references, nested `Error` objects, or non-JSON values.
+
 ### Log Levels
 
 | Level | When to use | Console method |
@@ -444,6 +474,7 @@ import { logger } from '../utils/logger';
 
 logger.info('AuthContext', 'Session found', { username });
 logger.error('RiderApi', 'fetchProfile failed', err);
+logger.error('ErrorBoundary', 'Unhandled application error', { error, componentStack });
 ```
 
 ### Level Configuration

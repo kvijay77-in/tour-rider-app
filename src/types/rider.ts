@@ -6,18 +6,33 @@
 /**
  * Rider profile information (from RiderProfile table in tour-data-api)
  */
+export interface RiderAddress {
+  line1?: string;
+  line2?: string;
+  city?: string;
+  state?: string;
+  country?: string;
+  postalCode?: string;
+}
+
+export interface RiderEmergencyContact {
+  name: string;
+  phone: string;
+  relation: string;
+}
+
 export interface RiderProfile {
   /** Unique profile identifier (UUID) */
   profileId: string;
 
-  /** First name */
-  firstName: string;
-
-  /** Last name */
-  lastName: string;
+  /** Rider full name */
+  name: string;
 
   /** Contact email (primary identifier, same as Cognito email) */
   email: string;
+
+  /** Personal code assigned by organizers (read-only for riders) */
+  personalCode?: string;
 
   /** Contact phone number */
   phone?: string;
@@ -28,23 +43,20 @@ export interface RiderProfile {
   /** Gender */
   gender?: 'Male' | 'Female' | 'Other' | 'Prefer not to say';
 
-  /** Address (optional) */
-  address?: string;
+  /** Address object (DynamoDB map) */
+  address?: RiderAddress;
 
-  /** Emergency contact name */
-  emergencyContactName?: string;
-
-  /** Emergency contact relationship */
-  emergencyContactRelationship?: string;
-
-  /** Emergency contact phone */
-  emergencyContactPhone?: string;
+  /** Emergency contact object (DynamoDB map) */
+  emergencyContact?: RiderEmergencyContact;
 
   /** S3 object key for profile picture */
   photoS3Key?: string;
 
   /** Profile picture URL (resolved from S3 key) */
   photoUrl?: string;
+
+  /** True when the current user is not authorized to view the profile picture */
+  photoAccessDenied?: boolean;
 
   /** Created timestamp */
   createdAt?: string;
@@ -57,29 +69,56 @@ export interface RiderProfile {
  * Rider profile creation request
  */
 export interface CreateRiderProfileRequest {
-  firstName: string;
-  lastName: string;
+  profileId?: string;
+  name: string;
   email: string;
-  phone?: string;
+  phone: string;
+  emergencyContact: RiderEmergencyContact;
   dateOfBirth?: string;
-  gender?: string;
-  address?: string;
-  emergencyContactName?: string;
-  emergencyContactRelationship?: string;
-  emergencyContactPhone?: string;
+  gender?: RiderProfile['gender'];
+  address?: RiderAddress;
+  photoS3Key?: string;
 }
 
 /**
  * Rider profile update request
  */
 export interface UpdateRiderProfileRequest {
-  firstName?: string;
-  lastName?: string;
+  name?: string;
+  email?: string;
   phone?: string;
   dateOfBirth?: string;
-  gender?: string;
-  address?: string;
-  emergencyContactName?: string;
-  emergencyContactRelationship?: string;
-  emergencyContactPhone?: string;
+  gender?: RiderProfile['gender'];
+  address?: RiderAddress;
+  emergencyContact?: RiderEmergencyContact;
+  photoS3Key?: string;
+}
+
+/**
+ * Profile picture upload URL response payload.
+ */
+export interface ProfilePictureUploadUrlResponse {
+  uploadUrl: string;
+  photoS3Key: string;
+  contentType: string;
+  expiresIn: number;
+  profileId: string;
+}
+
+/**
+ * Profile picture download URL response payload.
+ */
+export interface ProfilePictureDownloadUrlResponse {
+  downloadUrl: string;
+  photoS3Key: string;
+  expiresIn: number;
+  profileId: string;
+}
+
+/**
+ * Cognito-sub to rider profile link response payload.
+ */
+export interface LinkProfileResponse {
+  profileId: string;
+  cognitoUserName: string;
 }

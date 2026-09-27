@@ -43,6 +43,67 @@ function shouldLog(level: LogLevel): boolean {
   return level >= activeLevel;
 }
 
+function safeStringify(value: unknown): string {
+  if (value === undefined) return 'undefined';
+  if (value === null) return 'null';
+
+  try {
+    const seen = new WeakSet<object>();
+    return JSON.stringify(value, (_key, nestedValue: unknown) => {
+      if (nestedValue instanceof Error) {
+        const details: Record<string, unknown> = {
+          name: nestedValue.name,
+          message: nestedValue.message,
+        };
+
+        const errorWithMeta = nestedValue as Error & {
+          statusCode?: number;
+          errorCode?: string;
+          cause?: unknown;
+        };
+
+        if (nestedValue.stack) {
+          details.stack = nestedValue.stack;
+        }
+        if (errorWithMeta.statusCode !== undefined) {
+          details.statusCode = errorWithMeta.statusCode;
+        }
+        if (errorWithMeta.errorCode) {
+          details.errorCode = errorWithMeta.errorCode;
+        }
+        if (errorWithMeta.cause !== undefined) {
+          details.cause = errorWithMeta.cause;
+        }
+
+        return details;
+      }
+
+      if (typeof nestedValue === 'object' && nestedValue !== null) {
+        if (seen.has(nestedValue as object)) {
+          return '[Circular]';
+        }
+        seen.add(nestedValue as object);
+      }
+      if (typeof nestedValue === 'bigint') {
+        return nestedValue.toString();
+      }
+      if (typeof nestedValue === 'function') {
+        return `[Function ${nestedValue.name || 'anonymous'}]`;
+      }
+      if (typeof nestedValue === 'symbol') {
+        return nestedValue.toString();
+      }
+      return nestedValue;
+    });
+  } catch {
+    try {
+      return String(value);
+    } catch {
+      return '[Unserializable]';
+    }
+  }
+}
+
 /**
  * Format an error for logging — extracts class name, message and relevant properties.
  */
@@ -58,11 +119,7 @@ function formatError(err: unknown): string {
     }
     return parts.join(' | ');
   }
-  try {
-    return JSON.stringify(err);
-  } catch {
-    return String(err);
-  }
+  return safeStringify(err);
 }
 
 function log(level: LogLevel, tag: string, message: string, data?: unknown): void {
@@ -70,10 +127,10 @@ function log(level: LogLevel, tag: string, message: string, data?: unknown): voi
 
   const prefix = `[${LEVEL_NAMES[level]}] [${tag}]`;
   const extra = data !== undefined
-    ? (data instanceof Error ? formatError(data) : (typeof data === 'string' ? data : JSON.stringify(data)))
+    ? (data instanceof Error ? formatError(data) : (typeof data === 'string' ? data : safeStringify(data)))
     : '';
 
-  const line = extra ? `${prefix} ${message} — ${extra}` : `${prefix} ${message}`;
+  const line = extra ? `${prefix} ${message} - ${extra}` : `${prefix} ${message}`;
 
   switch (level) {
     case LogLevel.ERROR:
@@ -83,8 +140,7 @@ function log(level: LogLevel, tag: string, message: string, data?: unknown): voi
       console.warn(line);
       break;
     default:
-      // eslint-disable-next-line no-console
-      console.log(line);
+      console.info(line);
       break;
   }
 }
