@@ -173,6 +173,11 @@ export function ProfileScreen() {
       return;
     }
 
+    if (!profileDefinitions.definitionsVersion) {
+      Alert.alert('Profile fields unavailable', 'The profile field version is unavailable right now. Please refresh and try again.');
+      return;
+    }
+
     const hasPhoto = Boolean(selectedPhotoUri || profile?.photoUrl || profile?.photoS3Key);
     const errors = validateProfileDraftValues(profileDefinitions, values, { skipReadOnly: true });
     if (photoAttribute?.required && !hasPhoto) {

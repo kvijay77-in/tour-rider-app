@@ -130,6 +130,10 @@ export function buildProfileSavePayload({
   definitions,
   values,
 }: BuildProfileSavePayloadOptions): Record<string, unknown> {
+  if (!definitions.definitionsVersion) {
+    throw new Error('Profile field version is unavailable. Refresh profile definitions and try again.');
+  }
+
   const payload: Record<string, unknown> = {
     definitionsVersion: definitions.definitionsVersion,
   };

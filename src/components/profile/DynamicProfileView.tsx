@@ -33,7 +33,12 @@ function ProfileRow({
       <View style={styles.profileValueContainer}>
         <Text style={styles.profileValue}>{value}</Text>
         {actionLabel && onActionPress ? (
-          <TouchableOpacity onPress={() => void onActionPress()} style={styles.profileActionButton}>
+          <TouchableOpacity
+            onPress={() => void onActionPress()}
+            style={styles.profileActionButton}
+            accessibilityRole="button"
+            accessibilityLabel={`${actionLabel} ${label}`}
+          >
             <Text style={styles.profileActionText}>{actionLabel}</Text>
           </TouchableOpacity>
         ) : null}

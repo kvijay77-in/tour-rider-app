@@ -655,20 +655,6 @@ function SelectField({
   );
 }
 
-function base64ToUint8Array(base64Data: string): Uint8Array {
-  const atobFn = globalThis.atob;
-  if (typeof atobFn !== 'function') {
-    throw new Error('Image decoding is not available in this runtime.');
-  }
-
-  const binaryString = atobFn(base64Data);
-  const bytes = new Uint8Array(binaryString.length);
-  for (let index = 0; index < binaryString.length; index += 1) {
-    bytes[index] = binaryString.charCodeAt(index);
-  }
-  return bytes;
-}
-
 function FileField({
   definition,
   value,
@@ -731,10 +717,9 @@ function FileField({
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images'],
         quality: 1,
-        base64: true,
       });
       const asset = result.canceled ? undefined : result.assets[0];
-      if (!asset?.uri || !asset.base64) {
+      if (!asset?.uri) {
         return;
       }
 
@@ -759,11 +744,8 @@ function FileField({
         throw new Error(uploadUrlResponse.error?.message ?? 'Unable to request image upload URL.');
       }
 
-      const uploadBytes = base64ToUint8Array(asset.base64);
-      const uploadBuffer = uploadBytes.buffer.slice(
-        uploadBytes.byteOffset,
-        uploadBytes.byteOffset + uploadBytes.byteLength,
-      ) as ArrayBuffer;
+      const localFileResponse = await fetch(asset.uri);
+      const uploadBuffer = await localFileResponse.arrayBuffer();
       const putResponse = await fetch(uploadUrlResponse.data.uploadUrl, {
         method: 'PUT',
         headers: { 'Content-Type': contentType },
@@ -793,12 +775,24 @@ function FileField({
       <Text style={styles.fileFieldName}>{fileValue?.fileName ?? `No ${definition.label.toLowerCase()} uploaded`}</Text>
       <View style={styles.fileFieldActions}>
         {fileValue?.s3Key ? (
-          <TouchableOpacity style={styles.fileActionButton} onPress={handleView} disabled={isUploading || disabled}>
+          <TouchableOpacity
+            style={styles.fileActionButton}
+            onPress={handleView}
+            disabled={isUploading || disabled}
+            accessibilityRole="button"
+            accessibilityLabel={`View ${definition.label}`}
+          >
             <Text style={styles.fileActionText}>View</Text>
           </TouchableOpacity>
         ) : null}
         {definition.type === 'IMAGE' ? (
-          <TouchableOpacity style={styles.fileActionButton} onPress={handlePickImage} disabled={isUploading || disabled}>
+          <TouchableOpacity
+            style={styles.fileActionButton}
+            onPress={handlePickImage}
+            disabled={isUploading || disabled}
+            accessibilityRole="button"
+            accessibilityLabel={`${fileValue?.s3Key ? 'Replace' : 'Upload'} ${definition.label}`}
+          >
             <Text style={styles.fileActionText}>{isUploading ? 'Uploading…' : fileValue?.s3Key ? 'Replace' : 'Upload'}</Text>
           </TouchableOpacity>
         ) : null}
