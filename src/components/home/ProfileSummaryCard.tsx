@@ -9,7 +9,7 @@ import { COLORS } from '../../constants';
 import { Card } from '../common/Card';
 import { ProfilePicture } from '../profile/ProfilePicture';
 import type { RiderProfile } from '../../types/rider';
-import { logger } from '../../utils/logger';
+import { getProfileCoreValue } from '../../profile-schema';
 
 export interface ProfileSummaryCardProps {
   profile: RiderProfile | null;
@@ -18,8 +18,14 @@ export interface ProfileSummaryCardProps {
 
 function ProfileSummaryCardInner({ profile, onPress }: ProfileSummaryCardProps) {
   const displayName = profile
-    ? profile.name
+    ? String(getProfileCoreValue(profile, 'name') ?? 'Profile not available')
     : 'Profile not available';
+  const displayEmail = profile
+    ? String(getProfileCoreValue(profile, 'email') ?? 'No email available')
+    : 'No email available';
+  const displayPhone = profile
+    ? String(getProfileCoreValue(profile, 'phone') ?? 'No phone number added')
+    : 'No phone number added';
   return (
     <TouchableOpacity
       style={styles.touchable}
@@ -39,8 +45,8 @@ function ProfileSummaryCardInner({ profile, onPress }: ProfileSummaryCardProps) 
           <View style={styles.textColumn}>
             <Text style={styles.title}>Your Profile</Text>
             <Text style={styles.name} numberOfLines={1}>{displayName}</Text>
-            <Text style={styles.detail} numberOfLines={1}>{profile?.email ?? 'No email available'}</Text>
-            <Text style={styles.detail} numberOfLines={1}>{profile?.phone ?? 'No phone number added'}</Text>
+            <Text style={styles.detail} numberOfLines={1}>{displayEmail}</Text>
+            <Text style={styles.detail} numberOfLines={1}>{displayPhone}</Text>
           </View>
         </View>
       </Card>

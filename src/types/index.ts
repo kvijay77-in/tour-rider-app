@@ -5,6 +5,7 @@ export type {
   CreateRiderProfileRequest,
   UpdateRiderProfileRequest,
   ProfilePictureUploadUrlResponse,
+  ProfileAttributeFileUrlResponse,
   LinkProfileResponse,
 } from './rider';
 export type { Tour, TourRider, TourRegistrationRequest, RiderTourStatistics } from './tour';

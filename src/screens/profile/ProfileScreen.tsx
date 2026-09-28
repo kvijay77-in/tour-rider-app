@@ -20,127 +20,61 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '../../components/common/Button';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
-import { ProfileFormFields } from '../../components/profile/ProfileFormFields';
+import { DynamicProfileForm } from '../../components/profile/DynamicProfileForm';
+import { DynamicProfileView } from '../../components/profile/DynamicProfileView';
 import { ProfilePicture } from '../../components/profile/ProfilePicture';
 import { COLORS } from '../../constants';
 import { useAuth } from '../../hooks/useAuth';
 import { useRider } from '../../hooks/useRider';
-import { formatDate } from '../../utils/dateFormatter';
+import { ApiError } from '../../services/api/apiClient';
 import { logger } from '../../utils/logger';
 import {
-  combinePhoneNumber,
-  createProfileFormValues,
-  validateProfileForm,
-  type ProfileFormErrors,
-  type ProfileFormField,
-  type ProfileFormValues,
-} from '../../utils/profileForm';
-import type { RiderAddress, RiderEmergencyContact, UpdateRiderProfileRequest } from '../../types/rider';
+  buildProfileSavePayload,
+  createProfileDraftValues,
+  findAttributeByHandler,
+  getProfileCoreValue,
+  mergeDraftValuesWithDefinitions,
+  validateProfileDraftValues,
+  type ProfileDraftValues,
+  type ProfileValidationErrors,
+} from '../../profile-schema';
+import type { UpdateRiderProfileRequest } from '../../types/rider';
 
 const TAG = 'ProfileScreen';
 
-function formatDateForApi(date: Date): string {
-  return date.toISOString().split('T')[0] ?? '';
+function isDefinitionsChangedError(error: unknown): boolean {
+  return error instanceof ApiError && error.statusCode === 409 && error.errorCode === 'PROFILE_DEFINITIONS_CHANGED';
 }
 
-function formatAddress(address?: RiderAddress): string {
-  if (!address) return '—';
-  const segments = [
-    address.line1,
-    address.line2,
-    address.city,
-    address.state,
-    address.country,
-    address.postalCode,
-  ].filter((segment): segment is string => Boolean(segment?.trim()));
-  return segments.length ? segments.join(', ') : '—';
-}
-
-function buildProfileUpdatePayload(
-  profile: NonNullable<ReturnType<typeof useRider>['profile']>,
-  values: ProfileFormValues,
-): UpdateRiderProfileRequest {
-  const payload: UpdateRiderProfileRequest = {};
-  const name = values.name.trim();
-  const phone = combinePhoneNumber(values.phoneCallingCode, values.phoneNumber);
-  const dateOfBirth = formatDateForApi(values.dateOfBirth as Date);
-  const gender = values.gender ?? undefined;
-  const address: RiderAddress = {
-    line1: values.addressLine1.trim(),
-    city: values.city.trim(),
-    state: values.state.trim(),
-    country: values.country,
-    postalCode: values.postalCode.trim(),
-  };
-  const addressLine2 = values.addressLine2.trim();
-  if (addressLine2) {
-    address.line2 = addressLine2;
-  }
-
-  const emergencyContact: RiderEmergencyContact = {
-    name: values.emergencyContactName.trim(),
-    relation: values.emergencyContactRelationship.trim(),
-    phone: combinePhoneNumber(values.emergencyPhoneCallingCode, values.emergencyContactPhone),
-  };
-
-  if (name !== profile.name) {
-    payload.name = name;
-  }
-
-  if (phone !== (profile.phone ?? '')) {
-    payload.phone = phone;
-  }
-
-  if (dateOfBirth !== (profile.dateOfBirth ?? '')) {
-    payload.dateOfBirth = dateOfBirth;
-  }
-
-  if (gender !== profile.gender) {
-    payload.gender = gender;
-  }
-
-  const currentAddress: RiderAddress = {
-    line1: profile.address?.line1 ?? '',
-    city: profile.address?.city ?? '',
-    state: profile.address?.state ?? '',
-    country: profile.address?.country ?? '',
-    postalCode: profile.address?.postalCode ?? '',
-  };
-  if (profile.address?.line2?.trim()) {
-    currentAddress.line2 = profile.address.line2.trim();
-  }
-
-  if (JSON.stringify(address) !== JSON.stringify(currentAddress)) {
-    payload.address = address;
-  }
-
-  const currentEmergencyContact: RiderEmergencyContact = {
-    name: profile.emergencyContact?.name ?? '',
-    relation: profile.emergencyContact?.relation ?? '',
-    phone: profile.emergencyContact?.phone ?? '',
-  };
-
-  if (JSON.stringify(emergencyContact) !== JSON.stringify(currentEmergencyContact)) {
-    payload.emergencyContact = emergencyContact;
-  }
-
-  return payload;
+function hasProfileUpdates(payload: Record<string, unknown>): boolean {
+  return Object.keys(payload).some((key) => key !== 'definitionsVersion');
 }
 
 export function ProfileScreen() {
-  const { logout, isAuthenticating } = useAuth();
-  const { profile, isLoading, error, updateProfile, uploadProfilePicture, refreshProfile } = useRider();
+  const { logout, isAuthenticating, user } = useAuth();
+  const {
+    profile,
+    isLoading,
+    error,
+    updateProfile,
+    uploadProfilePicture,
+    refreshProfile,
+    profileDefinitions,
+    isLoadingDefinitions,
+    definitionsError,
+    refreshProfileDefinitions,
+  } = useRider();
   const { width: screenWidth } = useWindowDimensions();
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isPhotoPreviewVisible, setIsPhotoPreviewVisible] = useState(false);
   const [photoAspectRatio, setPhotoAspectRatio] = useState(1);
   const [successMessageVisible, setSuccessMessageVisible] = useState(false);
-  const [values, setValues] = useState<ProfileFormValues>(() => createProfileFormValues());
+  const [values, setValues] = useState<ProfileDraftValues>({});
   const [selectedPhotoUri, setSelectedPhotoUri] = useState<string | null>(null);
   const [selectedPhotoMimeType, setSelectedPhotoMimeType] = useState<string | undefined>();
   const [selectedPhotoBase64, setSelectedPhotoBase64] = useState<string | null>(null);
-  const [formErrors, setFormErrors] = useState<ProfileFormErrors>({});
+  const [formErrors, setFormErrors] = useState<ProfileValidationErrors>({});
 
   useEffect(() => {
     if (!successMessageVisible) return;
@@ -148,21 +82,40 @@ export function ProfileScreen() {
     return () => clearTimeout(timer);
   }, [successMessageVisible]);
 
+  useEffect(() => {
+    if (!profileDefinitions) {
+      return;
+    }
+
+    if (isEditing) {
+      setValues((previous) => mergeDraftValuesWithDefinitions(previous, profile, profileDefinitions, user));
+    } else {
+      setValues(createProfileDraftValues(profile, profileDefinitions, user));
+    }
+  }, [isEditing, profile, profileDefinitions, user]);
+
+  const photoAttribute = useMemo(
+    () => (profileDefinitions ? findAttributeByHandler(profileDefinitions.orderedAttributes, 'PROFILE_PHOTO') : undefined),
+    [profileDefinitions],
+  );
+
   const resetEditor = useCallback(() => {
-    setValues(createProfileFormValues(profile));
+    if (!profileDefinitions) {
+      return;
+    }
+
+    setValues(createProfileDraftValues(profile, profileDefinitions, user));
     setSelectedPhotoUri(null);
     setSelectedPhotoMimeType(undefined);
     setSelectedPhotoBase64(null);
     setFormErrors({});
-  }, [profile]);
+  }, [profile, profileDefinitions, user]);
 
-  const handleFieldChange = <Key extends keyof ProfileFormValues>(
-    field: Key,
-    value: ProfileFormValues[Key],
-    errorField?: ProfileFormField,
-  ) => {
+  const handleFieldChange = (field: string, value: unknown) => {
     setValues((previous) => ({ ...previous, [field]: value }));
-    if (errorField) setFormErrors((previous) => ({ ...previous, [errorField]: undefined }));
+    setFormErrors((previous) => Object.fromEntries(
+      Object.entries(previous).filter(([key]) => key !== field && !key.startsWith(`${field}.`)),
+    ));
   };
 
   const handlePickPhoto = useCallback(async () => {
@@ -195,13 +148,15 @@ export function ProfileScreen() {
       setSelectedPhotoUri(asset.uri);
       setSelectedPhotoMimeType(asset.mimeType ?? 'image/jpeg');
       setSelectedPhotoBase64(asset.base64);
-      setFormErrors((previous) => ({ ...previous, photo: undefined }));
+      if (photoAttribute) {
+        setFormErrors((previous) => ({ ...previous, [photoAttribute.key]: '' }));
+      }
       logger.info(TAG, 'Profile photo selected for profile update');
     } catch (pickError) {
       logger.error(TAG, 'Error selecting profile photo', pickError);
       Alert.alert('Error', 'Unable to select photo. Please try again.');
     }
-  }, []);
+  }, [photoAttribute]);
 
   const handleEdit = useCallback(() => {
     resetEditor();
@@ -214,28 +169,40 @@ export function ProfileScreen() {
   }, [resetEditor]);
 
   const handleSave = useCallback(async () => {
-    if (!profile) {
+    if (!profileDefinitions) {
+      return;
+    }
+
+    if (!profileDefinitions.definitionsVersion) {
+      Alert.alert('Profile fields unavailable', 'The profile field version is unavailable right now. Please refresh and try again.');
       return;
     }
 
     const hasPhoto = Boolean(selectedPhotoUri || profile?.photoUrl || profile?.photoS3Key);
-    const errors = validateProfileForm(values, hasPhoto);
+    const errors = validateProfileDraftValues(profileDefinitions, values, { skipReadOnly: true });
+    if (photoAttribute?.required && !hasPhoto) {
+      errors[photoAttribute.key] = 'Profile picture is required.';
+    }
     setFormErrors(errors);
-    if (Object.keys(errors).length > 0) return;
+    if (Object.keys(errors).filter((key) => errors[key]).length > 0) return;
 
     setIsSaving(true);
     try {
-      const profileUpdates = buildProfileUpdatePayload(profile, values);
-      const hasProfileUpdates = Object.keys(profileUpdates).length > 0;
+      const profileUpdates = buildProfileSavePayload({
+        profile,
+        definitions: profileDefinitions,
+        values,
+      }) as unknown as UpdateRiderProfileRequest;
+      const hasDataUpdates = hasProfileUpdates(profileUpdates as unknown as Record<string, unknown>);
       const hasPhotoUpdate = Boolean(selectedPhotoUri);
 
-      if (!hasProfileUpdates && !hasPhotoUpdate) {
+      if (!hasDataUpdates && !hasPhotoUpdate) {
         logger.info(TAG, 'Profile save skipped because no changes were detected');
         setIsEditing(false);
         return;
       }
 
-      if (hasProfileUpdates) {
+      if (hasDataUpdates) {
         await updateProfile(profileUpdates);
       }
 
@@ -252,13 +219,22 @@ export function ProfileScreen() {
       setSuccessMessageVisible(true);
       logger.info(TAG, 'Profile updated');
     } catch (saveError) {
+      if (isDefinitionsChangedError(saveError)) {
+        await refreshProfileDefinitions();
+        Alert.alert('Profile updated', 'Profile definitions changed. Please review the fields and save again.');
+        return;
+      }
+
       logger.error(TAG, 'Error updating profile', saveError);
       Alert.alert('Error', 'Failed to save profile. Please try again.');
     } finally {
       setIsSaving(false);
     }
   }, [
+    photoAttribute,
     profile,
+    profileDefinitions,
+    refreshProfileDefinitions,
     selectedPhotoBase64,
     selectedPhotoMimeType,
     selectedPhotoUri,
@@ -277,7 +253,8 @@ export function ProfileScreen() {
   }, [logout]);
 
   const displayPhotoUrl = selectedPhotoUri ?? profile?.photoUrl;
-  const formattedAddress = useMemo(() => formatAddress(profile?.address), [profile?.address]);
+  const displayName = String(getProfileCoreValue(profile, 'name') ?? 'Profile not available');
+  const displayEmail = String(getProfileCoreValue(profile, 'email') ?? 'No email available');
 
   const handleOpenPhotoPreview = useCallback(() => {
     if (!displayPhotoUrl) return;
@@ -297,10 +274,22 @@ export function ProfileScreen() {
     );
   }, [displayPhotoUrl]);
 
-  if (isLoading && !profile) {
+  if ((isLoading && !profile) || (isLoadingDefinitions && !profileDefinitions)) {
     return (
       <SafeAreaView style={styles.safeArea}>
         <LoadingSpinner message="Loading profile..." />
+      </SafeAreaView>
+    );
+  }
+
+  if (!profileDefinitions) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.centered}>
+          <Text style={styles.infoTitle}>Profile fields are unavailable.</Text>
+          <Text style={styles.infoText}>{definitionsError ?? 'Unable to load the profile form right now.'}</Text>
+          <Button title="Retry" onPress={refreshProfileDefinitions} variant="secondary" />
+        </View>
       </SafeAreaView>
     );
   }
@@ -317,7 +306,7 @@ export function ProfileScreen() {
 
         <View style={styles.header}>
           <TouchableOpacity
-            style={[styles.photoFrame, formErrors.photo ? styles.photoError : null]}
+            style={[styles.photoFrame, photoAttribute && formErrors[photoAttribute.key] ? styles.photoError : null]}
             onPress={isEditing ? handlePickPhoto : handleOpenPhotoPreview}
             disabled={isSaving || (!isEditing && !displayPhotoUrl)}
             accessibilityRole="button"
@@ -335,11 +324,11 @@ export function ProfileScreen() {
             ) : null}
           </TouchableOpacity>
           {isEditing ? <Text style={styles.photoHint}>Tap the photo to change it</Text> : null}
-          {isEditing && formErrors.photo ? <Text style={styles.photoErrorText}>Profile picture is required.</Text> : null}
+          {isEditing && photoAttribute && formErrors[photoAttribute.key] ? <Text style={styles.photoErrorText}>{formErrors[photoAttribute.key]}</Text> : null}
           {profile && !isEditing ? (
             <>
-              <Text style={styles.name}>{profile.name}</Text>
-              <Text style={styles.email}>{profile.email}</Text>
+              <Text style={styles.name}>{displayName}</Text>
+              <Text style={styles.email}>{displayEmail}</Text>
             </>
           ) : null}
         </View>
@@ -357,11 +346,13 @@ export function ProfileScreen() {
           </View>
         ) : isEditing ? (
           <>
-            <ProfileFormFields
-              email={profile.email}
+            <DynamicProfileForm
+              definitions={profileDefinitions}
               values={values}
               errors={formErrors}
               disabled={isSaving}
+              excludedKeys={photoAttribute ? [photoAttribute.key] : []}
+              showAdminOnly
               onChange={handleFieldChange}
             />
             <View style={styles.buttonRow}>
@@ -375,19 +366,11 @@ export function ProfileScreen() {
           </>
         ) : (
           <View style={styles.profileSection}>
-            <ProfileRow label="Personal Code" value={profile.personalCode ?? 'Not assigned'} />
-            <ProfileRow label="Email" value={profile.email} />
-            <ProfileRow label="Phone" value={profile.phone ?? '—'} />
-            <ProfileRow label="Date of Birth" value={profile.dateOfBirth ? formatDate(profile.dateOfBirth) : '—'} />
-            <ProfileRow label="Gender" value={profile.gender ?? '—'} />
-            <ProfileRow label="Address" value={formattedAddress} />
-            <View style={styles.subheadingRow}>
-              <MaterialIcons name="contact-phone" size={19} color={COLORS.primary} />
-              <Text style={styles.subheading}>Emergency contact</Text>
-            </View>
-            <ProfileRow label="Name" value={profile.emergencyContact?.name ?? '—'} />
-            <ProfileRow label="Relation" value={profile.emergencyContact?.relation ?? '—'} />
-            <ProfileRow label="Phone" value={profile.emergencyContact?.phone ?? '—'} />
+            <DynamicProfileView
+              definitions={profileDefinitions}
+              profile={profile}
+              excludedKeys={photoAttribute ? [photoAttribute.key, 'name', 'email'] : ['name', 'email']}
+            />
             <View style={styles.editButtonContainer}>
               <Button title="Edit Profile" onPress={handleEdit} />
             </View>
@@ -432,15 +415,6 @@ export function ProfileScreen() {
         </View>
       </Modal>
     </SafeAreaView>
-  );
-}
-
-function ProfileRow({ label, value }: { label: string; value: string }) {
-  return (
-    <View style={styles.profileRow}>
-      <Text style={styles.profileLabel}>{label}</Text>
-      <Text style={styles.profileValue}>{value}</Text>
-    </View>
   );
 }
 
@@ -496,23 +470,12 @@ const styles = StyleSheet.create({
   },
   name: { fontSize: 24, fontWeight: '700', color: COLORS.textPrimary, marginTop: 12 },
   email: { fontSize: 14, color: COLORS.textSecondary, marginTop: 4 },
-  centered: { alignItems: 'center', paddingVertical: 24 },
+  centered: { alignItems: 'center', justifyContent: 'center', flex: 1, paddingVertical: 24 },
+  infoTitle: { fontSize: 20, fontWeight: '700', color: COLORS.textPrimary, marginBottom: 8, textAlign: 'center' },
   errorContainer: { backgroundColor: COLORS.danger, padding: 12, borderRadius: 8, marginBottom: 16 },
   errorText: { color: COLORS.white, fontSize: 14, textAlign: 'center' },
-  infoText: { fontSize: 14, color: COLORS.textSecondary, marginBottom: 12 },
+  infoText: { fontSize: 14, color: COLORS.textSecondary, marginBottom: 12, textAlign: 'center' },
   profileSection: { marginBottom: 16 },
-  profileRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 16,
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.borderLight,
-  },
-  profileLabel: { fontSize: 14, fontWeight: '700', color: COLORS.textSecondary, flex: 1 },
-  profileValue: { fontSize: 14, lineHeight: 20, color: COLORS.textPrimary, flex: 1.4, textAlign: 'right' },
-  subheadingRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 24, marginBottom: 4 },
-  subheading: { fontSize: 18, fontWeight: '700', color: COLORS.textPrimary },
   editButtonContainer: { marginTop: 22 },
   buttonRow: { flexDirection: 'row', gap: 12, marginTop: 24 },
   buttonHalf: { flex: 1 },

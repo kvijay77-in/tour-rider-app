@@ -58,6 +58,12 @@ export interface RiderProfile {
   /** True when the current user is not authorized to view the profile picture */
   photoAccessDenied?: boolean;
 
+  /** Dynamic profile attributes stored outside the fixed CORE field set */
+  attributes?: Record<string, unknown>;
+
+  /** Profile definitions version used when the profile was last saved */
+  definitionsVersion?: string;
+
   /** Created timestamp */
   createdAt?: string;
 
@@ -70,14 +76,16 @@ export interface RiderProfile {
  */
 export interface CreateRiderProfileRequest {
   profileId?: string;
-  name: string;
-  email: string;
-  phone: string;
-  emergencyContact: RiderEmergencyContact;
+  name?: string;
+  email?: string;
+  phone?: string;
+  emergencyContact?: RiderEmergencyContact;
   dateOfBirth?: string;
   gender?: RiderProfile['gender'];
   address?: RiderAddress;
   photoS3Key?: string;
+  attributes?: Record<string, unknown>;
+  definitionsVersion: string;
 }
 
 /**
@@ -92,6 +100,8 @@ export interface UpdateRiderProfileRequest {
   address?: RiderAddress;
   emergencyContact?: RiderEmergencyContact;
   photoS3Key?: string;
+  attributes?: Record<string, unknown>;
+  definitionsVersion: string;
 }
 
 /**
@@ -111,6 +121,21 @@ export interface ProfilePictureUploadUrlResponse {
 export interface ProfilePictureDownloadUrlResponse {
   downloadUrl: string;
   photoS3Key: string;
+  expiresIn: number;
+  profileId: string;
+}
+
+export interface ProfileAttributeFileUrlResponse {
+  uploadUrl?: string;
+  downloadUrl?: string;
+  attributeKey: string;
+  file: {
+    s3Key: string;
+    fileName: string;
+    contentType: string;
+    sizeBytes?: number;
+    uploadedAt?: string;
+  };
   expiresIn: number;
   profileId: string;
 }

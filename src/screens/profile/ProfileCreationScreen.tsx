@@ -2,7 +2,7 @@
  * Profile creation screen shown after first authenticated sign-in.
  */
 
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Alert, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -10,50 +10,69 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 import { Button } from '../../components/common/Button';
-import { ProfileFormFields } from '../../components/profile/ProfileFormFields';
+import { LoadingSpinner } from '../../components/common/LoadingSpinner';
+import { DynamicProfileForm } from '../../components/profile/DynamicProfileForm';
 import { COLORS } from '../../constants';
 import { useAuth } from '../../hooks/useAuth';
 import { useRider } from '../../hooks/useRider';
 import { ApiError, isValidationApiError } from '../../services/api/apiClient';
 import { createRiderProfile, linkCognitoUser } from '../../services/api/riderApi';
 import { logger } from '../../utils/logger';
-import {
-  combinePhoneNumber,
-  createProfileFormValues,
-  validateProfileForm,
-  type ProfileFormErrors,
-  type ProfileFormField,
-  type ProfileFormValues,
-} from '../../utils/profileForm';
 import type { AppStackParamList } from '../../types/navigation';
+import type { CreateRiderProfileRequest } from '../../types/rider';
+import {
+  buildProfileSavePayload,
+  findAttributeByHandler,
+  mergeDraftValuesWithDefinitions,
+  validateProfileDraftValues,
+  type ProfileDraftValues,
+  type ProfileValidationErrors,
+} from '../../profile-schema';
 
 const TAG = 'ProfileCreationScreen';
 
 type Props = NativeStackScreenProps<AppStackParamList, 'ProfileCreation'>;
 
-function formatDateForApi(date: Date): string {
-  return date.toISOString().split('T')[0] ?? '';
+function isDefinitionsChangedError(error: unknown): boolean {
+  return error instanceof ApiError && error.statusCode === 409 && error.errorCode === 'PROFILE_DEFINITIONS_CHANGED';
 }
 
 export function ProfileCreationScreen({ navigation }: Props) {
   const { user, setLinkedProfileId, logout, isAuthenticating } = useAuth();
-  const { uploadProfilePicture, refreshProfile } = useRider();
-  const [values, setValues] = useState<ProfileFormValues>(() => createProfileFormValues());
+  const {
+    uploadProfilePicture,
+    refreshProfile,
+    profileDefinitions,
+    isLoadingDefinitions,
+    definitionsError,
+    refreshProfileDefinitions,
+  } = useRider();
+  const [values, setValues] = useState<ProfileDraftValues>({});
   const [selectedPhotoUri, setSelectedPhotoUri] = useState<string | null>(null);
   const [selectedPhotoMimeType, setSelectedPhotoMimeType] = useState<string | undefined>();
   const [selectedPhotoBase64, setSelectedPhotoBase64] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [formErrors, setFormErrors] = useState<ProfileFormErrors>({});
+  const [formErrors, setFormErrors] = useState<ProfileValidationErrors>({});
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const email = user?.email ?? '';
 
-  const handleFieldChange = <Key extends keyof ProfileFormValues>(
-    field: Key,
-    value: ProfileFormValues[Key],
-    errorField?: ProfileFormField,
-  ) => {
+  useEffect(() => {
+    if (!profileDefinitions) {
+      return;
+    }
+
+    setValues((previous) => mergeDraftValuesWithDefinitions(previous, null, profileDefinitions, user));
+  }, [profileDefinitions, user]);
+
+  const photoAttribute = useMemo(
+    () => (profileDefinitions ? findAttributeByHandler(profileDefinitions.orderedAttributes, 'PROFILE_PHOTO') : undefined),
+    [profileDefinitions],
+  );
+
+  const handleFieldChange = (field: string, value: unknown) => {
     setValues((previous) => ({ ...previous, [field]: value }));
-    if (errorField) setFormErrors((previous) => ({ ...previous, [errorField]: undefined }));
+    setFormErrors((previous) => Object.fromEntries(
+      Object.entries(previous).filter(([key]) => key !== field && !key.startsWith(`${field}.`)),
+    ));
   };
 
   const handlePickPhoto = async () => {
@@ -86,7 +105,9 @@ export function ProfileCreationScreen({ navigation }: Props) {
       setSelectedPhotoUri(asset.uri);
       setSelectedPhotoMimeType(asset.mimeType ?? 'image/jpeg');
       setSelectedPhotoBase64(asset.base64);
-      setFormErrors((previous) => ({ ...previous, photo: undefined }));
+      if (photoAttribute) {
+        setFormErrors((previous) => ({ ...previous, [photoAttribute.key]: '' }));
+      }
       logger.info(TAG, 'Profile photo selected during profile creation');
     } catch (error) {
       logger.error(TAG, 'Error selecting profile photo', error);
@@ -96,14 +117,27 @@ export function ProfileCreationScreen({ navigation }: Props) {
 
   const handleSubmit = async () => {
     setSubmitError(null);
-    if (!user || !email) {
+    if (!user) {
       setSubmitError('Authenticated user details are unavailable. Please sign in again.');
       return;
     }
 
-    const errors = validateProfileForm(values, Boolean(selectedPhotoUri));
+    if (!profileDefinitions) {
+      setSubmitError('Profile definitions are unavailable. Please retry.');
+      return;
+    }
+
+    if (!profileDefinitions.definitionsVersion) {
+      setSubmitError('The profile field version is unavailable right now. Please retry after refreshing.');
+      return;
+    }
+
+    const errors = validateProfileDraftValues(profileDefinitions, values, { skipReadOnly: true });
+    if (photoAttribute?.required && !selectedPhotoUri) {
+      errors[photoAttribute.key] = 'Profile picture is required.';
+    }
     setFormErrors(errors);
-    if (Object.keys(errors).length > 0) return;
+    if (Object.keys(errors).filter((key) => errors[key]).length > 0) return;
 
     setIsSubmitting(true);
     try {
@@ -115,38 +149,34 @@ export function ProfileCreationScreen({ navigation }: Props) {
       }
       if (!profileId) throw new Error('Failed to resolve profile identifier for profile creation.');
 
-      await createRiderProfile( profileId, {
-        profileId,
-        name: values.name.trim(),
-        email,
-        phone: combinePhoneNumber(values.phoneCallingCode, values.phoneNumber),
-        dateOfBirth: formatDateForApi(values.dateOfBirth as Date),
-        gender: values.gender ?? undefined,
-        address: {
-          line1: values.addressLine1.trim(),
-          ...(values.addressLine2.trim() ? { line2: values.addressLine2.trim() } : {}),
-          city: values.city.trim(),
-          state: values.state.trim(),
-          country: values.country,
-          postalCode: values.postalCode.trim(),
-        },
-        emergencyContact: {
-          name: values.emergencyContactName.trim(),
-          relation: values.emergencyContactRelationship.trim(),
-          phone: combinePhoneNumber(values.emergencyPhoneCallingCode, values.emergencyContactPhone),
-        },
-      });
+      const payload = buildProfileSavePayload({
+        profile: null,
+        definitions: profileDefinitions,
+        values,
+      }) as unknown as CreateRiderProfileRequest;
+      payload.profileId = profileId;
 
-      await uploadProfilePicture(
-        selectedPhotoUri,
-        selectedPhotoMimeType,
-        profileId,
-        selectedPhotoBase64 ?? undefined,
-      );
+      await createRiderProfile(payload);
+
+      if (selectedPhotoUri) {
+        await uploadProfilePicture(
+          selectedPhotoUri,
+          selectedPhotoMimeType,
+          profileId,
+          selectedPhotoBase64 ?? undefined,
+        );
+      }
       await refreshProfile();
       logger.info(TAG, 'Profile created successfully');
       navigation.replace('MainTabs', { successMessage: 'Profile created successfully' });
     } catch (error) {
+      if (isDefinitionsChangedError(error)) {
+        await refreshProfileDefinitions();
+        Alert.alert('Profile updated', 'Profile definitions changed. Please review the fields and save again.');
+        setSubmitError('Profile definitions changed. Please review the fields and save again.');
+        return;
+      }
+
       const message = error instanceof Error ? error.message : 'Failed to create profile';
       if (isValidationApiError(error)) {
         logger.info(TAG, 'Profile creation validation failed', {
@@ -184,6 +214,29 @@ export function ProfileCreationScreen({ navigation }: Props) {
     ]);
   };
 
+  if (isLoadingDefinitions && !profileDefinitions) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <LoadingSpinner message="Loading profile fields..." />
+      </SafeAreaView>
+    );
+  }
+
+  if (!profileDefinitions) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.centeredState}>
+          <Text style={styles.centeredStateTitle}>Profile fields are unavailable</Text>
+          <Text style={styles.centeredStateMessage}>{definitionsError ?? 'Unable to load the profile form right now.'}</Text>
+          <Button title="Retry" onPress={refreshProfileDefinitions} variant="secondary" />
+          <View style={styles.retrySpacing}>
+            <Button title="Sign Out" onPress={handleLogout} variant="secondary" disabled={isAuthenticating} />
+          </View>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
@@ -199,36 +252,40 @@ export function ProfileCreationScreen({ navigation }: Props) {
           </View>
         ) : null}
 
-        <View style={styles.photoSection}>
-          <Text style={styles.sectionTitle}>Profile picture *</Text>
-          <TouchableOpacity
-            style={[styles.photoButton, formErrors.photo ? styles.photoError : null]}
-            onPress={handlePickPhoto}
-            disabled={isSubmitting}
-            accessibilityRole="button"
-            accessibilityLabel="Select profile picture"
-          >
-            {selectedPhotoUri ? (
-              <Image source={{ uri: selectedPhotoUri }} style={styles.photoPreview} />
-            ) : (
-              <View style={styles.photoPlaceholder}>
-                <MaterialIcons name="add-a-photo" size={30} color={COLORS.primary} />
+        {photoAttribute ? (
+          <View style={styles.photoSection}>
+            <Text style={styles.sectionTitle}>{photoAttribute.label}{photoAttribute.required ? ' *' : ''}</Text>
+            <TouchableOpacity
+              style={[styles.photoButton, formErrors[photoAttribute.key] ? styles.photoError : null]}
+              onPress={handlePickPhoto}
+              disabled={isSubmitting}
+              accessibilityRole="button"
+              accessibilityLabel="Select profile picture"
+            >
+              {selectedPhotoUri ? (
+                <Image source={{ uri: selectedPhotoUri }} style={styles.photoPreview} />
+              ) : (
+                <View style={styles.photoPlaceholder}>
+                  <MaterialIcons name="add-a-photo" size={30} color={COLORS.primary} />
+                </View>
+              )}
+              <View style={styles.photoCopy}>
+                <Text style={styles.photoTitle}>{selectedPhotoUri ? 'Change photo' : 'Add a profile photo'}</Text>
+                <Text style={styles.photoHint}>{photoAttribute.helpText ?? 'JPEG or PNG, up to 5MB'}</Text>
               </View>
-            )}
-            <View style={styles.photoCopy}>
-              <Text style={styles.photoTitle}>{selectedPhotoUri ? 'Change photo' : 'Add a profile photo'}</Text>
-              <Text style={styles.photoHint}>JPEG or PNG, up to 5MB</Text>
-            </View>
-            <MaterialIcons name="chevron-right" size={24} color={COLORS.textSecondary} />
-          </TouchableOpacity>
-          {formErrors.photo ? <Text style={styles.photoErrorText}>Profile picture is required.</Text> : null}
-        </View>
+              <MaterialIcons name="chevron-right" size={24} color={COLORS.textSecondary} />
+            </TouchableOpacity>
+            {formErrors[photoAttribute.key] ? <Text style={styles.photoErrorText}>{formErrors[photoAttribute.key]}</Text> : null}
+          </View>
+        ) : null}
 
-        <ProfileFormFields
-          email={email}
+        <DynamicProfileForm
+          definitions={profileDefinitions}
           values={values}
           errors={formErrors}
           disabled={isSubmitting}
+          excludedKeys={photoAttribute ? [photoAttribute.key] : []}
+          showAdminOnly={false}
           onChange={handleFieldChange}
         />
 
@@ -283,6 +340,30 @@ const styles = StyleSheet.create({
   photoHint: { fontSize: 12, color: COLORS.textSecondary, marginTop: 4 },
   photoErrorText: { marginTop: 8, color: COLORS.danger, fontSize: 13, fontWeight: '600' },
   actions: { gap: 10, marginTop: 24 },
+  centeredState: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+  },
+  centeredStateTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
+    marginBottom: 10,
+    textAlign: 'center',
+  },
+  centeredStateMessage: {
+    fontSize: 14,
+    lineHeight: 22,
+    color: COLORS.textSecondary,
+    marginBottom: 18,
+    textAlign: 'center',
+  },
+  retrySpacing: {
+    marginTop: 10,
+    width: '100%',
+  },
 });
 
 export default ProfileCreationScreen;

@@ -20,12 +20,17 @@ const Stack = createNativeStackNavigator<AppStackParamList>();
 
 function AuthenticatedStack() {
   const { user, postLoginRedirect, clearPostLoginRedirect } = useAuth();
-  const { hasProfile, isLoading: isLoadingProfile } = useRider();
+  const {
+    hasCompleteProfileForAccess,
+    hasProfile,
+    isLoading: isLoadingProfile,
+    isLoadingDefinitions,
+  } = useRider();
 
   const shouldForceProfileCreation = Boolean(user)
-    && postLoginRedirect === 'ProfileCreation'
     && !isLoadingProfile
-    && !hasProfile;
+    && !isLoadingDefinitions
+    && (!hasProfile || !hasCompleteProfileForAccess || postLoginRedirect === 'ProfileCreation');
 
   useEffect(() => {
     if (postLoginRedirect) {

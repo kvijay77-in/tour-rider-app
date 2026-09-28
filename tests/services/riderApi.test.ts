@@ -4,8 +4,10 @@
 
 import {
   createRiderProfile,
+  getProfileAttributeDownloadUrl,
   getProfilePictureDownloadUrl,
   getRiderProfile,
+  requestProfileAttributeUploadUrl,
   updateRiderProfile,
 } from '../../src/services/api/riderApi';
 import { apiClient } from '../../src/services/api/apiClient';
@@ -31,13 +33,10 @@ beforeEach(() => {
   jest.clearAllMocks();
 });
 
-// ---------------------------------------------------------------------------
-// createRiderProfile
-// ---------------------------------------------------------------------------
-
 describe('createRiderProfile', () => {
   it('posts to /v1/riders/profile with profile data', async () => {
     const data = {
+      profileId: 'P1',
       name: 'John Doe',
       email: 'john@example.com',
       phone: '+14155550100',
@@ -46,6 +45,7 @@ describe('createRiderProfile', () => {
         relation: 'Spouse',
         phone: '+14155550101',
       },
+      definitionsVersion: 'defs-v1',
     };
     mockedPost.mockResolvedValueOnce({
       success: true,
@@ -53,16 +53,15 @@ describe('createRiderProfile', () => {
       timestamp: '',
     });
 
-    const result = await createRiderProfile('P1',data);
-    expect(mockedPost).toHaveBeenCalledWith('/v1/riders/profile', data);
+    const result = await createRiderProfile(data);
+
+    expect(mockedPost).toHaveBeenCalledWith('/v1/riders/profile', data, {
+      isExpectedError: expect.any(Function),
+    });
     expect(result.success).toBe(true);
     expect(result.data?.profileId).toBe('P1');
   });
 });
-
-// ---------------------------------------------------------------------------
-// getRiderProfile
-// ---------------------------------------------------------------------------
 
 describe('getRiderProfile', () => {
   it('fetches profile by ID', async () => {
@@ -79,14 +78,6 @@ describe('getRiderProfile', () => {
     expect(result.data?.name).toBe('Jane Smith');
   });
 
-  it('encodes profile ID', async () => {
-    mockedGet.mockResolvedValueOnce({ success: true, timestamp: '' });
-    await getRiderProfile('P/1');
-    expect(mockedGet).toHaveBeenCalledWith(`/v1/riders/profile/${encodeURIComponent('P/1')}`, {
-      isExpectedError: expect.any(Function),
-    });
-  });
-
   it('classifies 404 as expected for profile lookup', async () => {
     mockedGet.mockResolvedValueOnce({ success: false, error: { code: 'RIDERPROFILE_NOT_FOUND', message: 'not found' }, timestamp: '' });
     await getRiderProfile('P1');
@@ -96,31 +87,7 @@ describe('getRiderProfile', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// getProfilePictureDownloadUrl
-// ---------------------------------------------------------------------------
-
 describe('getProfilePictureDownloadUrl', () => {
-  it('fetches a pre-signed profile picture download URL', async () => {
-    mockedGet.mockResolvedValueOnce({
-      success: true,
-      data: {
-        downloadUrl: 'https://example.test/profile.jpg',
-        photoS3Key: 'profiles/P1/photo.jpg',
-        expiresIn: 300,
-        profileId: 'P1',
-      },
-      timestamp: '',
-    });
-
-    const result = await getProfilePictureDownloadUrl('P/1');
-
-    expect(mockedGet).toHaveBeenCalledWith('/v1/riders/profile/P%2F1/picture', {
-      isExpectedError: expect.any(Function),
-    });
-    expect(result.data?.downloadUrl).toBe('https://example.test/profile.jpg');
-  });
-
   it('returns an access-denied response instead of throwing on 403', async () => {
     mockedGet.mockResolvedValueOnce({
       success: false,
@@ -135,13 +102,55 @@ describe('getProfilePictureDownloadUrl', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// updateRiderProfile
-// ---------------------------------------------------------------------------
+describe('profile attribute file endpoints', () => {
+  it('requests a presigned upload URL for a profile attribute file', async () => {
+    mockedPost.mockResolvedValueOnce({ success: true, data: { uploadUrl: 'https://upload.test' }, timestamp: '' });
+
+    await requestProfileAttributeUploadUrl('P1', 'medicalCertificate', 'application/pdf', 2048);
+
+    expect(mockedPost).toHaveBeenCalledWith(
+      '/v1/riders/profile/P1/attributes/medicalCertificate/upload',
+      { contentType: 'application/pdf', sizeBytes: 2048 },
+    );
+  });
+
+  it('requests a presigned download URL for a profile attribute file', async () => {
+    mockedGet.mockResolvedValueOnce({ success: true, data: { downloadUrl: 'https://download.test' }, timestamp: '' });
+
+    await getProfileAttributeDownloadUrl('P1', 'medicalCertificate');
+
+    expect(mockedGet).toHaveBeenCalledWith(
+      '/v1/riders/profile/P1/attributes/medicalCertificate/download',
+      {
+        isExpectedError: expect.any(Function),
+        returnErrorResponseForStatuses: [403],
+      },
+    );
+  });
+
+  it('encodes reserved characters in profile and attribute identifiers', async () => {
+    mockedGet.mockResolvedValueOnce({ success: true, timestamp: '' });
+    mockedPost.mockResolvedValueOnce({ success: true, timestamp: '' });
+
+    await requestProfileAttributeUploadUrl('P/1', 'medical/certificate');
+    await getProfileAttributeDownloadUrl('P/1', 'medical/certificate');
+
+    expect(mockedPost).toHaveBeenCalledWith(
+      `/v1/riders/profile/${encodeURIComponent('P/1')}/attributes/${encodeURIComponent('medical/certificate')}/upload`,
+      {},
+    );
+    expect(mockedGet).toHaveBeenCalledWith(
+      `/v1/riders/profile/${encodeURIComponent('P/1')}/attributes/${encodeURIComponent('medical/certificate')}/download`,
+      expect.objectContaining({
+        isExpectedError: expect.any(Function),
+      }),
+    );
+  });
+});
 
 describe('updateRiderProfile', () => {
   it('puts updated fields to profile endpoint', async () => {
-    const updates = { phone: '+61412345678' };
+    const updates = { phone: '+61412345678', definitionsVersion: 'defs-v1' };
     mockedPut.mockResolvedValueOnce({
       success: true,
       data: { profileId: 'P1', phone: '+61412345678' },

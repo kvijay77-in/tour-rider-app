@@ -43,9 +43,9 @@ tour-rider-app/
 │   │   │   ├── StageIndicator.tsx
 │   │   │   └── CheckInCard.tsx
 │   │   └── profile/           # Profile-specific components
-│   │       ├── ProfilePicture.tsx
-│   │       ├── ProfileFormFields.tsx
-│   │       └── SearchableSelectField.tsx
+│   │       ├── DynamicProfileForm.tsx
+│   │       ├── DynamicProfileView.tsx
+│   │       └── ProfilePicture.tsx
 │   ├── config/                 # Configuration files
 │   │   └── amplify.ts         # AWS Amplify configuration
 │   ├── constants/              # Application constants
@@ -88,12 +88,23 @@ tour-rider-app/
 │   │   │   ├── CheckInStatusScreen.tsx
 │   │   │   └── CheckInHistoryScreen.tsx
 │   │   ├── profile/           # Profile screens
+│   │   │   ├── ProfileCreationScreen.tsx
 │   │   │   └── ProfileScreen.tsx
 │   │   └── notifications/     # Notification screens
 │   │       └── NotificationsScreen.tsx
+│   ├── profile-schema/         # Configuration-driven rider profile engine
+│   │   ├── bindings.ts        # CORE/attributes storage bindings
+│   │   ├── definitions.ts     # AppConfig to ordered profile schema
+│   │   ├── handlers.ts        # Special frontend handlers registry
+│   │   ├── options.ts         # Country/state/phone helpers
+│   │   ├── payload.ts         # Change-only save payload builder
+│   │   ├── types.ts           # Profile definition contracts
+│   │   ├── validation.ts      # Schema-driven validation
+│   │   └── visibility.ts      # visibleWhen evaluation
 │   ├── services/               # Business logic and services
 │   │   ├── api/               # API service layer
 │   │   │   ├── apiClient.ts   # Base HTTP client
+│   │   │   ├── configApi.ts   # Runtime configuration API
 │   │   │   ├── riderApi.ts    # Rider profile API
 │   │   │   ├── tourApi.ts     # Tour API
 │   │   │   ├── tourRegistrationApi.ts # Tour registration API
@@ -101,9 +112,9 @@ tour-rider-app/
 │   │   │   ├── checkInApi.ts  # Check-in API
 │   │   │   └── notificationApi.ts # Notification API
 │   │   ├── activeTourStore.ts # SQLite cache for the sign-in refreshed active snapshot
+│   │   ├── profileConfigStore.ts # SQLite cache for rider profile definitions
+│   │   ├── profileDefinitionsService.ts # Definitions refresh with cache fallback
 │   │   ├── tourHistoryStore.ts # SQLite cache for long-lived historical tours and rides
-│   │   └── config/            # Runtime configuration
-│   │       └── orgConfigService.ts # Org config secure storage
 │   ├── types/                  # TypeScript type definitions
 │   │   ├── rider.ts           # Rider types
 │   │   ├── tour.ts            # Tour types
@@ -116,7 +127,6 @@ tour-rider-app/
 │   └── utils/                  # Utility functions
 │       ├── logger.ts          # Logging utility
 │       ├── dateFormatter.ts   # Date formatting
-│       ├── profileForm.ts     # Shared profile form defaults and validation
 │       ├── validation.ts      # Input validation
 │       └── permissions.ts     # Permission checks
 ├── .env.example                # Environment variables template
@@ -200,6 +210,14 @@ Screen-level components, one per screen. Organized by feature area.
 - Each screen exports a default component
 - Type navigation props with TypeScript
 
+### `/src/profile-schema`
+Configuration-driven rider profile engine:
+- **definitions.ts**: Builds ordered sections, LOV maps, and the server-sourced `definitionsVersion` from AppConfig payloads
+- **bindings.ts**: Reads and writes values through CORE bindings and dynamic `attributes`, including legacy LOV label-to-value normalization
+- **validation.ts**: Applies shared schema-driven validation rules
+- **payload.ts**: Builds save payloads that only include changed rider-editable values
+- **handlers.ts**: Isolates special frontend handlers such as profile photo and Cognito email
+
 ### `/src/services`
 Business logic and API communication:
 
@@ -216,6 +234,7 @@ HTTP client and API service layer for tour-data-api integration:
 
 #### Local SQLite caches
 - **activeTourStore.ts**: Replaces the rider's active-tour snapshot at sign-in and serves active tour and active rides locally during the session
+- **profileConfigStore.ts**: Stores the last successful rider profile definitions refresh for config fallback
 - **tourHistoryStore.ts**: Stores immutable historical tour catalog and ride data for reuse across later visits to the Tour page
 
 ### `/src/types`
