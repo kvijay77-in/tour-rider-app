@@ -127,6 +127,11 @@ export function ProfileCreationScreen({ navigation }: Props) {
       return;
     }
 
+    if (!profileDefinitions.definitionsVersion) {
+      setSubmitError('The profile field version is unavailable right now. Please retry after refreshing.');
+      return;
+    }
+
     const errors = validateProfileDraftValues(profileDefinitions, values, { skipReadOnly: true });
     if (photoAttribute?.required && !selectedPhotoUri) {
       errors[photoAttribute.key] = 'Profile picture is required.';

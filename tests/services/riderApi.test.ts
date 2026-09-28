@@ -106,11 +106,11 @@ describe('profile attribute file endpoints', () => {
   it('requests a presigned upload URL for a profile attribute file', async () => {
     mockedPost.mockResolvedValueOnce({ success: true, data: { uploadUrl: 'https://upload.test' }, timestamp: '' });
 
-    await requestProfileAttributeUploadUrl('P1', 'medicalCertificate', 'application/pdf');
+    await requestProfileAttributeUploadUrl('P1', 'medicalCertificate', 'application/pdf', 2048);
 
     expect(mockedPost).toHaveBeenCalledWith(
       '/v1/riders/profile/P1/attributes/medicalCertificate/upload',
-      { contentType: 'application/pdf' },
+      { contentType: 'application/pdf', sizeBytes: 2048 },
     );
   });
 

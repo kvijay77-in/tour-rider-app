@@ -21,7 +21,7 @@ import { loadProfileDefinitionsWithFallback } from '../services/profileDefinitio
 import { logger } from '../utils/logger';
 import type { RiderProfile, UpdateRiderProfileRequest } from '../types/rider';
 import type { ProfileDefinitions } from '../profile-schema';
-import { createProfileDraftValues, hasRequiredSystemProfileValues } from '../profile-schema';
+import { buildProfileDefinitions, createProfileDraftValues, hasRequiredSystemProfileValues } from '../profile-schema';
 
 const TAG = 'RiderContext';
 
@@ -313,6 +313,14 @@ export function RiderProvider({ children }: RiderProviderProps) {
       setDefinitionsError(null);
     }
   }, [definitionsSessionKey, refreshProfileDefinitions]);
+
+  useEffect(() => {
+    if (!profileDefinitions || profileDefinitions.definitionsVersion || !profile?.definitionsVersion) {
+      return;
+    }
+
+    setProfileDefinitions(buildProfileDefinitions(profileDefinitions.rawEntries, profile.definitionsVersion));
+  }, [profile?.definitionsVersion, profileDefinitions]);
 
   const hasCompleteProfileForAccess = useMemo(() => {
     if (!profile || !profileDefinitions) {

@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
+  Alert,
+  Linking,
   Modal,
   Platform,
   Pressable,
@@ -13,14 +15,13 @@ import {
 } from 'react-native';
 import DateTimePicker, { type DateTimePickerChangeEvent } from '@react-native-community/datetimepicker';
 import { MaterialIcons } from '@expo/vector-icons';
-import type { TCountryCode } from 'countries-list';
+import * as ImagePicker from 'expo-image-picker';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { COLORS } from '../../constants';
 import {
-  COUNTRY_OPTIONS,
-  INDIA_STATES,
   combinePhoneNumber,
+  getPhoneCountryOptions,
   splitPhoneNumber,
 } from '../../profile-schema/options';
 import {
@@ -31,9 +32,13 @@ import {
   type ProfileDefinitions,
   type ProfileDraftValues,
   type ProfileFieldDefinition,
+  type ProfileFileValue,
   type ProfileValidationErrors,
 } from '../../profile-schema';
+import { useAuth } from '../../hooks/useAuth';
+import { getProfileAttributeDownloadUrl, linkCognitoUser, requestProfileAttributeUploadUrl } from '../../services/api/riderApi';
 import { formatDate } from '../../utils/dateFormatter';
+import { logger } from '../../utils/logger';
 import { SearchableSelectField, type SelectOption } from '../common/SearchableSelectField';
 
 interface DynamicProfileFormProps {
@@ -70,17 +75,7 @@ function updateNestedValue(target: Record<string, unknown>, path: string[], valu
   };
 }
 
-function buildCountryOptions(): SelectOption[] {
-  return COUNTRY_OPTIONS.map((country) => ({
-    value: country.code,
-    label: country.name,
-    leading: country.flag,
-    detail: `+${country.callingCode}`,
-  }));
-}
-
-const COUNTRY_SELECT_OPTIONS = buildCountryOptions();
-const INDIA_STATE_OPTIONS: SelectOption[] = INDIA_STATES.map((state) => ({ value: state, label: state }));
+const TAG = 'DynamicProfileForm';
 let repeatableGroupItemSeed = 0;
 
 function createRepeatableGroupItemId(): string {
@@ -260,7 +255,16 @@ function BaseFieldRenderer({
     case 'DATE':
       return <DateField definition={definition} value={typeof value === 'string' ? value : ''} disabled={disabled} hasError={Boolean(error)} onChange={onChange} />;
     case 'PHONE':
-      return <PhoneField definition={definition} value={typeof value === 'string' ? value : ''} disabled={disabled} hasError={Boolean(error)} onChange={onChange} />;
+      return (
+        <PhoneField
+          definitions={definitions}
+          definition={definition}
+          value={typeof value === 'string' ? value : ''}
+          disabled={disabled}
+          hasError={Boolean(error)}
+          onChange={onChange}
+        />
+      );
     case 'SELECT':
       return (
         <SelectField
@@ -301,11 +305,13 @@ function BaseFieldRenderer({
     case 'FILE':
     case 'IMAGE':
       return (
-        <View style={[styles.unsupportedField, error ? styles.inputError : null]}>
-          <Text style={styles.unsupportedText}>
-            {definition.label} uploads are not available from this form. Use the dedicated handler when configured.
-          </Text>
-        </View>
+        <FileField
+          definition={definition}
+          value={value}
+          disabled={disabled}
+          hasError={Boolean(error)}
+          onChange={onChange as (value: ProfileFileValue) => void}
+        />
       );
     default:
       return null;
@@ -519,20 +525,32 @@ function DateField({
 }
 
 function PhoneField({
+  definitions,
   definition,
   value,
   disabled,
   hasError,
   onChange,
 }: {
+  definitions: ProfileDefinitions;
   definition: ProfileFieldDefinition;
   value: string;
   disabled: boolean;
   hasError: boolean;
   onChange: (value: string) => void;
 }) {
-  const parsedValue = splitPhoneNumber(value);
-  const [phoneCountryCode, setPhoneCountryCode] = useState<TCountryCode>(parsedValue.countryCode);
+  const countryOptions = useMemo(() => getPhoneCountryOptions(definitions), [definitions]);
+  const selectOptions = useMemo<SelectOption[]>(
+    () => countryOptions.map((country) => ({
+      value: country.code,
+      label: country.name,
+      leading: country.flag,
+      detail: `+${country.callingCode}`,
+    })),
+    [countryOptions],
+  );
+  const parsedValue = useMemo(() => splitPhoneNumber(value, countryOptions), [countryOptions, value]);
+  const [phoneCountryCode, setPhoneCountryCode] = useState(parsedValue.countryCode);
   const [phoneCallingCode, setPhoneCallingCode] = useState(parsedValue.callingCode);
   const [phoneNumber, setPhoneNumber] = useState(parsedValue.phoneNumber);
 
@@ -543,7 +561,7 @@ function PhoneField({
   }, [parsedValue.callingCode, parsedValue.countryCode, parsedValue.phoneNumber]);
 
   const selectCountry = (option: SelectOption) => {
-    const country = COUNTRY_OPTIONS.find((item) => item.code === option.value);
+    const country = countryOptions.find((item) => item.code === option.value);
     if (!country) {
       return;
     }
@@ -558,7 +576,7 @@ function PhoneField({
       <SearchableSelectField
         label=""
         value={phoneCountryCode}
-        options={COUNTRY_SELECT_OPTIONS}
+        options={selectOptions}
         onSelect={selectCountry}
         placeholder="Code"
         searchPlaceholder="Search country or code"
@@ -620,14 +638,7 @@ function SelectField({
   }
 
   const selectOptions: SelectOption[] = options.map((option) => ({ value: option.value, label: option.label }));
-
-  if (definition.lovId === 'COUNTRY') {
-    selectOptions.splice(0, selectOptions.length, ...COUNTRY_SELECT_OPTIONS);
-  }
-
-  if (definition.dependsOn && definition.lovId === 'STATE' && options.length === 0) {
-    selectOptions.splice(0, selectOptions.length, ...INDIA_STATE_OPTIONS);
-  }
+  const selectedLabel = value && !selectOptions.some((option) => option.value === value) ? value : undefined;
 
   return (
     <SearchableSelectField
@@ -639,7 +650,187 @@ function SelectField({
       searchPlaceholder={`Search ${definition.label.toLowerCase()}`}
       disabled={disabled}
       hasError={hasError}
+      selectedLabel={selectedLabel}
     />
+  );
+}
+
+function FileField({
+  definition,
+  value,
+  disabled,
+  hasError,
+  onChange,
+}: {
+  definition: ProfileFieldDefinition;
+  value: unknown;
+  disabled: boolean;
+  hasError: boolean;
+  onChange: (value: ProfileFileValue) => void;
+}) {
+  const { user, setLinkedProfileId } = useAuth();
+  const [isUploading, setIsUploading] = useState(false);
+  const fileValue = value && typeof value === 'object' ? value as ProfileFileValue : undefined;
+
+  const inferMimeType = (fileNameOrUri: string): string | undefined => {
+    const lowerCaseValue = fileNameOrUri.toLowerCase();
+    if (lowerCaseValue.endsWith('.jpg') || lowerCaseValue.endsWith('.jpeg')) {
+      return 'image/jpeg';
+    }
+    if (lowerCaseValue.endsWith('.png')) {
+      return 'image/png';
+    }
+    if (lowerCaseValue.endsWith('.webp')) {
+      return 'image/webp';
+    }
+    if (lowerCaseValue.endsWith('.gif')) {
+      return 'image/gif';
+    }
+    return undefined;
+  };
+
+  const ensureProfileId = async (): Promise<string> => {
+    if (user?.profileId) {
+      return user.profileId;
+    }
+
+    if (!user?.userId) {
+      throw new Error('A linked rider profile is required before uploading files.');
+    }
+
+    const linkResponse = await linkCognitoUser(user.userId);
+    const profileId = linkResponse.data?.profileId;
+    if (!linkResponse.success || !profileId) {
+      throw new Error(linkResponse.error?.message ?? 'Unable to link rider profile for upload.');
+    }
+
+    setLinkedProfileId(profileId);
+    return profileId;
+  };
+
+  const handleView = async () => {
+    try {
+      const profileId = await ensureProfileId();
+      const response = await getProfileAttributeDownloadUrl(profileId, definition.key);
+      if (!response.success || !response.data?.downloadUrl) {
+        throw new Error(response.error?.message ?? 'Unable to open uploaded file.');
+      }
+
+      await Linking.openURL(response.data.downloadUrl);
+    } catch (error) {
+      logger.warn(TAG, 'Unable to open uploaded profile attribute file', error);
+      Alert.alert('Unable to open file', error instanceof Error ? error.message : 'Please try again.');
+    }
+  };
+
+  const handlePickImage = async () => {
+    try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert('Permission required', 'Media library permission is required to select an image.');
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        quality: 1,
+      });
+      const asset = result.canceled ? undefined : result.assets[0];
+      if (!asset?.uri) {
+        return;
+      }
+
+      const contentType = asset.mimeType ?? inferMimeType(asset.fileName ?? asset.uri);
+      if (!contentType) {
+        Alert.alert('Unsupported image', `Unable to determine the file type for ${definition.label}. Please choose a PNG, JPEG, WEBP, or GIF image.`);
+        return;
+      }
+      const sizeBytes = asset.fileSize ?? 0;
+      const allowedMimeTypes = definition.validation?.allowedMimeTypes;
+      if (allowedMimeTypes?.length && !allowedMimeTypes.includes(contentType)) {
+        Alert.alert('Unsupported image', `${definition.label} must use one of: ${allowedMimeTypes.join(', ')}`);
+        return;
+      }
+
+      const maxFileSizeBytes = definition.validation?.maxFileSizeBytes;
+      if (typeof maxFileSizeBytes === 'number' && sizeBytes > maxFileSizeBytes) {
+        Alert.alert('Image too large', `${definition.label} must be ${maxFileSizeBytes} bytes or smaller.`);
+        return;
+      }
+
+      const profileId = await ensureProfileId();
+      setIsUploading(true);
+      const uploadUrlResponse = await requestProfileAttributeUploadUrl(profileId, definition.key, contentType, sizeBytes);
+      if (!uploadUrlResponse.success || !uploadUrlResponse.data?.uploadUrl) {
+        throw new Error(uploadUrlResponse.error?.message ?? 'Unable to request image upload URL.');
+      }
+
+      const localFileResponse = await fetch(asset.uri);
+      const uploadBuffer = await localFileResponse.arrayBuffer();
+      const putResponse = await fetch(uploadUrlResponse.data.uploadUrl, {
+        method: 'PUT',
+        headers: { 'Content-Type': contentType },
+        body: uploadBuffer,
+      });
+      if (!putResponse.ok) {
+        throw new Error(`Image upload failed with status ${putResponse.status}.`);
+      }
+
+      onChange({
+        s3Key: uploadUrlResponse.data.file?.s3Key ?? '',
+        fileName: uploadUrlResponse.data.file?.fileName ?? asset.fileName ?? asset.uri.split('/').pop() ?? `${definition.key}.jpg`,
+        contentType: uploadUrlResponse.data.file?.contentType ?? contentType,
+        sizeBytes: uploadUrlResponse.data.file?.sizeBytes ?? sizeBytes,
+        uploadedAt: uploadUrlResponse.data.file?.uploadedAt ?? new Date().toISOString(),
+      });
+    } catch (error) {
+      logger.warn(TAG, 'Unable to upload profile attribute image', error);
+      Alert.alert('Upload failed', error instanceof Error ? error.message : 'Unable to upload image.');
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  return (
+    <View style={[styles.fileFieldContainer, hasError ? styles.inputError : null]}>
+      <Text style={styles.fileFieldName}>{fileValue?.fileName ?? `No ${definition.label.toLowerCase()} uploaded`}</Text>
+      <View style={styles.fileFieldActions}>
+        {fileValue?.s3Key ? (
+          <TouchableOpacity
+            style={styles.fileActionButton}
+            onPress={handleView}
+            disabled={isUploading || disabled}
+            accessibilityRole="button"
+            accessibilityLabel={`View ${definition.label}`}
+          >
+            <Text style={styles.fileActionText}>View</Text>
+          </TouchableOpacity>
+        ) : null}
+        {definition.type === 'IMAGE' ? (
+          <TouchableOpacity
+            style={styles.fileActionButton}
+            onPress={handlePickImage}
+            disabled={isUploading || disabled}
+            accessibilityRole="button"
+            accessibilityLabel={`${fileValue?.s3Key ? 'Replace' : 'Upload'} ${definition.label}`}
+          >
+            <Text style={styles.fileActionText}>{isUploading ? 'Uploading…' : fileValue?.s3Key ? 'Replace' : 'Upload'}</Text>
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity
+            style={[styles.fileActionButton, styles.fileActionButtonDisabled]}
+            disabled
+            accessibilityRole="button"
+            accessibilityLabel={`Upload ${definition.label} unavailable in this build`}
+          >
+            <Text style={[styles.fileActionText, styles.fileActionTextDisabled]}>Upload unavailable</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+      {definition.type === 'FILE' ? (
+        <Text style={styles.unsupportedText}>File uploads require document picker support, which is not installed in this build.</Text>
+      ) : null}
+    </View>
   );
 }
 
@@ -883,6 +1074,42 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     fontSize: 13,
     lineHeight: 18,
+  },
+  fileFieldContainer: {
+    minHeight: 50,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 8,
+    backgroundColor: COLORS.surface,
+    paddingHorizontal: 13,
+    paddingVertical: 12,
+    marginBottom: 12,
+    gap: 10,
+  },
+  fileFieldName: {
+    fontSize: 15,
+    color: COLORS.textPrimary,
+  },
+  fileFieldActions: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  fileActionButton: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
+    backgroundColor: COLORS.gray[100],
+  },
+  fileActionButtonDisabled: {
+    opacity: 0.65,
+  },
+  fileActionText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLORS.primary,
+  },
+  fileActionTextDisabled: {
+    color: COLORS.textSecondary,
   },
   modalSafeArea: {
     flex: 1,

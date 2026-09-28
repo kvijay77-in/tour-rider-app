@@ -15,6 +15,11 @@ interface CachedProfileDefinitionsRow {
   refreshedAt: string;
 }
 
+interface CachedProfileDefinitionsPayload {
+  entries: AppConfigEntry[];
+  definitionsVersion?: string;
+}
+
 export interface CachedProfileDefinitions {
   definitions: ProfileDefinitions;
   refreshedAt: string;
@@ -41,13 +46,19 @@ async function getDatabase(): Promise<SQLite.SQLiteDatabase> {
   return databasePromise;
 }
 
-export async function cacheProfileDefinitions(entries: AppConfigEntry[]): Promise<void> {
+export async function cacheProfileDefinitions(
+  entries: AppConfigEntry[],
+  definitionsVersion?: string,
+): Promise<void> {
   try {
     const db = await getDatabase();
     const refreshedAt = new Date().toISOString();
     await db.runAsync(
       'INSERT OR REPLACE INTO cached_profile_definitions (singletonId, payload, refreshedAt) VALUES (1, ?, ?)',
-      JSON.stringify(entries),
+      JSON.stringify({
+        entries,
+        ...(definitionsVersion ? { definitionsVersion } : {}),
+      } satisfies CachedProfileDefinitionsPayload),
       refreshedAt,
     );
   } catch (error) {
@@ -68,9 +79,11 @@ export async function getCachedProfileDefinitions(): Promise<CachedProfileDefini
       return null;
     }
 
-    const entries = JSON.parse(row.payload) as AppConfigEntry[];
+    const parsedPayload = JSON.parse(row.payload) as AppConfigEntry[] | CachedProfileDefinitionsPayload;
+    const entries = Array.isArray(parsedPayload) ? parsedPayload : parsedPayload.entries;
+    const definitionsVersion = Array.isArray(parsedPayload) ? undefined : parsedPayload.definitionsVersion;
     return {
-      definitions: buildProfileDefinitions(entries),
+      definitions: buildProfileDefinitions(entries, definitionsVersion),
       refreshedAt: row.refreshedAt,
     };
   } catch (error) {

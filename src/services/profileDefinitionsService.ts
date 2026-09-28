@@ -9,7 +9,7 @@ export interface LoadedProfileDefinitions {
 }
 
 export async function loadProfileDefinitionsWithFallback(
-  fetchDefinitions: () => Promise<{ success: boolean; data?: { items: AppConfigEntry[] }; error?: { message: string } }> = getAppConfigEntries,
+  fetchDefinitions: () => Promise<{ success: boolean; data?: { items: AppConfigEntry[]; definitionsVersion?: string }; error?: { message: string } }> = getAppConfigEntries,
   readCache: typeof getCachedProfileDefinitions = getCachedProfileDefinitions,
   writeCache: typeof cacheProfileDefinitions = cacheProfileDefinitions,
 ): Promise<LoadedProfileDefinitions> {
@@ -17,9 +17,10 @@ export async function loadProfileDefinitionsWithFallback(
     const response = await fetchDefinitions();
     if (response.success) {
       const entries = response.data?.items ?? [];
-      await writeCache(entries);
+      const definitionsVersion = response.data?.definitionsVersion;
+      await writeCache(entries, definitionsVersion);
       return {
-        definitions: buildProfileDefinitions(entries),
+        definitions: buildProfileDefinitions(entries, definitionsVersion),
         source: 'remote',
         refreshedAt: new Date().toISOString(),
       };

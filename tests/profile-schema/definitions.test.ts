@@ -46,13 +46,13 @@ describe('buildProfileDefinitions', () => {
         type: 'TEXT',
         storage: { scope: 'ATTRIBUTES' },
       }, false),
-    ]);
+    ], 'server-defs-v1');
 
     expect(definitions.sections.map((section) => section.id)).toEqual(['personal', 'medical']);
     expect(definitions.sections[0]?.attributes.map((attribute) => attribute.key)).toEqual(['email', 'name']);
     expect(definitions.sections[1]?.attributes.map((attribute) => attribute.key)).toEqual(['hasMedicalCondition']);
     expect(definitions.attributesByKey.legacy).toBeUndefined();
     expect(definitions.attributesByKey.disabledField).toBeUndefined();
-    expect(definitions.definitionsVersion).toContain('RIDER_PROFILE_ATTRIBUTE:email:1');
+    expect(definitions.definitionsVersion).toBe('server-defs-v1');
   });
 });

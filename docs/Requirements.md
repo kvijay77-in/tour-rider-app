@@ -55,6 +55,7 @@ The app supports two types of users, collectively referred to as **riders**:
 ### Profile Creation
 - Rider profile fields are fully configuration-driven from `GET /v1/config`
 - The rider app uses only enabled `RIDER_PROFILE_SECTION`, `RIDER_PROFILE_ATTRIBUTE`, and `LOV` entries for the current signed-in session
+- The active `definitionsVersion` comes from the server response (`GET /v1/config`), and if that response does not include one yet, the app falls back to the `definitionsVersion` returned by the rider profile response
 - The current contract is defined in `kvijay77-in/tour-data-api/docs/rider-profile-attributes-design.md`
 - Riders must complete a profile after account verification and first authenticated sign-in
 - App access is gated only by required **system** profile attributes, so adding a new non-system required field does not block existing riders until their next save
@@ -74,8 +75,10 @@ The app supports two types of users, collectively referred to as **riders**:
   - Personal code (read-only, organizer-managed)
   - Profile photo
   - Dietary preference, blood group, medical-condition flags, and other configured attributes
-- Country defaults to India for the seeded address configuration
+- Country/state and other select options come only from configured LOV items; the app does not replace them with built-in lists
+- Country defaults come from the configured attribute or sub-field `defaultValue`, and otherwise use the first configured COUNTRY LOV item by order
 - When a dependent state/province LOV has no child entries, the field falls back to free text when configured
+- When loading existing profiles, stored select values are matched by configured value or label (case-insensitive); unmatched legacy values are kept and shown as raw text instead of being dropped
 
 ### Profile Picture
 - Riders must upload a profile picture during profile creation when the configured `PROFILE_PHOTO` attribute is required and may replace it later from profile settings
@@ -86,6 +89,8 @@ The app supports two types of users, collectively referred to as **riders**:
   - App uploads raw image bytes with `PUT` to the pre-signed URL
   - App updates rider profile with returned `photoS3Key` via profile update endpoint
 - Other configured `FILE` and `IMAGE` attributes use the profile attribute upload/download endpoints
+- For configured `IMAGE` and `FILE` attributes, the app validates `allowedMimeTypes` and `maxFileSizeBytes` before upload, requests a presigned upload URL with both `contentType` and `sizeBytes`, uploads the binary with `PUT`, and stores `{ s3Key, fileName, contentType, sizeBytes, uploadedAt }` under `attributes.<key>`
+- The current build supports inline uploads for `IMAGE` attributes via `expo-image-picker`; `FILE` attributes support view/download, but file picking remains unavailable until a document-picker dependency is added
 - Default placeholder avatar shown if no picture uploaded
 
 ### Profile Management
@@ -96,6 +101,7 @@ The app supports two types of users, collectively referred to as **riders**:
 - Sensitive attributes are shown normally to the rider because they are viewing their own data
 - Profile changes sync to tour-data-api backend
 - Save requests include only changed CORE fields, changed dynamic `attributes`, and the active `definitionsVersion`
+- The profile photo update path sends only `photoS3Key` plus the server-sourced `definitionsVersion`
 - On `PROFILE_DEFINITIONS_CHANGED`, the app reloads definitions, preserves entered values for surviving keys, and prompts the rider to review and save again
 - Profile data persists across tours within the organizer's data infrastructure
 - On successful profile update, app displays a temporary success banner

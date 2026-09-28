@@ -147,4 +147,48 @@ describe('RiderContext profile picture', () => {
 
     act(() => renderer.unmount());
   });
+
+  it('falls back to the profile response definitionsVersion when config does not include one', async () => {
+    loadProfileDefinitionsWithFallback.mockResolvedValueOnce({
+      definitions: {
+        definitionsVersion: '',
+        sections: [],
+        orderedAttributes: [],
+        attributesByKey: {},
+        lovsById: {},
+        rawEntries: [],
+      },
+      source: 'remote',
+      refreshedAt: '2026-09-27T00:00:00.000Z',
+    });
+    getRiderProfile.mockResolvedValueOnce({
+      success: true,
+      data: {
+        profileId: 'P1',
+        name: 'Jane Rider',
+        email: 'jane@example.com',
+        definitionsVersion: 'profile-defs-v2',
+      },
+      timestamp: '',
+    });
+
+    let definitionsVersion: string | undefined;
+    function Consumer() {
+      definitionsVersion = useRider().profileDefinitions?.definitionsVersion;
+      return null;
+    }
+
+    let renderer: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      renderer = TestRenderer.create(
+        <RiderProvider>
+          <Consumer />
+        </RiderProvider>,
+      );
+    });
+
+    expect(definitionsVersion).toBe('profile-defs-v2');
+
+    act(() => renderer.unmount());
+  });
 });

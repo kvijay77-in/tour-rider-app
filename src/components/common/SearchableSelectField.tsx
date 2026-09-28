@@ -50,6 +50,7 @@ export function SearchableSelectField({
   const [query, setQuery] = useState('');
   const deferredQuery = useDeferredValue(query.trim().toLowerCase());
   const selectedOption = options.find((option) => option.value === value);
+  const hasSelectedValue = Boolean(selectedOption || selectedLabel);
   const filteredOptions = deferredQuery
     ? options.filter((option) => `${option.label} ${option.detail ?? ''}`.toLowerCase().includes(deferredQuery))
     : options;
@@ -69,7 +70,7 @@ export function SearchableSelectField({
         accessibilityRole="button"
         accessibilityLabel={label || placeholder}
       >
-        <Text style={[styles.value, !selectedOption ? styles.placeholder : null]} numberOfLines={1}>
+        <Text style={[styles.value, !hasSelectedValue ? styles.placeholder : null]} numberOfLines={1}>
           {selectedOption?.leading ? `${selectedOption.leading} ` : ''}
           {selectedLabel ?? selectedOption?.label ?? placeholder}
         </Text>
