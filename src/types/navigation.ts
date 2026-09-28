@@ -27,6 +27,7 @@ export type MainTabParamList = {
  */
 export type MainDrawerParamList = {
   Home: { successMessage?: string } | undefined;
+  Notifications: undefined;
   ViewProfile: undefined;
   TrainingChallenge: undefined;
   Tour: undefined;

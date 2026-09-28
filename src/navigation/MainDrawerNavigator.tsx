@@ -3,7 +3,7 @@
  */
 
 import React from 'react';
-import { Pressable } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import { createDrawerNavigator } from '@react-navigation/drawer';
 import type { RouteProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -14,6 +14,8 @@ import { HomeScreen } from '../screens/home/HomeScreen';
 import { ProfileScreen } from '../screens/profile/ProfileScreen';
 import { TrainingChallengeScreen } from '../screens/training/TrainingChallengeScreen';
 import { ChangePasswordScreen } from '../screens/auth/ChangePasswordScreen';
+import { NotificationsScreen } from '../screens/notifications/NotificationsScreen';
+import { NotificationBell } from '../components/common/NotificationBell';
 import { DrawerContent } from './DrawerContent';
 import { TourStackNavigator } from './TourStackNavigator';
 import type { AppStackParamList, MainDrawerParamList } from '../types/navigation';
@@ -32,30 +34,30 @@ export function MainDrawerNavigator({ route }: MainDrawerNavigatorProps) {
     <Drawer.Navigator
       initialRouteName="Home"
       drawerContent={(props) => <DrawerContent {...props} />}
-      screenOptions={{
+      screenOptions={({ navigation }) => ({
         headerShown: true,
         headerRight: () => (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Log out"
-            hitSlop={8}
-            onPress={() => {
-              logout().catch(() => {});
-            }}
-            style={({ pressed }) => ({
-              opacity: pressed ? 0.7 : 1,
-              padding: 4,
-            })}
-          >
-            <Ionicons name="log-out-outline" size={24} color={COLORS.textPrimary} />
-          </Pressable>
+          <View style={styles.headerActions}>
+            <NotificationBell onPress={() => navigation.navigate('Notifications')} />
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Log out"
+              hitSlop={8}
+              onPress={() => {
+                logout().catch(() => {});
+              }}
+              style={({ pressed }) => [styles.logoutButton, pressed ? styles.pressed : null]}
+            >
+              <Ionicons name="log-out-outline" size={24} color={COLORS.textPrimary} />
+            </Pressable>
+          </View>
         ),
         drawerActiveTintColor: COLORS.primary,
         drawerLabelStyle: {
           fontSize: 16,
           fontWeight: '600',
         },
-      }}
+      })}
     >
       <Drawer.Screen
         name="Home"
@@ -69,6 +71,11 @@ export function MainDrawerNavigator({ route }: MainDrawerNavigatorProps) {
         name="ViewProfile"
         component={ProfileScreen}
         options={{ title: 'View Profile' }}
+      />
+      <Drawer.Screen
+        name="Notifications"
+        component={NotificationsScreen}
+        options={{ title: 'Notifications' }}
       />
       <Drawer.Screen
         name="TrainingChallenge"
@@ -91,5 +98,19 @@ export function MainDrawerNavigator({ route }: MainDrawerNavigatorProps) {
     </Drawer.Navigator>
   );
 }
+
+const styles = StyleSheet.create({
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  logoutButton: {
+    padding: 4,
+  },
+  pressed: {
+    opacity: 0.7,
+  },
+});
 
 export default MainDrawerNavigator;

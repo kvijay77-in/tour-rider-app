@@ -38,6 +38,7 @@
         }
       ],
       "@react-native-community/datetimepicker",
+      "expo-notifications",
       "expo-font",
       "expo-secure-store",
       "expo-status-bar",
@@ -50,6 +51,9 @@
         "appSlug": "tour-rider-app",
         "iosBundleId": "com.tourrider.app",
         "androidPackage": "com.tourrider.app"
+      },
+      "eas": {
+        "projectId": "REPLACE_WITH_EAS_PROJECT_ID"
       }
     }
   }

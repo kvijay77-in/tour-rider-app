@@ -1,42 +1,73 @@
 /**
  * Notification API service.
- * Handles notification retrieval via tour-data-api.
- *
- * Note: This requires a backend extension (Notification-{tourId} table).
- * See docs/Requirements.md § Backend Extensions Required.
+ * Handles notification and push-device operations via tour-data-api.
  */
 
 import { apiClient } from './apiClient';
 import { logger } from '../../utils/logger';
-import type { ApiResponse, PaginatedResponse } from '../../types/api';
-import type { Notification } from '../../types/notification';
+import type { ApiResponse } from '../../types/api';
+import type {
+  MarkNotificationsReadRequest,
+  NotificationListResponse,
+  NotificationUnreadCountResponse,
+  PushDevicePlatform,
+} from '../../types/notification';
 
 const TAG = 'NotificationApi';
+const NOTIFICATIONS_NOT_DEPLOYED_STATUSES = [404, 501] as const;
 
-/**
- * Get notifications for a specific tour.
- */
-export async function getTourNotifications(
-  tourId: string,
-  params?: Record<string, string>,
-): Promise<ApiResponse<PaginatedResponse<Notification>>> {
-  logger.debug(TAG, `Fetching notifications for tour ${tourId}`);
-  return apiClient.get<PaginatedResponse<Notification>>(
-    `/v1/tours/${encodeURIComponent(tourId)}/notifications`,
-    { params },
+export function isNotificationsApiUnavailable(response: ApiResponse<unknown>): boolean {
+  const errorCode = response.error?.code;
+  return errorCode === 'HTTP_404' || errorCode === 'HTTP_501';
+}
+
+export async function registerPushDevice(
+  token: string,
+  platform: PushDevicePlatform,
+): Promise<ApiResponse<Record<string, never>>> {
+  logger.debug(TAG, 'Registering push device token');
+  return apiClient.post<Record<string, never>>('/v1/notifications/devices', { token, platform });
+}
+
+export async function deletePushDevice(
+  token: string,
+): Promise<ApiResponse<Record<string, never>>> {
+  logger.debug(TAG, 'Deleting push device token');
+  return apiClient.delete<Record<string, never>>(
+    `/v1/notifications/devices/${encodeURIComponent(token)}`,
   );
 }
 
-/**
- * Mark a notification as read.
- */
-export async function markNotificationRead(
-  tourId: string,
-  notificationId: string,
-): Promise<ApiResponse<Notification>> {
-  logger.debug(TAG, `Marking notification ${notificationId} as read`);
-  return apiClient.put<Notification>(
-    `/v1/tours/${encodeURIComponent(tourId)}/notifications/${encodeURIComponent(notificationId)}`,
-    { isRead: true },
-  );
+export async function getNotifications(params?: {
+  since?: string;
+  limit?: number;
+}): Promise<ApiResponse<NotificationListResponse>> {
+  logger.debug(TAG, 'Fetching notifications');
+
+  const query: Record<string, string> = {};
+  if (params?.since) {
+    query.since = params.since;
+  }
+  if (typeof params?.limit === 'number') {
+    query.limit = String(params.limit);
+  }
+
+  return apiClient.get<NotificationListResponse>('/v1/notifications', {
+    params: Object.keys(query).length ? query : undefined,
+    returnErrorResponseForStatuses: NOTIFICATIONS_NOT_DEPLOYED_STATUSES,
+  });
+}
+
+export async function getUnreadNotificationCount(): Promise<ApiResponse<NotificationUnreadCountResponse>> {
+  logger.debug(TAG, 'Fetching unread notification count');
+  return apiClient.get<NotificationUnreadCountResponse>('/v1/notifications/unread-count', {
+    returnErrorResponseForStatuses: NOTIFICATIONS_NOT_DEPLOYED_STATUSES,
+  });
+}
+
+export async function markAllNotificationsRead(
+  payload: MarkNotificationsReadRequest = {},
+): Promise<ApiResponse<Record<string, never>>> {
+  logger.debug(TAG, 'Marking all notifications as read');
+  return apiClient.put<Record<string, never>>('/v1/notifications/read', payload);
 }
