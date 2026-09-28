@@ -47,8 +47,24 @@ function sanitizeValue(definition: ProfileFieldDefinition, value: unknown): unkn
         ? value.map((entry) => normalizeString(entry)).filter((entry): entry is string => Boolean(entry))
         : undefined;
     case 'FILE':
-    case 'IMAGE':
-      return isPlainObject(value) ? value : undefined;
+    case 'IMAGE': {
+      if (!isPlainObject(value)) {
+        return undefined;
+      }
+
+      const s3Key = normalizeString(value.s3Key);
+      if (!s3Key) {
+        return undefined;
+      }
+
+      return {
+        s3Key,
+        ...(normalizeString(value.fileName) ? { fileName: normalizeString(value.fileName) } : {}),
+        ...(normalizeString(value.contentType) ? { contentType: normalizeString(value.contentType) } : {}),
+        ...(typeof value.sizeBytes === 'number' && Number.isFinite(value.sizeBytes) ? { sizeBytes: value.sizeBytes } : {}),
+        ...(normalizeString(value.uploadedAt) ? { uploadedAt: normalizeString(value.uploadedAt) } : {}),
+      };
+    }
     case 'GROUP': {
       if (definition.repeatable) {
         if (!Array.isArray(value)) {

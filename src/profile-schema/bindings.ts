@@ -3,20 +3,43 @@ import type { RiderProfile } from '../types/rider';
 import { getProfileHandler } from './handlers';
 import type { ProfileAttributeDefinition, ProfileDefinitions, ProfileDraftValues, ProfileFieldDefinition, ProfileLovDefinition } from './types';
 
-const INDIA_LOV_VALUE = 'IN';
+function normalizeLovMatchValue(value: string): string {
+  return value.trim().toLowerCase();
+}
 
-function toFormValue(definition: ProfileFieldDefinition, value: unknown): unknown {
+function findLovItemByStoredValue(
+  lov: ProfileLovDefinition | undefined,
+  value: string,
+  parentValue?: string,
+) {
+  const normalizedValue = normalizeLovMatchValue(value);
+  const options = getLovItems(lov, parentValue);
+
+  return options.find((item) => (
+    normalizeLovMatchValue(item.value) === normalizedValue
+    || normalizeLovMatchValue(item.label) === normalizedValue
+  ));
+}
+
+function toFormValue(
+  definition: ProfileFieldDefinition,
+  value: unknown,
+  definitions: ProfileDefinitions,
+  currentValues: ProfileDraftValues = {},
+): unknown {
   if (value === undefined || value === null) {
     if (definition.type === 'GROUP' && definition.fields?.length) {
-      const defaults = Object.fromEntries(
-        definition.fields
-          .map((field) => [field.key, getDefaultFieldValue(field)])
-          .filter(([, fieldValue]) => fieldValue !== undefined),
-      );
+      const defaults: Record<string, unknown> = {};
+      for (const field of definition.fields) {
+        const fieldValue = getDefaultFieldValue(field, definitions);
+        if (fieldValue !== undefined) {
+          defaults[field.key] = fieldValue;
+        }
+      }
       return Object.keys(defaults).length > 0 ? defaults : undefined;
     }
 
-    return getDefaultFieldValue(definition);
+    return getDefaultFieldValue(definition, definitions);
   }
 
   if (definition.type === 'NUMBER') {
@@ -25,15 +48,44 @@ function toFormValue(definition: ProfileFieldDefinition, value: unknown): unknow
 
   if (definition.type === 'GROUP' && definition.fields?.length) {
     const objectValue = (value && typeof value === 'object' ? value : {}) as Record<string, unknown>;
-    return Object.fromEntries(definition.fields.map((field) => [field.key, toFormValue(field, objectValue[field.key])])) as Record<string, unknown>;
+    const nextValue: Record<string, unknown> = {};
+    for (const field of definition.fields) {
+      const fieldCurrentValues = { ...objectValue, ...nextValue };
+      nextValue[field.key] = toFormValue(field, objectValue[field.key], definitions, fieldCurrentValues);
+    }
+    return nextValue;
+  }
+
+  if (definition.type === 'SELECT' && typeof value === 'string') {
+    const lov = definition.lovId ? definitions.lovsById[definition.lovId] : undefined;
+    const parentValue = definition.dependsOn && typeof currentValues[definition.dependsOn] === 'string'
+      ? currentValues[definition.dependsOn] as string
+      : undefined;
+    return findLovItemByStoredValue(lov, value, parentValue)?.value ?? value;
+  }
+
+  if (definition.type === 'MULTI_SELECT' && Array.isArray(value)) {
+    const lov = definition.lovId ? definitions.lovsById[definition.lovId] : undefined;
+    return value.map((entry) => (
+      typeof entry === 'string'
+        ? (findLovItemByStoredValue(lov, entry)?.value ?? entry)
+        : entry
+    ));
   }
 
   return value;
 }
 
-export function getDefaultFieldValue(definition: ProfileFieldDefinition): unknown {
+export function getDefaultFieldValue(
+  definition: ProfileFieldDefinition,
+  definitions?: ProfileDefinitions,
+): unknown {
+  if (definition.defaultValue !== undefined) {
+    return definition.defaultValue;
+  }
+
   if (definition.type === 'SELECT' && definition.lovId === 'COUNTRY') {
-    return INDIA_LOV_VALUE;
+    return definitions?.lovsById.COUNTRY?.items[0]?.value;
   }
 
   if (definition.type === 'MULTI_SELECT') {
@@ -47,7 +99,7 @@ export function getDefaultFieldValue(definition: ProfileFieldDefinition): unknow
   if (definition.type === 'GROUP' && definition.fields?.length) {
     const defaults = Object.fromEntries(
       definition.fields
-        .map((field) => [field.key, getDefaultFieldValue(field)])
+        .map((field) => [field.key, getDefaultFieldValue(field, definitions)])
         .filter(([, value]) => value !== undefined),
     );
     return Object.keys(defaults).length > 0 ? defaults : undefined;
@@ -96,12 +148,14 @@ export function createProfileDraftValues(
   definitions: ProfileDefinitions,
   user: AuthUser | null,
 ): ProfileDraftValues {
-  return Object.fromEntries(
-    definitions.orderedAttributes.map((attribute) => {
-      const rawValue = getEditableAttributeValue(profile, attribute, user);
-      return [attribute.key, toFormValue(attribute, rawValue)];
-    }),
-  );
+  const draftValues: ProfileDraftValues = {};
+
+  for (const attribute of definitions.orderedAttributes) {
+    const rawValue = getEditableAttributeValue(profile, attribute, user);
+    draftValues[attribute.key] = toFormValue(attribute, rawValue, definitions, draftValues);
+  }
+
+  return draftValues;
 }
 
 export function mergeDraftValuesWithDefinitions(
@@ -148,7 +202,7 @@ export function getAttributeDisplayValue(
     const lov = attribute.lovId ? definitions.lovsById[attribute.lovId] : undefined;
     return value
       .map((item) => {
-        const match = lov?.items.find((entry) => entry.value === item);
+        const match = typeof item === 'string' ? findLovItemByStoredValue(lov, item) : undefined;
         return match?.label ?? String(item);
       })
       .join(', ');
@@ -156,11 +210,18 @@ export function getAttributeDisplayValue(
 
   if (attribute.type === 'SELECT' && typeof value === 'string') {
     const lov = attribute.lovId ? definitions.lovsById[attribute.lovId] : undefined;
-    return lov?.items.find((item) => item.value === value)?.label ?? value;
+    return findLovItemByStoredValue(lov, value)?.label ?? value;
   }
 
   if (attribute.type === 'BOOLEAN') {
     return value ? 'Yes' : 'No';
+  }
+
+  if ((attribute.type === 'FILE' || attribute.type === 'IMAGE') && value && typeof value === 'object') {
+    const fileValue = value as Record<string, unknown>;
+    return typeof fileValue.fileName === 'string' && fileValue.fileName.trim().length > 0
+      ? fileValue.fileName
+      : 'Uploaded file';
   }
 
   if (attribute.type === 'GROUP' && value && typeof value === 'object' && attribute.fields?.length) {
@@ -173,7 +234,10 @@ export function getAttributeDisplayValue(
         }
 
         if (field.type === 'SELECT' && typeof childValue === 'string' && field.lovId) {
-          return definitions.lovsById[field.lovId]?.items.find((item) => item.value === childValue)?.label ?? childValue;
+          const parentValue = field.dependsOn && typeof objectValue[field.dependsOn] === 'string'
+            ? objectValue[field.dependsOn] as string
+            : undefined;
+          return findLovItemByStoredValue(definitions.lovsById[field.lovId], childValue, parentValue)?.label ?? childValue;
         }
 
         return String(childValue);

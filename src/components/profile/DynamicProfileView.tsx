@@ -1,9 +1,11 @@
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Alert, Linking, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 
 import { COLORS } from '../../constants';
 import { evaluateVisibleWhen, getAttributeDisplayValue, getAttributeValue, type ProfileDefinitions } from '../../profile-schema';
+import { getProfileAttributeDownloadUrl } from '../../services/api/riderApi';
+import { logger } from '../../utils/logger';
 import type { RiderProfile } from '../../types/rider';
 
 interface DynamicProfileViewProps {
@@ -12,11 +14,30 @@ interface DynamicProfileViewProps {
   excludedKeys?: string[];
 }
 
-function ProfileRow({ label, value }: { label: string; value: string }) {
+const TAG = 'DynamicProfileView';
+
+function ProfileRow({
+  label,
+  value,
+  actionLabel,
+  onActionPress,
+}: {
+  label: string;
+  value: string;
+  actionLabel?: string;
+  onActionPress?: () => void | Promise<void>;
+}) {
   return (
     <View style={styles.profileRow}>
       <Text style={styles.profileLabel}>{label}</Text>
-      <Text style={styles.profileValue}>{value}</Text>
+      <View style={styles.profileValueContainer}>
+        <Text style={styles.profileValue}>{value}</Text>
+        {actionLabel && onActionPress ? (
+          <TouchableOpacity onPress={() => void onActionPress()} style={styles.profileActionButton}>
+            <Text style={styles.profileActionText}>{actionLabel}</Text>
+          </TouchableOpacity>
+        ) : null}
+      </View>
     </View>
   );
 }
@@ -52,6 +73,22 @@ export function DynamicProfileView({ definitions, profile, excludedKeys = [] }: 
                 key={attribute.key}
                 label={attribute.label}
                 value={getAttributeDisplayValue(attribute, values[attribute.key], definitions)}
+                actionLabel={(attribute.type === 'FILE' || attribute.type === 'IMAGE') && values[attribute.key] ? 'View' : undefined}
+                onActionPress={(attribute.type === 'FILE' || attribute.type === 'IMAGE') && values[attribute.key]
+                  ? async () => {
+                    try {
+                      const response = await getProfileAttributeDownloadUrl(profile.profileId, attribute.key);
+                      if (!response.success || !response.data?.downloadUrl) {
+                        throw new Error(response.error?.message ?? 'Unable to open uploaded file.');
+                      }
+
+                      await Linking.openURL(response.data.downloadUrl);
+                    } catch (error) {
+                      logger.warn(TAG, 'Unable to open profile attribute file', error);
+                      Alert.alert('Unable to open file', error instanceof Error ? error.message : 'Please try again.');
+                    }
+                  }
+                  : undefined}
               />
             ))}
           </View>
@@ -88,7 +125,15 @@ const styles = StyleSheet.create({
     borderBottomColor: COLORS.borderLight,
   },
   profileLabel: { fontSize: 14, fontWeight: '700', color: COLORS.textSecondary, flex: 1 },
-  profileValue: { fontSize: 14, lineHeight: 20, color: COLORS.textPrimary, flex: 1.4, textAlign: 'right' },
+  profileValueContainer: { flex: 1.4, alignItems: 'flex-end', gap: 6 },
+  profileValue: { fontSize: 14, lineHeight: 20, color: COLORS.textPrimary, textAlign: 'right' },
+  profileActionButton: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
+    backgroundColor: COLORS.gray[100],
+  },
+  profileActionText: { fontSize: 13, fontWeight: '700', color: COLORS.primary },
 });
 
 export default DynamicProfileView;

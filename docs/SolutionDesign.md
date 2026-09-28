@@ -233,18 +233,25 @@ The app bootstrap flow wraps the full provider and navigation tree in a root `Er
 
 `TourContext` is the single owner of active-tour bootstrap. After a rider with a completed profile signs in, it refreshes the active tour snapshot once by calling `GET /v1/tours/active`, `GET /v1/tours/{tourId}/riders?profileId=...`, and `GET /v1/tours/{tourId}/rides`, replaces any previously cached active snapshot in SQLite, and then exposes active tour, active rides, and derived today's ride from that local cache to the rest of the app.
 
-`RiderContext` owns the configuration-driven profile bootstrap. At sign-in it refreshes `GET /v1/config`, extracts enabled rider profile sections/attributes/LOVs, caches the raw config locally, and keeps a session-scoped `ProfileDefinitions` snapshot in memory for the profile screens and the home summary card. If the refresh fails, it falls back to the cached copy; if no cached copy exists, the profile screens show a retryable error state.
+`RiderContext` owns the configuration-driven profile bootstrap. At sign-in it refreshes `GET /v1/config`, extracts enabled rider profile sections/attributes/LOVs, caches the raw config plus the server-provided `definitionsVersion` locally, and keeps a session-scoped `ProfileDefinitions` snapshot in memory for the profile screens and the home summary card. If the refresh fails, it falls back to the cached copy; if no cached copy exists, the profile screens show a retryable error state. When the config payload does not yet include `definitionsVersion`, the app falls back to the `definitionsVersion` returned by the rider profile response and never computes one locally.
 
 ### Dynamic Rider Profile Engine
 
 The rider profile is driven by a dedicated schema layer under `src/profile-schema/` that mirrors the backend contract in `kvijay77-in/tour-data-api/docs/rider-profile-attributes-design.md`.
 
-- **Definitions builder**: converts enabled AppConfig entries into ordered sections, attribute lookup maps, LOV lookup maps, and a deterministic `definitionsVersion`
+- **Definitions builder**: converts enabled AppConfig entries into ordered sections, attribute lookup maps, LOV lookup maps, and the server-supplied `definitionsVersion`
 - **Binding helpers**: read/write configured values through CORE paths (for example `name`, `phone`, `address`, `photoS3Key`) or through `profile.attributes.<key>`
+- **Legacy LOV normalization**: maps stored SELECT values by configured LOV `value` or `label` (case-insensitive) when drafts are loaded, while preserving unmatched raw legacy values for display
 - **Visibility and validation**: evaluates `visibleWhen`, applies backend-aligned validation for the supported field types, and enforces rider-facing required checks on save
 - **Payload builder**: sends only changed CORE fields plus changed `attributes`, never sends disabled/unknown/admin-only keys, and always includes `definitionsVersion`
 - **Handler registry**: isolates special frontend behavior such as `PROFILE_PHOTO`, `COGNITO_EMAIL`, and `PERSONAL_CODE`
 - **Field registry**: renders each configured field type through reusable dynamic form/view components while preserving the existing screen styling patterns
+
+Configured LOVs are the only source for rider-facing select lists. The form does not replace COUNTRY/STATE or other LOV-backed selects with built-in option lists. Dependent selects continue to filter on the configured parent value, and when a configured dependent select has no child items and `fallbackToText` is enabled, the UI switches that field to free text entry.
+
+Phone entry still uses a searchable country dialing-code selector, but it is now derived from the configured COUNTRY LOV `meta.callingCode` values. The built-in `countries-list` dataset is only used as a fallback when the COUNTRY LOV is unavailable.
+
+Configured `IMAGE` and `FILE` attributes share the backend’s profile-attribute upload contract. Before upload, the client validates MIME type and size using the field validation metadata. For inline image uploads, the app requests a presigned URL with both `contentType` and `sizeBytes`, uploads the binary with `PUT`, and stores `{ s3Key, fileName, contentType, sizeBytes, uploadedAt }` in `profile.attributes.<key>`. The current build supports inline upload only for `IMAGE` attributes because `expo-document-picker` is not installed; `FILE` attributes still support view/download through the backend download URL flow.
 
 ### Local State
 

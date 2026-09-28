@@ -94,6 +94,7 @@ export interface ProfileFieldDefinition {
   label: string;
   helpText?: string;
   placeholder?: string;
+  defaultValue?: unknown;
   type: ProfileFieldType;
   lovId?: string;
   validation?: ProfileValidationRules;

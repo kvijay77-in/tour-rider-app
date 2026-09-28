@@ -120,9 +120,13 @@ export async function requestProfileAttributeUploadUrl(
   profileId: string,
   attributeKey: string,
   contentType?: string,
+  sizeBytes?: number,
 ): Promise<ApiResponse<ProfileAttributeFileUrlResponse>> {
   logger.info(TAG, `Requesting upload URL for profile attribute ${attributeKey}`);
-  const payload = contentType ? { contentType } : {};
+  const payload = {
+    ...(contentType ? { contentType } : {}),
+    ...(typeof sizeBytes === 'number' ? { sizeBytes } : {}),
+  };
   return apiClient.post<ProfileAttributeFileUrlResponse>(
     `/v1/riders/profile/${encodeURIComponent(profileId)}/attributes/${encodeURIComponent(attributeKey)}/upload`,
     payload,

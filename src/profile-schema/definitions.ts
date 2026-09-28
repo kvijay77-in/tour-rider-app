@@ -31,6 +31,7 @@ function normalizeFieldDefinition(key: string, config: Record<string, unknown>):
     label: String(config.label ?? key),
     ...(typeof config.helpText === 'string' ? { helpText: config.helpText } : {}),
     ...(typeof config.placeholder === 'string' ? { placeholder: config.placeholder } : {}),
+    ...('defaultValue' in config ? { defaultValue: config.defaultValue } : {}),
     type: String(config.type ?? 'TEXT') as ProfileFieldDefinition['type'],
     ...(typeof config.lovId === 'string' ? { lovId: config.lovId } : {}),
     ...(config.validation && typeof config.validation === 'object'
@@ -128,15 +129,7 @@ function toLov(entry: AppConfigEntry<Record<string, unknown>>): ProfileLovDefini
   };
 }
 
-function buildDefinitionsVersion(entries: AppConfigEntry[]): string {
-  return entries
-    .filter((entry) => entry.enabled)
-    .map((entry) => `${entry.configType}:${entry.configId}:${String(entry.version)}`)
-    .sort((first, second) => first.localeCompare(second))
-    .join('|');
-}
-
-export function buildProfileDefinitions(entries: AppConfigEntry[]): ProfileDefinitions {
+export function buildProfileDefinitions(entries: AppConfigEntry[], definitionsVersion?: string): ProfileDefinitions {
   const relevantEntries = entries.filter((entry) => (
     entry.configType === PROFILE_SECTION_CONFIG_TYPE
     || entry.configType === PROFILE_ATTRIBUTE_CONFIG_TYPE
@@ -174,7 +167,7 @@ export function buildProfileDefinitions(entries: AppConfigEntry[]): ProfileDefin
     .filter((entry): entry is ProfileLovDefinition => Boolean(entry));
 
   return {
-    definitionsVersion: buildDefinitionsVersion(relevantEntries),
+    definitionsVersion: definitionsVersion ?? '',
     sections: sectionsWithAttributes,
     orderedAttributes,
     attributesByKey: Object.fromEntries(orderedAttributes.map((attribute) => [attribute.key, attribute])),

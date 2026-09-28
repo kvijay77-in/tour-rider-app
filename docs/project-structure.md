@@ -212,8 +212,8 @@ Screen-level components, one per screen. Organized by feature area.
 
 ### `/src/profile-schema`
 Configuration-driven rider profile engine:
-- **definitions.ts**: Builds ordered sections, LOV maps, and `definitionsVersion` from AppConfig payloads
-- **bindings.ts**: Reads and writes values through CORE bindings and dynamic `attributes`
+- **definitions.ts**: Builds ordered sections, LOV maps, and the server-sourced `definitionsVersion` from AppConfig payloads
+- **bindings.ts**: Reads and writes values through CORE bindings and dynamic `attributes`, including legacy LOV label-to-value normalization
 - **validation.ts**: Applies shared schema-driven validation rules
 - **payload.ts**: Builds save payloads that only include changed rider-editable values
 - **handlers.ts**: Isolates special frontend handlers such as profile photo and Cognito email

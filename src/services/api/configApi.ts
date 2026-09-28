@@ -5,7 +5,11 @@ import type { AppConfigEntry } from '../../profile-schema';
 
 const TAG = 'ConfigApi';
 
-function normalizeConfigPayload(payload: unknown): PaginatedResponse<AppConfigEntry> {
+export interface ConfigEntriesResponse extends PaginatedResponse<AppConfigEntry> {
+  definitionsVersion?: string;
+}
+
+function normalizeConfigPayload(payload: unknown): ConfigEntriesResponse {
   if (Array.isArray(payload)) {
     return { items: payload as AppConfigEntry[] };
   }
@@ -24,23 +28,24 @@ function normalizeConfigPayload(payload: unknown): PaginatedResponse<AppConfigEn
 
   return {
     items: items as AppConfigEntry[],
+    ...(typeof response.definitionsVersion === 'string' ? { definitionsVersion: response.definitionsVersion } : {}),
     ...(typeof response.nextToken === 'string' ? { nextToken: response.nextToken } : {}),
     ...(typeof response.total === 'number' ? { total: response.total } : {}),
   };
 }
 
-export async function getAppConfigEntries(): Promise<ApiResponse<PaginatedResponse<AppConfigEntry>>> {
+export async function getAppConfigEntries(): Promise<ApiResponse<ConfigEntriesResponse>> {
   logger.debug(TAG, 'Fetching application config entries');
   const response = await apiClient.get<unknown>('/v1/config', {
     isExpectedError: (error) => error.statusCode >= 400 && error.statusCode < 500,
   });
 
   if (!response.success) {
-    return response as ApiResponse<PaginatedResponse<AppConfigEntry>>;
+    return response as ApiResponse<ConfigEntriesResponse>;
   }
 
   return {
     ...response,
     data: normalizeConfigPayload(response.data),
-  } as ApiResponse<PaginatedResponse<AppConfigEntry>>;
+  } as ApiResponse<ConfigEntriesResponse>;
 }
