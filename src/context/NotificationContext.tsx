@@ -13,6 +13,7 @@ import {
 import {
   configureForegroundNotificationHandler,
   registerPushTokenForCurrentUser,
+  unregisterPushTokenForCurrentUser,
 } from '../services/push/pushService';
 import { logger } from '../utils/logger';
 import { navigationRef } from '../navigation/navigationRef';
@@ -116,6 +117,7 @@ function navigateForNotificationTarget(target: NotificationTargetPayload, fallba
 export function NotificationProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   const { hasProfile } = useRider();
+  const userId = user?.userId ?? null;
 
   const [items, setItems] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -214,11 +216,21 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   }, [hasProfile, isApiAvailable, user]);
 
   useEffect(() => {
-    if (!user || !hasProfile) {
+    if (!userId || !hasProfile) {
       setItems([]);
       setUnreadCount(0);
       setIsApiAvailable(true);
       setIsRefreshing(false);
+      return;
+    }
+
+    return () => {
+      void unregisterPushTokenForCurrentUser();
+    };
+  }, [hasProfile, userId]);
+
+  useEffect(() => {
+    if (!user || !hasProfile) {
       return;
     }
 

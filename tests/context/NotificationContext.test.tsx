@@ -23,6 +23,7 @@ jest.mock('../../src/services/api/notificationApi', () => ({
 jest.mock('../../src/services/push/pushService', () => ({
   configureForegroundNotificationHandler: jest.fn(),
   registerPushTokenForCurrentUser: jest.fn(),
+  unregisterPushTokenForCurrentUser: jest.fn(),
 }));
 
 jest.mock('../../src/navigation/navigationRef', () => ({
@@ -66,6 +67,10 @@ const { addNotificationReceivedListener, addNotificationResponseReceivedListener
 ) as {
   addNotificationReceivedListener: jest.Mock;
   addNotificationResponseReceivedListener: jest.Mock;
+};
+
+const { unregisterPushTokenForCurrentUser } = jest.requireMock('../../src/services/push/pushService') as {
+  unregisterPushTokenForCurrentUser: jest.Mock;
 };
 
 const { navigationRef } = jest.requireMock('../../src/navigation/navigationRef') as {
@@ -235,5 +240,22 @@ describe('NotificationContext', () => {
     expect(navigationRef.navigate).toHaveBeenCalledWith('ViewProfile');
 
     act(() => renderer!.unmount());
+  });
+
+  it('cleans up push token registration on provider unmount', async () => {
+    getNotifications.mockResolvedValue({ success: true, data: { items: [], unreadCount: 0 }, timestamp: '' });
+
+    let renderer: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      renderer = TestRenderer.create(
+        <NotificationProvider>
+          <Consumer />
+        </NotificationProvider>,
+      );
+    });
+
+    act(() => renderer!.unmount());
+
+    expect(unregisterPushTokenForCurrentUser).toHaveBeenCalled();
   });
 });

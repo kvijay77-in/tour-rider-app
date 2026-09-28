@@ -113,18 +113,23 @@ export async function registerPushTokenForCurrentUser(): Promise<string | null> 
 
   try {
     const response = await registerPushDevice(token, platform);
-    if (response.success || isNotificationsApiUnavailable(response)) {
+    if (response.success) {
       cachedExpoPushToken = token;
-    } else {
-      cachedExpoPushToken = null;
+      return token;
+    }
+
+    cachedExpoPushToken = null;
+    if (!isNotificationsApiUnavailable(response)) {
       logger.warn(TAG, response.error?.message ?? 'Push registration failed');
+    } else {
+      logger.info(TAG, 'Notifications API unavailable. Push token not registered with backend yet.');
     }
   } catch (error) {
     cachedExpoPushToken = null;
     logger.warn(TAG, 'Push registration request failed', error);
   }
 
-  return token;
+  return null;
 }
 
 export async function unregisterPushTokenForCurrentUser(): Promise<void> {
