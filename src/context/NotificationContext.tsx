@@ -194,7 +194,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   }, [hasProfile, user]);
 
   const markAllRead = useCallback(async () => {
-    if (!isApiAvailable) {
+    if (!user || !hasProfile || !isApiAvailable) {
       return;
     }
 
@@ -211,10 +211,14 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     } catch (error) {
       logger.warn(TAG, 'Failed to mark notifications as read', error);
     }
-  }, [isApiAvailable]);
+  }, [hasProfile, isApiAvailable, user]);
 
   useEffect(() => {
     if (!user || !hasProfile) {
+      setItems([]);
+      setUnreadCount(0);
+      setIsApiAvailable(true);
+      setIsRefreshing(false);
       return;
     }
 
@@ -262,6 +266,10 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   }, [refreshUnreadCount]);
 
   useEffect(() => {
+    if (Platform.OS === 'web') {
+      return;
+    }
+
     const receivedSubscription = Notifications.addNotificationReceivedListener((notification) => {
       const channelId = notification.request.content?.data?.channelId;
       if (channelId === 'urgent' || channelId === 'general') {

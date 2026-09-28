@@ -3,7 +3,7 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -112,9 +112,14 @@ export function HomeScreen({ navigation, route }: Props) {
               <Text style={styles.newsSubtitle}>No notifications yet.</Text>
             )}
 
-            <Text style={styles.newsLink} onPress={() => navigation.navigate('Notifications')}>
-              Open notifications inbox
-            </Text>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Open notifications inbox"
+              onPress={() => navigation.navigate('Notifications')}
+              style={({ pressed }) => [styles.newsLinkButton, pressed ? styles.newsLinkPressed : null]}
+            >
+              <Text style={styles.newsLink}>Open notifications inbox</Text>
+            </Pressable>
           </Card>
         </View>
       </View>
@@ -201,10 +206,16 @@ const styles = StyleSheet.create({
     color: COLORS.textDisabled,
   },
   newsLink: {
-    marginTop: 6,
     fontSize: 13,
     color: COLORS.primary,
     fontWeight: '600',
+  },
+  newsLinkButton: {
+    alignSelf: 'flex-start',
+    marginTop: 6,
+  },
+  newsLinkPressed: {
+    opacity: 0.7,
   },
 });
 

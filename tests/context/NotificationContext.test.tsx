@@ -193,6 +193,10 @@ describe('NotificationContext', () => {
 
     expect(getNotifications).toHaveBeenCalledTimes(2);
 
+    const payload = renderer!.root.findByType('Text').props.children as string;
+    const parsed = JSON.parse(payload) as { unreadCount: number };
+    expect(parsed.unreadCount).toBe(1);
+
     act(() => renderer!.unmount());
   });
 

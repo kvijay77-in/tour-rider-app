@@ -111,14 +111,16 @@ export async function registerPushTokenForCurrentUser(): Promise<string | null> 
     return null;
   }
 
-  cachedExpoPushToken = token;
-
   try {
     const response = await registerPushDevice(token, platform);
-    if (!response.success && !isNotificationsApiUnavailable(response)) {
+    if (response.success || isNotificationsApiUnavailable(response)) {
+      cachedExpoPushToken = token;
+    } else {
+      cachedExpoPushToken = null;
       logger.warn(TAG, response.error?.message ?? 'Push registration failed');
     }
   } catch (error) {
+    cachedExpoPushToken = null;
     logger.warn(TAG, 'Push registration request failed', error);
   }
 
