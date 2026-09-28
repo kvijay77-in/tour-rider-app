@@ -199,7 +199,13 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     }
 
     try {
-      await markAllNotificationsRead();
+      const response = await markAllNotificationsRead();
+      if (!response.success) {
+        if (!isNotificationsApiUnavailable(response)) {
+          logger.warn(TAG, response.error?.message ?? 'Failed to mark notifications as read');
+        }
+        return;
+      }
       setItems((previousItems) => previousItems.map((item) => ({ ...item, isRead: true })));
       setUnreadCount(0);
     } catch (error) {

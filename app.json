@@ -51,9 +51,6 @@
         "appSlug": "tour-rider-app",
         "iosBundleId": "com.tourrider.app",
         "androidPackage": "com.tourrider.app"
-      },
-      "eas": {
-        "projectId": ""
       }
     }
   }
