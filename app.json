@@ -7,11 +7,6 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "scheme": "tour-rider-app",
-    "splash": {
-      "image": "./assets/splash-icon.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
-    },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.tourrider.app"
@@ -34,10 +29,19 @@
           "cameraPermission": "The app accesses your camera to let you take a profile picture."
         }
       ],
+      [
+        "expo-splash-screen",
+        {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+        }
+      ],
       "@react-native-community/datetimepicker",
       "expo-font",
       "expo-secure-store",
-      "expo-status-bar"
+      "expo-status-bar",
+      "expo-sqlite"
     ],
     "extra": {
       "_comment": "For single-subscription mode builds, customize these values for the specific organizer:",

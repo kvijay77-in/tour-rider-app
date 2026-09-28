@@ -115,8 +115,9 @@ export function RiderProvider({ children }: RiderProviderProps) {
   const definitionsSessionKey = user?.userId ?? user?.profileId ?? user?.email ?? null;
   const [profile, setProfile] = useState<RiderProfile | null>(null);
   const [profileDefinitions, setProfileDefinitions] = useState<ProfileDefinitions | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [isLoadingDefinitions, setIsLoadingDefinitions] = useState(false);
+  // Start as loading when a fetch is pending so the profile gate doesn't fire before the first load.
+  const [isLoading, setIsLoading] = useState(Boolean(user?.profileId));
+  const [isLoadingDefinitions, setIsLoadingDefinitions] = useState(Boolean(definitionsSessionKey));
   const [error, setError] = useState<string | null>(null);
   const [definitionsError, setDefinitionsError] = useState<string | null>(null);
   const hasProfile = profile !== null;
