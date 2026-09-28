@@ -85,7 +85,7 @@ export function getDefaultFieldValue(
   }
 
   if (definition.type === 'SELECT' && definition.lovId === 'COUNTRY') {
-    return definitions?.lovsById.COUNTRY?.items[0]?.value;
+    return getLovItems(definitions?.lovsById.COUNTRY)[0]?.value;
   }
 
   if (definition.type === 'MULTI_SELECT') {

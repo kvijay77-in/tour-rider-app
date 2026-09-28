@@ -672,6 +672,23 @@ function FileField({
   const [isUploading, setIsUploading] = useState(false);
   const fileValue = value && typeof value === 'object' ? value as ProfileFileValue : undefined;
 
+  const inferMimeType = (fileNameOrUri: string): string | undefined => {
+    const lowerCaseValue = fileNameOrUri.toLowerCase();
+    if (lowerCaseValue.endsWith('.jpg') || lowerCaseValue.endsWith('.jpeg')) {
+      return 'image/jpeg';
+    }
+    if (lowerCaseValue.endsWith('.png')) {
+      return 'image/png';
+    }
+    if (lowerCaseValue.endsWith('.webp')) {
+      return 'image/webp';
+    }
+    if (lowerCaseValue.endsWith('.gif')) {
+      return 'image/gif';
+    }
+    return undefined;
+  };
+
   const ensureProfileId = async (): Promise<string> => {
     if (user?.profileId) {
       return user.profileId;
@@ -715,7 +732,7 @@ function FileField({
       }
 
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'],
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
         quality: 1,
       });
       const asset = result.canceled ? undefined : result.assets[0];
@@ -723,7 +740,11 @@ function FileField({
         return;
       }
 
-      const contentType = asset.mimeType ?? 'image/jpeg';
+      const contentType = asset.mimeType ?? inferMimeType(asset.fileName ?? asset.uri);
+      if (!contentType) {
+        Alert.alert('Unsupported image', `Unable to determine the file type for ${definition.label}. Please choose a PNG, JPEG, WEBP, or GIF image.`);
+        return;
+      }
       const sizeBytes = asset.fileSize ?? 0;
       const allowedMimeTypes = definition.validation?.allowedMimeTypes;
       if (allowedMimeTypes?.length && !allowedMimeTypes.includes(contentType)) {
@@ -795,7 +816,16 @@ function FileField({
           >
             <Text style={styles.fileActionText}>{isUploading ? 'Uploading…' : fileValue?.s3Key ? 'Replace' : 'Upload'}</Text>
           </TouchableOpacity>
-        ) : null}
+        ) : (
+          <TouchableOpacity
+            style={[styles.fileActionButton, styles.fileActionButtonDisabled]}
+            disabled
+            accessibilityRole="button"
+            accessibilityLabel={`Upload ${definition.label} unavailable in this build`}
+          >
+            <Text style={[styles.fileActionText, styles.fileActionTextDisabled]}>Upload unavailable</Text>
+          </TouchableOpacity>
+        )}
       </View>
       {definition.type === 'FILE' ? (
         <Text style={styles.unsupportedText}>File uploads require document picker support, which is not installed in this build.</Text>
@@ -1070,10 +1100,16 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     backgroundColor: COLORS.gray[100],
   },
+  fileActionButtonDisabled: {
+    opacity: 0.65,
+  },
   fileActionText: {
     fontSize: 13,
     fontWeight: '700',
     color: COLORS.primary,
+  },
+  fileActionTextDisabled: {
+    color: COLORS.textSecondary,
   },
   modalSafeArea: {
     flex: 1,
