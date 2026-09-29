@@ -29,6 +29,7 @@ import {
 import { setAuthTokenProvider, setAuthInvalidatedCallback } from '../services/api/apiClient';
 import { ApiError } from '../services/api/apiClient';
 import { getLinkedProfileId } from '../services/api/riderApi';
+import { unregisterPushTokenForCurrentUser } from '../services/push/pushService';
 import { clearActiveTourCache } from '../services/activeTourStore';
 import { clearProfileDefinitionsCache } from '../services/profileConfigStore';
 import { logger } from '../utils/logger';
@@ -460,6 +461,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   const logout = useCallback(async (): Promise<void> => {
     try {
+      await unregisterPushTokenForCurrentUser();
       await signOut();
       logger.info(TAG, 'Logout successful');
     } catch {

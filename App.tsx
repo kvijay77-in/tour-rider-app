@@ -18,6 +18,7 @@ import { ErrorBoundary } from './src/components/common/ErrorBoundary';
 import { configureAmplify } from './src/config/amplify';
 import { AuthProvider } from './src/context/AuthContext';
 import { RootNavigator } from './src/navigation/RootNavigator';
+import { navigationRef } from './src/navigation/navigationRef';
 
 // Configure Amplify Auth on app start
 configureAmplify();
@@ -28,7 +29,7 @@ export default function App() {
       <SafeAreaProvider>
         <AuthProvider>
           <StatusBar style="auto" />
-          <NavigationContainer>
+          <NavigationContainer ref={navigationRef}>
             <RootNavigator />
           </NavigationContainer>
         </AuthProvider>

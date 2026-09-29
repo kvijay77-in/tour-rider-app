@@ -2,7 +2,14 @@
  * Unit tests for src/services/api/notificationApi.ts
  */
 
-import { getTourNotifications, markNotificationRead } from '../../src/services/api/notificationApi';
+import {
+  deletePushDevice,
+  getNotifications,
+  getUnreadNotificationCount,
+  isNotificationsApiUnavailable,
+  markAllNotificationsRead,
+  registerPushDevice,
+} from '../../src/services/api/notificationApi';
 import { apiClient } from '../../src/services/api/apiClient';
 
 jest.mock('../../src/services/api/apiClient', () => ({
@@ -19,52 +26,94 @@ jest.mock('../../src/utils/logger', () => ({
 }));
 
 const mockedGet = apiClient.get as jest.MockedFunction<typeof apiClient.get>;
+const mockedPost = apiClient.post as jest.MockedFunction<typeof apiClient.post>;
 const mockedPut = apiClient.put as jest.MockedFunction<typeof apiClient.put>;
+const mockedDelete = apiClient.delete as jest.MockedFunction<typeof apiClient.delete>;
 
 beforeEach(() => {
   jest.clearAllMocks();
 });
 
-describe('getTourNotifications', () => {
-  it('calls GET /v1/tours/{tourId}/notifications', async () => {
-    mockedGet.mockResolvedValueOnce({
-      success: true,
-      data: { items: [{ notificationId: 'N1', title: 'Test' }] },
-      timestamp: '',
-    });
+describe('push device endpoints', () => {
+  it('registers push device token with platform', async () => {
+    mockedPost.mockResolvedValueOnce({ success: true, timestamp: '' });
 
-    const result = await getTourNotifications('T1');
-    expect(mockedGet).toHaveBeenCalledWith('/v1/tours/T1/notifications', { params: undefined });
-    expect(result.data?.items).toHaveLength(1);
+    await registerPushDevice('ExponentPushToken[abc]', 'ios');
+
+    expect(mockedPost).toHaveBeenCalledWith('/v1/notifications/devices', {
+      token: 'ExponentPushToken[abc]',
+      platform: 'ios',
+    });
   });
 
-  it('forwards query params', async () => {
-    mockedGet.mockResolvedValueOnce({ success: true, data: { items: [] }, timestamp: '' });
-    await getTourNotifications('T1', { unreadOnly: 'true' });
-    expect(mockedGet).toHaveBeenCalledWith('/v1/tours/T1/notifications', { params: { unreadOnly: 'true' } });
+  it('deletes push device token with url encoding', async () => {
+    mockedDelete.mockResolvedValueOnce({ success: true, timestamp: '' });
+
+    await deletePushDevice('ExponentPushToken[a/b]');
+
+    expect(mockedDelete).toHaveBeenCalledWith(
+      `/v1/notifications/devices/${encodeURIComponent('ExponentPushToken[a/b]')}`,
+    );
   });
 });
 
-describe('markNotificationRead', () => {
-  it('calls PUT to mark notification as read', async () => {
-    mockedPut.mockResolvedValueOnce({
-      success: true,
-      data: { notificationId: 'N1', isRead: true },
-      timestamp: '',
-    });
+describe('notification inbox endpoints', () => {
+  it('gets notifications with query params', async () => {
+    mockedGet.mockResolvedValueOnce({ success: true, data: { items: [], unreadCount: 0 }, timestamp: '' });
 
-    await markNotificationRead('T1', 'N1');
-    expect(mockedPut).toHaveBeenCalledWith(
-      '/v1/tours/T1/notifications/N1',
-      { isRead: true },
-    );
+    await getNotifications({ since: '2026-09-28T00:00:00.000Z', limit: 20 });
+
+    expect(mockedGet).toHaveBeenCalledWith('/v1/notifications', {
+      params: {
+        since: '2026-09-28T00:00:00.000Z',
+        limit: '20',
+      },
+      returnErrorResponseForStatuses: [404, 501],
+    });
   });
 
-  it('encodes IDs with special characters', async () => {
+  it('gets unread count with graceful not-deployed statuses', async () => {
+    mockedGet.mockResolvedValueOnce({ success: true, data: { unreadCount: 2 }, timestamp: '' });
+
+    await getUnreadNotificationCount();
+
+    expect(mockedGet).toHaveBeenCalledWith('/v1/notifications/unread-count', {
+      returnErrorResponseForStatuses: [404, 501],
+    });
+  });
+
+  it('marks all notifications read with optional readAt', async () => {
     mockedPut.mockResolvedValueOnce({ success: true, timestamp: '' });
-    await markNotificationRead('T/1', 'N/1');
-    const path = mockedPut.mock.calls[0][0];
-    expect(path).toContain(encodeURIComponent('T/1'));
-    expect(path).toContain(encodeURIComponent('N/1'));
+
+    await markAllNotificationsRead({ readAt: '2026-09-28T10:00:00.000Z' });
+
+    expect(mockedPut).toHaveBeenCalledWith('/v1/notifications/read', {
+      readAt: '2026-09-28T10:00:00.000Z',
+    });
+  });
+});
+
+describe('isNotificationsApiUnavailable', () => {
+  it('returns true for 404/501 response codes', () => {
+    expect(isNotificationsApiUnavailable({
+      success: false,
+      error: { code: 'HTTP_404', message: 'missing' },
+      timestamp: '',
+    })).toBe(true);
+
+    expect(isNotificationsApiUnavailable({
+      success: false,
+      error: { code: 'HTTP_501', message: 'not implemented' },
+      timestamp: '',
+    })).toBe(true);
+  });
+
+  it('returns false for other responses', () => {
+    expect(isNotificationsApiUnavailable({ success: true, data: {}, timestamp: '' })).toBe(false);
+    expect(isNotificationsApiUnavailable({
+      success: false,
+      error: { code: 'HTTP_500', message: 'server error' },
+      timestamp: '',
+    })).toBe(false);
   });
 });

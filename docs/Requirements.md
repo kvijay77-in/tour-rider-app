@@ -305,19 +305,20 @@ Riders receive notifications from tour organizers throughout the tour.
 
 #### Notification Features
 - In-app notification center with unread count badge
-- Push notifications (if permissions granted)
+- Push notifications are the primary delivery channel on mobile (if permissions granted)
+- Inbox API is source of truth for message state and unread count
 - Notifications sorted by date (newest first)
-- Mark as read/unread
-- Notification details view with full message
-- Archive old notifications
-- Filter by notification type
+- Mark all as read on inbox open
+- Unknown notification targets open the Notifications inbox as fallback
 
 #### Push Notification Implementation
-- Request notification permissions on first app launch
+- Request notification permissions only after sign-in and profile availability
 - Device token registered with tour-data-api
-- Notifications sent via AWS SNS or similar service
+- Notifications sent via Expo Push Service (backend-managed credentials)
 - Notifications work when app is in background or closed
-- Notification settings in rider profile
+- Web uses bell + inbox only (no push registration)
+- Push token is not treated as an app secret; Expo access token remains backend-only (SSM)
+- Expo `projectId` is sourced from `app.json` `expo.extra.eas.projectId` (no new `EXPO_PUBLIC` variable)
 
 ## Self-Service Features
 
@@ -458,7 +459,11 @@ Each tour organizer has their own dedicated tour-data-api deployment (API Gatewa
 | `GET /v1/tours/{tourId}/rides/today` | Get today's ride |
 | `GET /v1/tours/{tourId}/rides/{rideId}/checkins` | Get rider's check-ins for a ride |
 | `POST /v1/tours/{tourId}/checkins` | Submit Not Riding or Quit Riding check-in |
-| `GET /v1/tours/{tourId}/notifications` | Get tour notifications (requires backend extension) |
+| `POST /v1/notifications/devices` | Register mobile push token (`{ token, platform }`) |
+| `DELETE /v1/notifications/devices/{token}` | Deregister push token on sign-out |
+| `GET /v1/notifications` | Get rider notifications (`since`, `limit`) |
+| `GET /v1/notifications/unread-count` | Get unread notification count |
+| `PUT /v1/notifications/read` | Mark inbox notifications as read (`readAt?`) |
 
 ### Backend Extensions Required
 
@@ -479,7 +484,7 @@ The tour-data-api may need to be extended to support:
 - **Profile data**: Stored in the organizer's `RiderProfile` DynamoDB table (within organizer's data infrastructure)
 - **Tour enrollment**: Stored in the organizer's `TourRider-{tourId}` DynamoDB table
 - **Check-ins**: Stored in the organizer's `CheckIn-{tourId}` DynamoDB table
-- **Notifications**: Stored in the organizer's infrastructure (table: `Notification-{tourId}`)
+- **Notifications**: Stored in organizer notification tables (`RiderNotification` + `Notification-{tourId}`), targeted by rider `profileId`
 - **Profile pictures**: Stored in the organizer's S3 bucket via tour-data-api upload endpoint
 - **Invitations**: Stored in the organizer's `Invitation` DynamoDB table
 

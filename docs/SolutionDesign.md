@@ -213,6 +213,7 @@ The app uses React Context for global state:
 | **AuthContext** | Authentication state | User info, JWT tokens, login/logout |
 | **RiderContext** | Rider profile state | Profile data, profile-exists flag, picture upload flow |
 | **TourContext** | Tour enrollment state | Active tour, enrollment status, cached active rides, derived today's ride |
+| **NotificationContext** | Notification state | Notification inbox items, unread count, refresh/mark-all-read, push/web refresh triggers |
 
 **Provider Order** (in `App.tsx` and navigation subtree):
 ```
@@ -224,7 +225,8 @@ ErrorBoundary
         → AppNavigator (authenticated)
           → RiderContext (depends on auth for profile loading)
             → TourContext (depends on rider for enrollment check)
-              → MainNavigator
+              → NotificationContext (depends on authenticated rider profile)
+                → MainNavigator
 ```
 
 The app bootstrap flow wraps the full provider and navigation tree in a root `ErrorBoundary`. This prevents a blank screen on unhandled render-time failures and routes boundary diagnostics through the centralized logger.
@@ -265,7 +267,7 @@ Screen-specific and component-specific state uses `useState` and `useReducer` ho
 
 State that can be computed from other state should not be stored separately. Examples:
 - Rider's current enrollment status (derived from TourContext)
-- Unread notification count (derived from notifications array)
+- Unread notification count (provided by NotificationContext and backend unread-count endpoint)
 - Today's ride (derived from the cached active rides array + current UTC date)
 
 ---
@@ -371,7 +373,21 @@ Each tour organizer has their own dedicated tour-data-api deployment as part of 
 | `tourRegistrationApi.ts` | `POST /v1/tours/{tourId}/riders` | Tour registration requests |
 | `rideApi.ts` | `GET /v1/tours/{tourId}/rides/today`, GET rides | Ride information |
 | `checkInApi.ts` | `GET /v1/tours/{tourId}/rides/{rideId}/checkins`, POST | Check-in viewing and self-service (Not Riding, Quit Riding for current ride) |
-| `notificationApi.ts` | `GET /v1/tours/{tourId}/notifications` | Notifications (requires backend extension) |
+| `notificationApi.ts` | `POST /v1/notifications/devices`, `DELETE /v1/notifications/devices/{token}`, `GET /v1/notifications`, `GET /v1/notifications/unread-count`, `PUT /v1/notifications/read` | Notification inbox and push-device registration |
+
+### Notification Flow
+
+- Mobile app registers Expo push token after sign-in once rider profile exists (never on first app launch before auth).
+- Backend push sender delivers push through Expo/FCM/APNs.
+- App refreshes notification inbox/unread badge on:
+  - App foreground
+  - Foreground push received
+  - Inbox open
+  - Web focus and 5-minute polling
+- Push tap target routing uses fixed allow-list: `NOTIFICATIONS`, `TOUR`, `RIDE_DETAILS`, `PROFILE`; unknown targets fall back to Notifications inbox.
+- Notifications API `404/501` is treated as not deployed yet: badge hidden, no noisy error spam.
+- Push token is not treated as a secret in-app; Expo access token remains backend-only in SSM.
+- Expo push `projectId` is read from `app.json` `expo.extra.eas.projectId` (no new `EXPO_PUBLIC` push token variable).
 
 ### API Client Features
 
@@ -519,7 +535,7 @@ The active log level is set via the `EXPO_PUBLIC_LOG_LEVEL` environment variable
 - **Primary platform** — full feature set including profile picture upload, notifications
 - **Portrait orientation** by default (configured in `app.json`)
 - **Camera permission** required for profile picture (camera or photo library)
-- **Notification permission** required for push notifications
+- **Notification permission** requested after sign-in when profile exists (push registration)
 - **Expo Go** for development; Expo EAS Build for production
 
 ### Web
@@ -527,6 +543,7 @@ The active log level is set via the `EXPO_PUBLIC_LOG_LEVEL` environment variable
 - **Simplified version** — Dashboard and profile views primarily
 - **Built with react-native-web** — same codebase, automatic web rendering
 - **Responsive layout** — adapts to browser window size
+- **Notifications** — bell + inbox only (no Expo push registration on web)
 
 ### Platform-Specific Notes
 

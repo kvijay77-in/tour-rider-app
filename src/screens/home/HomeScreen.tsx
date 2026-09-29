@@ -1,9 +1,9 @@
 /**
- * Home screen with profile summary, quick navigation cards, and announcements placeholder.
+ * Home screen with profile summary, quick navigation cards, and latest notifications.
  */
 
 import React, { useEffect, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -13,7 +13,8 @@ import { LoadingSpinner } from '../../components/common/LoadingSpinner';
 import { ProfileSummaryCard } from '../../components/home/ProfileSummaryCard';
 import { HomeSectionCard } from '../../components/home/HomeSectionCard';
 import { useRider } from '../../hooks/useRider';
-import { logger } from '../../utils/logger';
+import { useNotifications } from '../../hooks/useNotifications';
+import { getRelativeTime } from '../../utils/dateFormatter';
 
 interface HomeNavigation {
   navigate: (screen: string, params?: Record<string, unknown>) => void;
@@ -33,6 +34,7 @@ interface Props {
 
 export function HomeScreen({ navigation, route }: Props) {
   const { profile, isLoading } = useRider();
+  const { latestItems } = useNotifications();
 
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
@@ -89,9 +91,35 @@ export function HomeScreen({ navigation, route }: Props) {
 
         <View style={styles.rowThree}>
           <Card style={styles.newsCard}>
-            <Ionicons name="construct-outline" size={48} color={COLORS.textSecondary} />
-            <Text style={styles.newsTitle}>Announcements & News</Text>
-            <Text style={styles.newsSubtitle}>Under Construction</Text>
+            <View style={styles.newsHeader}>
+              <Ionicons name="notifications-outline" size={20} color={COLORS.textPrimary} />
+              <Text style={styles.newsTitle}>Latest Notifications</Text>
+            </View>
+
+            {latestItems.length ? latestItems.map((item) => (
+              <View key={item.notificationId} style={styles.notificationRow}>
+                <View style={styles.notificationTextBlock}>
+                  <Text style={styles.notificationTitle} numberOfLines={1}>
+                    {item.title}
+                  </Text>
+                  <Text style={styles.notificationBody} numberOfLines={2}>
+                    {item.body}
+                  </Text>
+                </View>
+                <Text style={styles.notificationTime}>{getRelativeTime(item.createdAt)}</Text>
+              </View>
+            )) : (
+              <Text style={styles.newsSubtitle}>No notifications yet.</Text>
+            )}
+
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Open notifications inbox"
+              onPress={() => navigation.navigate('Notifications')}
+              style={({ pressed }) => [styles.newsLinkButton, pressed ? styles.newsLinkPressed : null]}
+            >
+              <Text style={styles.newsLink}>Open notifications inbox</Text>
+            </Pressable>
           </Card>
         </View>
       </View>
@@ -136,23 +164,58 @@ const styles = StyleSheet.create({
   },
   newsCard: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    padding: 14,
     borderWidth: 1,
     borderColor: COLORS.border,
-    borderStyle: 'dashed',
     gap: 10,
   },
+  newsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   newsTitle: {
-    fontSize: 22,
+    fontSize: 18,
     color: COLORS.textPrimary,
     fontWeight: '700',
-    textAlign: 'center',
   },
   newsSubtitle: {
-    fontSize: 16,
+    fontSize: 14,
     color: COLORS.textSecondary,
-    textAlign: 'center',
+  },
+  notificationRow: {
+    borderTopWidth: 1,
+    borderTopColor: COLORS.borderLight,
+    paddingTop: 10,
+    gap: 4,
+  },
+  notificationTextBlock: {
+    gap: 2,
+  },
+  notificationTitle: {
+    fontSize: 14,
+    color: COLORS.textPrimary,
+    fontWeight: '600',
+  },
+  notificationBody: {
+    fontSize: 13,
+    color: COLORS.textSecondary,
+  },
+  notificationTime: {
+    fontSize: 12,
+    color: COLORS.textDisabled,
+  },
+  newsLink: {
+    fontSize: 13,
+    color: COLORS.primary,
+    fontWeight: '600',
+  },
+  newsLinkButton: {
+    alignSelf: 'flex-start',
+    marginTop: 6,
+  },
+  newsLinkPressed: {
+    opacity: 0.7,
   },
 });
 

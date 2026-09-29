@@ -12,6 +12,9 @@ export const Text = 'Text';
 export const Pressable = 'Pressable';
 export const TouchableOpacity = 'TouchableOpacity';
 export const ActivityIndicator = 'ActivityIndicator';
+export const AppState = {
+  addEventListener: () => ({ remove: () => {} }),
+};
 
 export const Platform = {
   OS: 'ios' as const,
@@ -31,6 +34,7 @@ export default {
   Pressable,
   TouchableOpacity,
   ActivityIndicator,
+  AppState,
   Platform,
   NativeEventEmitter,
 };

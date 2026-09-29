@@ -9,6 +9,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 import { RiderProvider } from '../context/RiderContext';
 import { TourProvider } from '../context/TourContext';
+import { NotificationProvider } from '../context/NotificationContext';
 import { useAuth } from '../hooks/useAuth';
 import { useRider } from '../hooks/useRider';
 import { MainDrawerNavigator } from './MainDrawerNavigator';
@@ -60,7 +61,9 @@ export function AppNavigator() {
   return (
     <RiderProvider>
       <TourProvider>
-        <AuthenticatedStack />
+        <NotificationProvider>
+          <AuthenticatedStack />
+        </NotificationProvider>
       </TourProvider>
     </RiderProvider>
   );
