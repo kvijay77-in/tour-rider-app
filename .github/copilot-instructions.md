@@ -1,14 +1,16 @@
 # Instructions for GitHub Copilot for the Project
 
+_Last updated: 2026-09-29_
+
 ## Primary Instructions
 These instructions are general for our interaction and MUST BE STRICTLY FOLLOWED.
-- /docs/Requirements.md must be read and understood before any development work is taken up.
-- /docs/SolutionDesign.md must be referred to for design principles and architecture.
-- Follow the project folder structure as described in /docs/project-structure.md for placing files and organizing code. Any changes to the structure must be flagged for review and once approved should be updated in that document.
-- Always refer to /docs/Requirements.md for any clarifications on features, functions, and requirements.
+- Read the relevant topics under /docs/requirements/ before development work.
+- Refer to /docs/design/architecture.md and the relevant topic under /docs/design/ for design principles.
+- Follow the project structure in /docs/guides/development.md. Flag structural changes for review and, once approved, update that guide.
+- Refer to the relevant /docs/requirements/ topic for feature clarifications.
 - If any inputs during our interaction contradict the requirement, flag it and ask for clarifications.
-- Understand the overall project requirements, features, and constraints as described in /docs/Requirements.md.
-- Ensure all code suggestions and implementations strictly adhere to the requirements specified in /docs/Requirements.md.
+- Understand the project requirements and constraints in /docs/requirements/.
+- Ensure implementations adhere to the requirements in /docs/requirements/.
 - Always follow what was asked, do not suggest or code extra features or changes unless explicitly requested.
 - Follow instructions and do not deviate from the task at hand.
 - Do not go overboard and keep suggestions concise and relevant.
@@ -21,25 +23,21 @@ These instructions are general for our interaction and MUST BE STRICTLY FOLLOWED
 - Platform: Mobile (iOS and Android) and Web
 - Programming Languages: Node.js, JavaScript, TypeScript
 - Frameworks/Libraries: React Native, Expo CLI, AWS Amplify
-- Backend Services - Standard: AWS Amplify (Authentication, API, Storage)
-- Backend Services - from the App platform: tour-data-api (REST API)
-- Storage: AWS DynamoDB, AWS S3, SQLite (for offline support)  
-- Authentication: AWS Cognito via AWS Amplify Auth SDK
-- API: AWS AppSync (GraphQL), API Gateway (HTTP REST API)
-- AWS Lambda for serverless functions  
+- Authentication: AWS Cognito via AWS Amplify Auth SDK; rider pool owned by tour-data-api
+- API: tour-data-api API Gateway HTTP API (RiderApi), with rider-pool JWT authorizer
+- Storage: Backend-managed AWS storage; limited local SQLite caches for profile definitions and tour data
 
 ### Design Considerations
 - The mobile app should be built using React Native with Expo managed workflow for ease of development and deployment.
-- The backend should not rely entirely on AWS Amplify services for API and storage since they have limitations. Use AWS AppSync and DynamoDB directly where necessary.
-- Use AWS Cognito via AWS Amplify for user authentication and management. 
-- Create API using AWS AppSync with GraphQL for efficient data querying and manipulation independent of the client platform.
-- For reusable business logic, use AWS Lambda functions.
+- Use AWS Cognito via AWS Amplify Auth for user authentication; the backend manages the pool and all AWS resources.
+- Consume the backend HTTP API through the app's apiClient. The backend API contract is at https://github.com/kvijay77-in/tour-data-api/blob/main/docs/design/api-reference.md.
+- Use backend permission names from https://github.com/kvijay77-in/tour-data-api/blob/main/src/layers/common/rbac.py.
 - Ensure the application is responsive and works well on various screen sizes and orientations for mobile devices.
 - Details of resources created externally will be provided as needed. If not provided, ask for details.
 - API calls use fetch (built-in) with a custom apiClient wrapper.
 - Details of AWS resources (Cognito User Pool, API URL) will be provided via environment variables.
 - DynamoDB tables are created and managed by the tour-data-api backend. This app only consumes the API.
-- No offline support is required.
+- Local caches do not provide an offline feature; app actions require connectivity.
 
 ## Library and Package Usage
 - Use only well-known and widely accepted libraries and packages.
@@ -78,7 +76,7 @@ These instructions are general for our interaction and MUST BE STRICTLY FOLLOWED
 - Always look for free tier options and optimize resource usage.
 - This app does NOT create AWS resources — all resources managed by tour-data-api.
 - Minimize API calls through efficient caching and data management.
-- Use SQLite caching to reduce redundant API calls.
+- Use existing SQLite caches only where already supported by the app.
 
 # Do's and Don'ts
 Some specific or explicit instructions that must be followed. Same will be updated here if not covered above.  
