@@ -24,7 +24,7 @@ flowchart LR
 
 ## Complete your profile
 
-If your profile is missing or needs more information, the app opens the profile form before Home. Fill in the fields marked as required and save. The fields you see may vary. Open **View Profile** from the menu or tap your profile card on Home to see or update your details. You can choose or take a profile picture there; allow photo or camera access when prompted.
+If your profile is missing or needs more information, the app opens the profile form before Home. Fill in the fields marked as required and save. The fields you see may vary. Open **View Profile** from the menu or tap your profile card on Home to see or update your details. You can choose a profile picture from your photo library; allow photo access when prompted.
 
 > 📸 **Screenshot:** Profile creation and profile picture
 
@@ -32,11 +32,11 @@ If your profile is missing or needs more information, the app opens the profile 
 
 Home shows your profile card, a **Tour** card, a **Training Challenge** card and your latest notifications. Tap **Tour** or choose it from the menu to see your current tour, if available, and previously listed tours. Use the tour selector to find a tour, then tap a ride to see its details. If you have not been enrolled, you may see “No tours available right now” or no active tour.
 
-The ride details show the planned route, distance and stages such as **Start**, **Pit Stop** and **Finish**. Elevation information appears when available for that ride. A historical tour can also be selected to view its rides.
+The ride details show the planned route, distance, expected times and stages such as **Start**, **Pit Stop** and **Finish**. An elevation profile is **not currently shown** in the app. A historical tour can also be selected to view its rides.
 
 > 📸 **Screenshot:** Home and tour selector
 >
-> 📸 **Screenshot:** Ride details, ride plan and elevation
+> 📸 **Screenshot:** Ride details and ride plan (elevation is not yet shown)
 
 ### Tour details and registration
 

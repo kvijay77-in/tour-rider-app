@@ -4,7 +4,7 @@ _Last updated: 2026-09-29_
 
 ## Available in the current navigation
 
-- From Home or the drawer, Tour presents the active tour, when enrolled, alongside historical tours in a searchable selection. Selecting a tour lists its rides; selecting a ride opens ride details, including route, stages and elevation information when supplied.
+- From Home or the drawer, Tour presents the active tour, when enrolled, alongside historical tours in a searchable selection. Selecting a tour lists its rides; selecting a ride opens ride details, including route, stages and expected times. There is no elevation profile in this view.
 - An active tour snapshot is loaded for enrolled riders; the app checks enrollment status before presenting active ride data. Historical tour and ride data can be locally cached, but there is no supported offline mode.
 
 ## Implemented screens not currently linked into navigation
