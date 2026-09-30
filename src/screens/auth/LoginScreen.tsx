@@ -20,7 +20,7 @@ import * as SecureStore from 'expo-secure-store';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
-import { COLORS } from '../../constants';
+import { COLORS, REMEMBERED_CREDENTIALS_KEY } from '../../constants';
 import { useAuth } from '../../hooks/useAuth';
 import { Button } from '../../components/common/Button';
 import { PasswordInput } from '../../components/common/PasswordInput';
@@ -29,7 +29,6 @@ import { logger } from '../../utils/logger';
 import type { AuthStackParamList } from '../../types/navigation';
 
 const TAG = 'LoginScreen';
-const REMEMBERED_CREDENTIALS_KEY = 'auth.rememberedCredentials';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'Login'>;
 
@@ -37,6 +36,7 @@ export function LoginScreen({ navigation }: Props) {
   const {
     login,
     error,
+    notice,
     isAuthenticating,
     pendingAuthChallenge,
     cancelPendingAuthChallenge,
@@ -192,6 +192,12 @@ export function LoginScreen({ navigation }: Props) {
             <Text style={styles.subtitle}>Sign in to your account</Text>
           </View>
 
+          {notice && !displayError ? (
+            <View style={styles.noticeContainer} accessibilityRole="alert">
+              <Text style={styles.noticeText}>{notice}</Text>
+            </View>
+          ) : null}
+
           {displayError ? (
             <View style={styles.errorContainer}>
               <Text style={styles.errorText}>{displayError}</Text>
@@ -315,6 +321,17 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   errorText: {
+    color: COLORS.white,
+    fontSize: 14,
+    textAlign: 'center',
+  },
+  noticeContainer: {
+    backgroundColor: COLORS.success,
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 16,
+  },
+  noticeText: {
     color: COLORS.white,
     fontSize: 14,
     textAlign: 'center',

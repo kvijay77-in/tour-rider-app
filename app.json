@@ -1,22 +1,24 @@
 {
   "expo": {
-    "name": "tour-rider-app",
+    "name": "Tour Rider",
     "slug": "tour-rider-app",
+    "owner": "kvijay77.in",
     "version": "1.0.0",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "scheme": "tour-rider-app",
     "ios": {
-      "supportsTablet": true,
-      "bundleIdentifier": "com.tourrider.app"
+      "supportsTablet": true
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
-      },
-      "package": "com.tourrider.app"
+      }
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -32,9 +34,9 @@
       [
         "expo-splash-screen",
         {
-      "image": "./assets/splash-icon.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+          "image": "./assets/splash-icon.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#ffffff"
         }
       ],
       "@react-native-community/datetimepicker",
@@ -45,12 +47,8 @@
       "expo-sqlite"
     ],
     "extra": {
-      "_comment": "For single-subscription mode builds, customize these values for the specific organizer:",
-      "organizerBranding": {
-        "appName": "Tour Rider",
-        "appSlug": "tour-rider-app",
-        "iosBundleId": "com.tourrider.app",
-        "androidPackage": "com.tourrider.app"
+      "eas": {
+        "projectId": "<EAS_PROJECT_ID>"
       }
     }
   }

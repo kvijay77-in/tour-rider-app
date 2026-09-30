@@ -19,6 +19,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '../../components/common/Button';
+import { PasswordInput } from '../../components/common/PasswordInput';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
 import { DynamicProfileForm } from '../../components/profile/DynamicProfileForm';
 import { DynamicProfileView } from '../../components/profile/DynamicProfileView';
@@ -27,6 +28,7 @@ import { COLORS } from '../../constants';
 import { useAuth } from '../../hooks/useAuth';
 import { useRider } from '../../hooks/useRider';
 import { ApiError } from '../../services/api/apiClient';
+import { AccountDeletionError } from '../../services/accountDeletionService';
 import { logger } from '../../utils/logger';
 import {
   buildProfileSavePayload,
@@ -51,7 +53,7 @@ function hasProfileUpdates(payload: Record<string, unknown>): boolean {
 }
 
 export function ProfileScreen() {
-  const { logout, isAuthenticating, user } = useAuth();
+  const { logout, deleteAccount, isAuthenticating, user } = useAuth();
   const {
     profile,
     isLoading,
@@ -75,6 +77,10 @@ export function ProfileScreen() {
   const [selectedPhotoMimeType, setSelectedPhotoMimeType] = useState<string | undefined>();
   const [selectedPhotoBase64, setSelectedPhotoBase64] = useState<string | null>(null);
   const [formErrors, setFormErrors] = useState<ProfileValidationErrors>({});
+  const [isDeleteModalVisible, setIsDeleteModalVisible] = useState(false);
+  const [deletePassword, setDeletePassword] = useState('');
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     if (!successMessageVisible) return;
@@ -252,6 +258,64 @@ export function ProfileScreen() {
     }
   }, [logout]);
 
+  const closeDeleteModal = useCallback(() => {
+    setIsDeleteModalVisible(false);
+    setDeletePassword('');
+    setDeleteError(null);
+  }, []);
+
+  const handleDeleteAccountPress = useCallback(() => {
+    Alert.alert(
+      'Delete my account',
+      'This permanently deletes your sign-in account. You will be signed out and will not be able to sign in with this email and password again. Your tour records held by the organizer are not removed by this action.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Continue',
+          style: 'destructive',
+          onPress: () => {
+            setDeletePassword('');
+            setDeleteError(null);
+            setIsDeleteModalVisible(true);
+          },
+        },
+      ],
+    );
+  }, []);
+
+  const handleConfirmDeleteAccount = useCallback(async () => {
+    if (!deletePassword) {
+      setDeleteError('Please enter your password.');
+      return;
+    }
+
+    setIsDeleting(true);
+    setDeleteError(null);
+    try {
+      await deleteAccount(deletePassword);
+      // AuthContext clears the session; the root navigator shows Login.
+    } catch (deleteAccountError) {
+      if (deleteAccountError instanceof AccountDeletionError) {
+        if (deleteAccountError.code === 'INVALID_PASSWORD') {
+          setDeleteError(deleteAccountError.message);
+          return;
+        }
+        closeDeleteModal();
+        Alert.alert(
+          deleteAccountError.code === 'OFFLINE' ? 'No connection' : 'Account not deleted',
+          deleteAccountError.message,
+        );
+        return;
+      }
+
+      logger.error(TAG, 'Account deletion failed', deleteAccountError);
+      closeDeleteModal();
+      Alert.alert('Account not deleted', 'Account deletion failed. Please try again.');
+    } finally {
+      setIsDeleting(false);
+    }
+  }, [closeDeleteModal, deleteAccount, deletePassword]);
+
   const displayPhotoUrl = selectedPhotoUri ?? profile?.photoUrl;
   const displayName = String(getProfileCoreValue(profile, 'name') ?? 'Profile not available');
   const displayEmail = String(getProfileCoreValue(profile, 'email') ?? 'No email available');
@@ -386,7 +450,62 @@ export function ProfileScreen() {
             disabled={isAuthenticating || isSaving}
           />
         </View>
+
+        <View style={styles.deleteAccountContainer}>
+          <TouchableOpacity
+            onPress={handleDeleteAccountPress}
+            disabled={isAuthenticating || isSaving || isDeleting}
+            accessibilityRole="button"
+            accessibilityLabel="Delete my account"
+            accessibilityHint="Permanently deletes your sign-in account after confirming your password"
+          >
+            <Text style={styles.deleteAccountText}>Delete my account</Text>
+          </TouchableOpacity>
+        </View>
       </ScrollView>
+
+      <Modal
+        visible={isDeleteModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={isDeleting ? () => {} : closeDeleteModal}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard} accessibilityViewIsModal>
+            <Text style={styles.modalTitle} accessibilityRole="header">Confirm your password</Text>
+            <Text style={styles.modalText}>
+              Enter your password to permanently delete your account. You need to be online.
+            </Text>
+            <PasswordInput
+              value={deletePassword}
+              onChangeText={setDeletePassword}
+              placeholder="Password"
+              placeholderTextColor={COLORS.textDisabled}
+              autoComplete="password"
+              textContentType="password"
+              editable={!isDeleting}
+              accessibilityLabel="Password"
+            />
+            {deleteError ? (
+              <Text style={styles.modalError} accessibilityRole="alert">{deleteError}</Text>
+            ) : null}
+            <View style={styles.buttonRow}>
+              <View style={styles.buttonHalf}>
+                <Button title="Cancel" onPress={closeDeleteModal} variant="secondary" disabled={isDeleting} />
+              </View>
+              <View style={styles.buttonHalf}>
+                <Button
+                  title="Delete"
+                  onPress={handleConfirmDeleteAccount}
+                  variant="danger"
+                  loading={isDeleting}
+                  disabled={isDeleting}
+                />
+              </View>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       <Modal
         visible={isPhotoPreviewVisible}
@@ -480,6 +599,18 @@ const styles = StyleSheet.create({
   buttonRow: { flexDirection: 'row', gap: 12, marginTop: 24 },
   buttonHalf: { flex: 1 },
   logoutContainer: { marginTop: 24, paddingTop: 18, borderTopWidth: 1, borderTopColor: COLORS.border },
+  deleteAccountContainer: { marginTop: 28, alignItems: 'center' },
+  deleteAccountText: { color: COLORS.danger, fontSize: 15, fontWeight: '600', paddingVertical: 10 },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+  },
+  modalCard: { backgroundColor: COLORS.surface, borderRadius: 12, padding: 20 },
+  modalTitle: { fontSize: 18, fontWeight: '700', color: COLORS.textPrimary, marginBottom: 8 },
+  modalText: { fontSize: 14, color: COLORS.textSecondary, marginBottom: 16 },
+  modalError: { color: COLORS.danger, fontSize: 13, fontWeight: '600', marginTop: 4 },
 });
 
 export default ProfileScreen;
