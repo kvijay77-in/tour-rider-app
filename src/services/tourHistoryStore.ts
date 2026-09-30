@@ -175,6 +175,25 @@ export function sortRidesForDisplay(rides: Ride[]): Ride[] {
   return sortRidesByDateAndSequence(rides);
 }
 
+export async function clearTourHistoryCache(): Promise<void> {
+  try {
+    const db = await getDatabase();
+    await db.execAsync('BEGIN');
+
+    try {
+      await db.execAsync('DELETE FROM cached_tours;');
+      await db.execAsync('DELETE FROM cached_tour_rides;');
+      await db.execAsync('COMMIT');
+    } catch (error) {
+      await db.execAsync('ROLLBACK');
+      throw error;
+    }
+  } catch (error) {
+    logger.warn(TAG, 'Failed to clear tour history cache');
+    logger.debug(TAG, 'Tour history cache clear failure', error);
+  }
+}
+
 export async function getCachedHistoricalTours(): Promise<Tour[]> {
   try {
     const db = await getDatabase();

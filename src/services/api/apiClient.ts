@@ -33,11 +33,17 @@ let _apiBaseUrl = isSingleSubscriptionMode()
 
 /**
  * Set the API base URL at runtime.
- * Used in multi-subscription mode after invitation validation.
+ * Used in multi-subscription mode after invitation validation, and by
+ * store-reviewer routing (src/config/reviewAccess.ts) to switch backends.
  */
 export function setApiBaseUrl(url: string): void {
   _apiBaseUrl = url.replace(/\/+$/, '');
   logger.info(TAG, `API base URL set to ${_apiBaseUrl}`);
+}
+
+/** Current API base URL (empty when not configured). */
+export function getApiBaseUrl(): string {
+  return _apiBaseUrl;
 }
 
 const DEFAULT_TIMEOUT_MS = 15_000;

@@ -32,12 +32,24 @@ import { getLinkedProfileId } from '../services/api/riderApi';
 import { unregisterPushTokenForCurrentUser } from '../services/push/pushService';
 import { clearActiveTourCache } from '../services/activeTourStore';
 import { clearProfileDefinitionsCache } from '../services/profileConfigStore';
+import {
+  ACCOUNT_DELETED_MESSAGE,
+  deleteCurrentAccount,
+} from '../services/accountDeletionService';
 import { logger } from '../utils/logger';
 import {
   subscriptionConfig,
   isSingleSubscriptionMode,
   type OrganizerConfig
 } from '../config/subscription.config';
+import {
+  getActiveBackendKind,
+  isReviewSessionActive,
+  routeBackendForLogin,
+  routeBackendToPrimary,
+  routeBackendToReview,
+  setReviewSessionActive,
+} from '../config/reviewAccess';
 
 const TAG = 'AuthContext';
 
@@ -88,6 +100,8 @@ interface AuthContextValue {
   isAuthenticating: boolean;
   /** Error message from the last auth operation */
   error: string | null;
+  /** Informational message for the login screen (e.g. account deleted) */
+  notice: string | null;
   /** Sign in with email and password */
   login: (email: string, password: string, options?: LoginOptions) => Promise<AuthUser | null>;
   /** Cognito challenge state for auth steps that require user input */
@@ -116,6 +130,12 @@ interface AuthContextValue {
   ) => Promise<void>;
   /** Change password for currently authenticated user */
   changePassword: (oldPassword: string, newPassword: string) => Promise<void>;
+  /**
+   * Re-authenticate with the password and delete the rider's Cognito account.
+   * Backend data is not changed. Throws AccountDeletionError on failure and
+   * keeps the session.
+   */
+  deleteAccount: (password: string) => Promise<void>;
   /** Update linked profile ID on the current user state */
   setLinkedProfileId: (profileId?: string) => void;
   /** Post-login route used for one-time redirects after auth transitions */
@@ -138,6 +158,7 @@ const AuthContext = createContext<AuthContextValue>({
   isLoading: true,
   isAuthenticating: false,
   error: null,
+  notice: null,
   login: async () => {
     throw new Error('AuthContext not initialized');
   },
@@ -152,6 +173,9 @@ const AuthContext = createContext<AuthContextValue>({
   requestPasswordReset: async () => {},
   confirmPasswordReset: async () => {},
   changePassword: async () => {},
+  deleteAccount: async () => {
+    throw new Error('AuthContext not initialized');
+  },
   setLinkedProfileId: () => {},
   postLoginRedirect: null,
   setPostLoginRedirect: () => {},
@@ -176,6 +200,12 @@ function isInvalidCredentialsError(error: unknown): boolean {
 function isUserNotFoundError(error: unknown): boolean {
   const maybeError = error as NamedError;
   return maybeError?.name === 'UserNotFoundException' || maybeError?.code === 'UserNotFoundException';
+}
+
+function isUserAlreadyAuthenticatedError(error: unknown): boolean {
+  const maybeError = error as NamedError;
+  return maybeError?.name === 'UserAlreadyAuthenticatedException'
+    || maybeError?.code === 'UserAlreadyAuthenticatedException';
 }
 
 // ---------------------------------------------------------------------------
@@ -236,6 +266,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [isAuthenticating, setIsAuthenticating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [pendingAuthChallenge, setPendingAuthChallenge] = useState<PendingAuthChallenge | null>(null);
   const [postLoginRedirect, setPostLoginRedirect] = useState<PostLoginRedirect>(null);
 
@@ -274,6 +305,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
   useEffect(() => {
     (async () => {
       try {
+        // A reviewer session lives in the Review (Dev) pool — select it before
+        // reading the stored session so Amplify looks up the right tokens.
+        if (await isReviewSessionActive()) {
+          if (!routeBackendToReview()) {
+            await setReviewSessionActive(false);
+          }
+        }
+
         const currentUser = await getCurrentUser();
         logger.info(TAG, `Session found for ${currentUser.username}`);
 
@@ -282,6 +321,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
         if (!session.tokens?.accessToken) {
           logger.info(TAG, 'Session invalid — no access token found, starting fresh login flow');
           await signOut().catch(() => {});
+          await setReviewSessionActive(false);
+          routeBackendToPrimary();
           setUser(null);
         } else {
           const authUser = await buildAuthUser(session);
@@ -291,6 +332,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
         // No valid session — clear any stale local state and require login
         logger.info(TAG, 'No existing session — login required');
         await signOut().catch(() => {});
+        await setReviewSessionActive(false);
+        routeBackendToPrimary();
         setUser(null);
       } finally {
         setIsLoading(false);
@@ -310,14 +353,30 @@ export function AuthProvider({ children }: AuthProviderProps) {
   ): Promise<AuthUser | null> => {
     setIsAuthenticating(true);
     setError(null);
+    setNotice(null);
     try {
-      const result = await signIn({
+      routeBackendForLogin(email);
+
+      const attemptSignIn = () => signIn({
         username: email,
         password,
         options: { authFlowType: 'USER_PASSWORD_AUTH' },
       });
 
+      let result: Awaited<ReturnType<typeof signIn>>;
+      try {
+        result = await attemptSignIn();
+      } catch (signInError) {
+        if (!isUserAlreadyAuthenticatedError(signInError)) {
+          throw signInError;
+        }
+        logger.info(TAG, 'Stale session found during sign-in — signing out and retrying once');
+        await signOut().catch(() => {});
+        result = await attemptSignIn();
+      }
+
       if (result.isSignedIn) {
+        await setReviewSessionActive(getActiveBackendKind() === 'review');
         const authUser = await buildAuthUser(undefined, options);
         setUser(authUser);
         setPendingAuthChallenge(null);
@@ -370,6 +429,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
 
     try {
+      routeBackendForLogin(pendingAuthChallenge.email);
       const result = await confirmSignIn({ challengeResponse: newPassword });
 
       if (!result.isSignedIn) {
@@ -377,6 +437,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
         setError(message);
         return null;
       }
+
+      await setReviewSessionActive(getActiveBackendKind() === 'review');
 
       const authUser = await buildAuthUser(undefined, options);
       setUser(authUser);
@@ -414,7 +476,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
   ): Promise<boolean> => {
     setIsAuthenticating(true);
     setError(null);
+    setNotice(null);
     try {
+      // Sign-up always goes to the primary pool (never the Review pool).
+      routeBackendToPrimary();
       await signUp({
         username: email,
         password,
@@ -447,6 +512,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     setIsAuthenticating(true);
     setError(null);
     try {
+      routeBackendToPrimary();
       await confirmSignUp({ username: email, confirmationCode: code });
       logger.info(TAG, `Sign-up confirmed for ${email}`);
     } catch (err) {
@@ -468,6 +534,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
       // Sign out locally even if the API call fails
       logger.warn(TAG, 'Sign-out API call failed — clearing local state');
     } finally {
+      await setReviewSessionActive(false);
+      routeBackendToPrimary();
       await clearActiveTourCache();
       await clearProfileDefinitionsCache();
       setUser(null);
@@ -481,6 +549,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     setIsAuthenticating(true);
     setError(null);
     try {
+      routeBackendToPrimary();
       await resetPassword({ username: email });
       logger.info(TAG, `Password reset requested for ${email}`);
     } catch (err) {
@@ -501,6 +570,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     setIsAuthenticating(true);
     setError(null);
     try {
+      routeBackendToPrimary();
       await confirmResetPassword({ username: email, confirmationCode: code, newPassword });
       logger.info(TAG, `Password reset confirmed for ${email}`);
     } catch (err) {
@@ -532,6 +602,23 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
   }, []);
 
+  const deleteAccount = useCallback(async (password: string): Promise<void> => {
+    if (!user) {
+      throw new Error('You must be signed in to delete your account.');
+    }
+
+    // Throws AccountDeletionError and keeps the session on failure.
+    await deleteCurrentAccount(user.username, password);
+
+    routeBackendToPrimary();
+    setUser(null);
+    setError(null);
+    setPostLoginRedirect(null);
+    setPendingAuthChallenge(null);
+    setNotice(ACCOUNT_DELETED_MESSAGE);
+    logger.info(TAG, 'Account deleted — returned to login');
+  }, [user]);
+
   const setLinkedProfileId = useCallback((profileId?: string) => {
     setUser((previousUser) => {
       if (!previousUser) {
@@ -555,6 +642,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     isLoading,
     isAuthenticating,
     error,
+    notice,
     login,
     pendingAuthChallenge,
     completeNewPasswordChallenge,
@@ -565,6 +653,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     requestPasswordReset,
     confirmPasswordReset: handleConfirmPasswordReset,
     changePassword,
+    deleteAccount,
     setLinkedProfileId,
     postLoginRedirect,
     setPostLoginRedirect,

@@ -18,7 +18,9 @@ let handlerConfigured = false;
 
 function getProjectId(): string | undefined {
   const expoProjectId = Constants.expoConfig?.extra?.eas?.projectId as string | undefined;
-  return expoProjectId ?? Constants.easConfig?.projectId;
+  const projectId = expoProjectId ?? Constants.easConfig?.projectId;
+  // Ignore the unreplaced app.json placeholder (<EAS_PROJECT_ID>).
+  return projectId && !projectId.startsWith('<') ? projectId : undefined;
 }
 
 function getDevicePlatform(): PushDevicePlatform | null {
