@@ -1,8 +1,8 @@
 # Rider's guide
 
-_Last updated: 2026-09-29_
+_Last updated: 2026-09-30_
 
-Welcome! This guide helps you find your way around the rider app. Your tour organizer can tell you where to get the app and which account to use. Some tour-day views described below are being prepared and may not appear in the menu yet.
+Welcome! This guide helps you find your way around the rider app. If you help test the app, you may have two apps installed: **Tour Rider (Test)** shows an orange **TEST** strip at the top of every screen and uses test data only, while **Tour Rider** is the live app for the real tour. Your tour organizer can tell you where to get the app and which account to use. Some tour-day views described below are being prepared and may not appear in the menu yet.
 
 ## Get the app and sign in
 
@@ -67,6 +67,14 @@ The **Training Challenge** card and menu item open a “Coming soon” page. Tra
 Open the menu to find **Home**, **View Profile**, **Notifications**, **Training Challenge**, **Tour** and **Change Password**. Use **Log out** in the menu or the sign-out icon in the top bar when you are finished, especially on a shared device.
 
 > 📸 **Screenshot:** Drawer menu
+
+## Delete your account
+
+Open **View Profile** from the menu, scroll to the bottom and tap **Delete my account**. Read the warning and tap **Continue**. Enter your password and tap **Delete**. You need an internet connection; if you are offline, the app says "You need to be online to delete your account" and nothing is changed. When deletion is complete, you are returned to the login screen with "Your account has been deleted", and you can no longer sign in with that email and password.
+
+Deleting your account removes your sign-in only. Your tour records held by your organizer are not removed; contact your organizer to ask for those to be deleted. If you use both the Test and the live app, delete the account in each app separately.
+
+> 📸 **Screenshot:** Delete my account
 
 ## Questions and quick fixes
 
