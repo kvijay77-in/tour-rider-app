@@ -2,7 +2,13 @@
  * Unit tests for src/services/api/tourApi.ts
  */
 
-import { getTours, getTourDetails, getTourRider, getTourRiderByProfile } from '../../src/services/api/tourApi';
+import {
+  getProfileTourParticipations,
+  getTours,
+  getTourDetails,
+  getTourRider,
+  getTourRiderByProfile,
+} from '../../src/services/api/tourApi';
 import { apiClient } from '../../src/services/api/apiClient';
 
 jest.mock('../../src/services/api/apiClient', () => ({
@@ -114,5 +120,20 @@ describe('getTourRiderByProfile', () => {
     const options = mockedGet.mock.calls[0][1] as { isExpectedError?: (error: { statusCode: number }) => boolean };
     expect(options.isExpectedError?.({ statusCode: 404 })).toBe(true);
     expect(options.isExpectedError?.({ statusCode: 400 })).toBe(false);
+  });
+});
+
+describe('getProfileTourParticipations', () => {
+  it('normalizes the profile participation list', async () => {
+    mockedGet.mockResolvedValueOnce({
+      success: true,
+      data: { items: [{ tourId: 'T1', riderId: 'R1', profileId: 'P1', status: 'REGISTERED' }] },
+      timestamp: '',
+    });
+
+    const result = await getProfileTourParticipations('P/1');
+    expect(mockedGet).toHaveBeenCalledWith('/v1/profile/P%2F1/tours');
+    expect(result.data?.items).toHaveLength(1);
+    expect(result.data?.items[0]?.tourId).toBe('T1');
   });
 });

@@ -4,6 +4,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Alert,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -12,15 +13,19 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 import { COLORS } from '../../constants';
 import { Card } from '../../components/common/Card';
+import { DocumentsSection } from '../../components/tour/DocumentsSection';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
 import { SearchableSelectField, type SelectOption } from '../../components/common/SearchableSelectField';
 import { getTourRides } from '../../services/api/rideApi';
-import { getTours } from '../../services/api/tourApi';
+import { getTours, getProfileTourParticipations } from '../../services/api/tourApi';
+import { getRiderRideCheckIns } from '../../services/api/checkInApi';
 import { useTour } from '../../hooks/useTour';
+import { useRider } from '../../hooks/useRider';
 import {
   cacheHistoricalTourCatalog,
   cacheHistoricalTourRides,
@@ -33,9 +38,10 @@ import {
 } from '../../services/tourHistoryStore';
 import { formatDate } from '../../utils/dateFormatter';
 import { logger } from '../../utils/logger';
-import { TourStatus } from '../../types/tour';
+import { TourRiderStatus, TourStatus } from '../../types/tour';
 import type { Ride } from '../../types/ride';
-import type { Tour } from '../../types/tour';
+import type { Tour, TourParticipation } from '../../types/tour';
+import type { CheckIn } from '../../types/checkin';
 import type { TourStackParamList } from '../../types/navigation';
 
 const TAG = 'TourScreen';
@@ -79,7 +85,8 @@ function extractTourItems(payload: unknown): Tour[] {
 type Props = NativeStackScreenProps<TourStackParamList, 'TourRides'>;
 
 export function TourScreen({ navigation }: Props) {
-  const { activeTour, activeRides, loadActiveTour } = useTour();
+  const { activeTour, activeRides, enrollment, loadActiveTour } = useTour();
+  const { profile } = useRider();
   const [historicalTours, setHistoricalTours] = useState<Tour[]>([]);
   const [selectedTourId, setSelectedTourId] = useState<string | null>(null);
   const [rides, setRides] = useState<Ride[]>([]);
@@ -90,10 +97,34 @@ export function TourScreen({ navigation }: Props) {
   const ridesRequestIdRef = useRef(0);
   const selectedTourIdRef = useRef<string | null>(null);
   const previousActiveTourIdRef = useRef<string | null>(null);
+  const checkInCacheRef = useRef<Map<string, CheckIn[]>>(new Map());
+  const [participations, setParticipations] = useState<TourParticipation[]>([]);
+  const [loadingCheckInKey, setLoadingCheckInKey] = useState<string | null>(null);
+  const [documentsRefreshKey, setDocumentsRefreshKey] = useState(0);
 
   useEffect(() => {
     selectedTourIdRef.current = selectedTourId;
   }, [selectedTourId]);
+
+  const loadParticipations = useCallback(async () => {
+    if (!profile?.profileId) {
+      setParticipations([]);
+      return;
+    }
+
+    try {
+      const response = await getProfileTourParticipations(profile.profileId);
+      setParticipations(response.success ? response.data?.items ?? [] : []);
+    } catch (error) {
+      logger.warn(TAG, 'Failed to load rider tour participations');
+      logger.debug(TAG, 'Rider tour participation load failure', error);
+      setParticipations([]);
+    }
+  }, [profile?.profileId]);
+
+  useEffect(() => {
+    void loadParticipations();
+  }, [loadParticipations]);
 
   const availableTours = useMemo(() => {
     return sortToursForDisplay([
@@ -262,10 +293,77 @@ export function TourScreen({ navigation }: Props) {
 
   const onRefresh = useCallback(async () => {
     setIsRefreshing(true);
+    checkInCacheRef.current.clear();
+    setDocumentsRefreshKey((current) => current + 1);
     await loadActiveTour();
+    await loadParticipations();
     await loadTourData();
     setIsRefreshing(false);
-  }, [loadActiveTour, loadTourData]);
+  }, [loadActiveTour, loadParticipations, loadTourData]);
+
+  const getParticipation = useCallback((tourId: string): TourParticipation | null => {
+    if (tourId === activeTour?.tourId && enrollment) {
+      return { ...enrollment, tourId };
+    }
+
+    return participations.find((participation) => participation.tourId === tourId) ?? null;
+  }, [activeTour?.tourId, enrollment, participations]);
+
+  const navigateToRideInfo = useCallback((tourId: string, rideId: string) => {
+    navigation.navigate('RideDetails', { rideId, tourId });
+  }, [navigation]);
+
+  const handleRidePress = useCallback(async (tour: Tour, ride: Ride) => {
+    const participation = getParticipation(tour.tourId);
+    const isRegistered = participation?.status === TourRiderStatus.REGISTERED
+      || participation?.status === TourRiderStatus.ACTIVE;
+
+    if (!isRegistered || typeof ride.rideNo !== 'number') {
+      navigateToRideInfo(tour.tourId, ride.rideId);
+      return;
+    }
+
+    const cacheKey = `${tour.tourId}:${ride.rideNo}`;
+    let checkIns = checkInCacheRef.current.get(cacheKey);
+    if (!checkIns) {
+      setLoadingCheckInKey(cacheKey);
+      try {
+        const response = await getRiderRideCheckIns(tour.tourId, participation.riderId, ride.rideNo);
+        checkIns = response.success ? response.data?.checkIns ?? [] : [];
+        checkInCacheRef.current.set(cacheKey, checkIns);
+      } catch (error) {
+        logger.warn(TAG, `Unable to load check-ins for ${cacheKey}`);
+        logger.debug(TAG, 'Ride check-in lookup failure', error);
+        navigateToRideInfo(tour.tourId, ride.rideId);
+        return;
+      } finally {
+        setLoadingCheckInKey(null);
+      }
+    }
+
+    if (checkIns.length === 0) {
+      navigateToRideInfo(tour.tourId, ride.rideId);
+      return;
+    }
+
+    Alert.alert(
+      'Ride options',
+      'Choose what you want to view.',
+      [
+        { text: 'Ride info', onPress: () => navigateToRideInfo(tour.tourId, ride.rideId) },
+        {
+          text: 'Check-In',
+          onPress: () => navigation.navigate('CheckInStatus', {
+            tourId: tour.tourId,
+            riderId: participation.riderId,
+            rideId: ride.rideId,
+            rideNo: ride.rideNo,
+          }),
+        },
+        { text: 'Cancel', style: 'cancel' },
+      ],
+    );
+  }, [getParticipation, navigation, navigateToRideInfo]);
 
   const sortedRides = useMemo(() => sortRidesForDisplay(rides), [rides]);
 
@@ -309,6 +407,8 @@ export function TourScreen({ navigation }: Props) {
               <Text style={styles.tourMeta}>{selectedTourMessage}</Text>
             </Card>
 
+            <DocumentsSection tourId={selectedTour.tourId} refreshKey={documentsRefreshKey} />
+
             {isLoadingRides ? (
               <Card>
                 <Text style={styles.emptySubtitle}>Loading rides for the selected tour...</Text>
@@ -326,7 +426,7 @@ export function TourScreen({ navigation }: Props) {
                   <TouchableOpacity
                     key={ride.rideId}
                     activeOpacity={0.75}
-                    onPress={() => navigation.navigate('RideDetails', { rideId: ride.rideId, tourId: selectedTour.tourId })}
+                    onPress={() => void handleRidePress(selectedTour, ride)}
                     accessibilityRole="button"
                     accessibilityLabel={`Open details for ${ride.name}`}
                   >
@@ -341,6 +441,26 @@ export function TourScreen({ navigation }: Props) {
                       <Text style={styles.metaText}>
                         {ride.totalDistance} km • {ride.stages.length} stages
                       </Text>
+                      {(() => {
+                        const participation = getParticipation(selectedTour.tourId);
+                        const isRegistered = participation?.status === TourRiderStatus.REGISTERED
+                          || participation?.status === TourRiderStatus.ACTIVE;
+                        if (!isRegistered) return null;
+                        const cacheKey = `${selectedTour.tourId}:${ride.rideNo}`;
+                        return (
+                          <View
+                            style={styles.checkInHint}
+                            accessibilityRole="image"
+                            accessibilityLabel="Check-in status available for this registered ride"
+                            accessibilityHint={loadingCheckInKey === cacheKey ? 'Loading check-in status' : 'Open ride options to view check-in status'}
+                          >
+                            <Ionicons name="information-circle-outline" size={16} color={COLORS.primary} />
+                            <Text style={styles.checkInHintText}>
+                            {loadingCheckInKey === cacheKey ? 'Loading check-in status...' : 'Check-in status'}
+                            </Text>
+                          </View>
+                        );
+                      })()}
                     </Card>
                   </TouchableOpacity>
                 ))
@@ -411,6 +531,16 @@ const styles = StyleSheet.create({
   metaText: {
     fontSize: 13,
     color: COLORS.textSecondary,
+  },
+  checkInHint: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  checkInHintText: {
+    marginLeft: 4,
+    fontSize: 13,
+    color: COLORS.primary,
   },
   emptyTitle: {
     fontSize: 20,

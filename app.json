@@ -44,7 +44,8 @@
       "expo-font",
       "expo-secure-store",
       "expo-status-bar",
-      "expo-sqlite"
+      "expo-sqlite",
+      "expo-sharing"
     ],
     "extra": {
       "eas": {

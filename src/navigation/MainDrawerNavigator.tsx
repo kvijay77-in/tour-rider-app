@@ -18,6 +18,7 @@ import { NotificationsScreen } from '../screens/notifications/NotificationsScree
 import { NotificationBell } from '../components/common/NotificationBell';
 import { DrawerContent } from './DrawerContent';
 import { TourStackNavigator } from './TourStackNavigator';
+import { EventsStackNavigator } from './EventsStackNavigator';
 import type { AppStackParamList, MainDrawerParamList } from '../types/navigation';
 
 const Drawer = createDrawerNavigator<MainDrawerParamList>();
@@ -87,6 +88,14 @@ export function MainDrawerNavigator({ route }: MainDrawerNavigatorProps) {
         component={TourStackNavigator}
         options={{
           title: 'Tour',
+          headerShown: false,
+        }}
+      />
+      <Drawer.Screen
+        name="Events"
+        component={EventsStackNavigator}
+        options={{
+          title: 'Events',
           headerShown: false,
         }}
       />

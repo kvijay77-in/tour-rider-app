@@ -24,6 +24,8 @@ import { RideStatus } from '../../types/ride';
 
 const STATUS_COLOR_MAP: Record<RideStatus, string> = {
   [RideStatus.PLANNED]: COLORS.gray[400],
+  [RideStatus.OPEN]: COLORS.accent,
+  [RideStatus.STARTED]: COLORS.success,
   [RideStatus.ACTIVE]: COLORS.success,
   [RideStatus.COMPLETED]: COLORS.secondary,
   [RideStatus.CLOSED]: COLORS.gray[500],

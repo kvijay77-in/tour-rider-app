@@ -6,7 +6,7 @@
 import { apiClient } from './apiClient';
 import { logger } from '../../utils/logger';
 import type { ApiResponse, PaginatedResponse } from '../../types/api';
-import type { Tour, TourRider } from '../../types/tour';
+import type { Tour, TourParticipation, TourRider } from '../../types/tour';
 
 const TAG = 'TourApi';
 
@@ -68,4 +68,30 @@ export async function getTourRiderByProfile(
       isExpectedError: (error) => error.statusCode === 404,
     },
   );
+}
+
+/** Get all tour participation records for the signed-in rider profile. */
+export async function getProfileTourParticipations(
+  profileId: string,
+): Promise<ApiResponse<PaginatedResponse<TourParticipation>>> {
+  logger.debug(TAG, `Fetching tour participations for profile ${profileId}`);
+  const response = await apiClient.get<unknown>(
+    `/v1/profile/${encodeURIComponent(profileId)}/tours`,
+  );
+
+  if (!response.success) {
+    return response as ApiResponse<PaginatedResponse<TourParticipation>>;
+  }
+
+  const payload = response.data;
+  const items = Array.isArray(payload)
+    ? payload
+    : payload && typeof payload === 'object' && Array.isArray((payload as { items?: unknown }).items)
+      ? (payload as { items: unknown[] }).items
+      : [];
+
+  return {
+    ...response,
+    data: { items: items as TourParticipation[] },
+  };
 }
