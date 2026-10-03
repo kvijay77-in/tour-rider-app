@@ -15,6 +15,8 @@ import { HomeSectionCard } from '../../components/home/HomeSectionCard';
 import { SelfCheckInPanel } from '../../components/checkin/SelfCheckInPanel';
 import { useRider } from '../../hooks/useRider';
 import { useNotifications } from '../../hooks/useNotifications';
+import { useTour } from '../../hooks/useTour';
+import { useTourArtifactImages } from '../../hooks/useTourArtifactImages';
 import { getRelativeTime } from '../../utils/dateFormatter';
 
 interface HomeNavigation {
@@ -36,6 +38,8 @@ interface Props {
 export function HomeScreen({ navigation, route }: Props) {
   const { profile, isLoading } = useRider();
   const { latestItems } = useNotifications();
+  const { activeTour } = useTour();
+  const tourImages = useTourArtifactImages(activeTour?.tourId);
 
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
@@ -79,13 +83,19 @@ export function HomeScreen({ navigation, route }: Props) {
           <HomeSectionCard
             title="Training Challenge"
             subtitle="Track your prep journey"
-            imageSource={require('../../../assets/TC_2026.jpg')}
+            imageSource={tourImages.sources['training-challenge']}
+            onImageError={() => void tourImages.onImageError('training-challenge')}
+            imageError={tourImages.errors['training-challenge'] ?? tourImages.error}
+            onRetry={() => void tourImages.refresh()}
             onPress={() => navigation.navigate('TrainingChallenge')}
           />
           <HomeSectionCard
             title="Tour"
-            subtitle="ToT 2026"
-            imageSource={require('../../../assets/rideplan-2026.png')}
+            subtitle={activeTour?.name}
+            imageSource={tourImages.sources['ride-plan']}
+            onImageError={() => void tourImages.onImageError('ride-plan')}
+            imageError={tourImages.errors['ride-plan'] ?? tourImages.error}
+            onRetry={() => void tourImages.refresh()}
             onPress={() => navigation.navigate('Tour')}
           />
         </View>

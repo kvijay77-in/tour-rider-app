@@ -7,7 +7,9 @@
     "development": {
       "developmentClient": true,
       "distribution": "internal",
-      "environment": "development",
+      "android": {
+        "buildType": "app-bundle"
+      },
       "env": {
         "APP_VARIANT": "test",
         "EXPO_PUBLIC_SUBSCRIPTION_MODE": "single",
@@ -16,7 +18,7 @@
     },
     "test": {
       "distribution": "store",
-      "channel": "test",
+      // "channel": "test",
       "environment": "preview",
       "autoIncrement": true,
       "env": {
@@ -32,7 +34,7 @@
     },
     "production": {
       "distribution": "store",
-      "channel": "production",
+      // "channel": "production",
       "environment": "production",
       "autoIncrement": true,
       "env": {

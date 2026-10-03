@@ -32,13 +32,13 @@ If your profile is missing or needs more information, the app opens the profile 
 
 Home shows your profile card, a **Tour** card, a **Training Challenge** card and your latest notifications. When you are enrolled on the active tour and a ride is scheduled for today, Home also shows the **Today's ride check-in** panel. Tap **Tour** or choose it from the menu to see your current tour, if available, and previously listed tours. Use the tour selector to find a tour, then tap a ride to see its details. If you have not been enrolled, you may see “No tours available right now” or no active tour.
 
-The ride details show the planned route, distance, expected times and stages such as **Start**, **Pit Stop** and **Finish**. An elevation profile is **not currently shown** in the app. A historical tour can also be selected to view its rides.
+The ride details show the planned route, distance, expected times and stages such as **Start**, **Pit Stop** and **Finish**. When your organizer uploads a tour elevation image, it appears above the selected tour's ride list. Home's Tour and Training Challenge images also come from the active tour's uploads. Images require an internet connection; use **Retry** if loading fails. A historical tour can also be selected to view its rides and available tour elevation image.
 
 For a registered ride, the app checks whether your check-in history has records when you open the ride. With records, choose **Ride info** or **Check-In**. Without records, the ride opens directly to **Ride info**; the check-in status affordance explains that no records are currently available. Unregistered rides open directly to Ride info.
 
 > 📸 **Screenshot:** Home and tour selector
 >
-> 📸 **Screenshot:** Ride details and ride plan (elevation is not yet shown)
+> 📸 **Screenshot:** Ride details and tour elevation
 
 ### Tour details and registration
 
@@ -75,6 +75,8 @@ Event participation requires an internet connection. Baggage handling and baggag
 ## Tour and ride documents
 
 When a tour or ride has documents, a **Documents** section appears on the Tour or Ride Details screen. If there are no documents, the section is hidden. Each item shows its title, filename and available file details. Tap the file button to download it; the app shows transfer progress, saves it in its private document storage, and opens the system share/view sheet so you can choose an available viewer. No public storage permission is needed. The app requests a fresh download link each time and retries once if a transfer fails. You need an internet connection.
+
+The Tour Documents section includes the **Rider docket** when uploaded by your organizer, along with other available tour files. Downloads are not limited to PDF files; viewing a file requires an app that supports its format.
 
 ## Notifications and training
 

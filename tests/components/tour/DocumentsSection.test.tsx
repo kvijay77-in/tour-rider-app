@@ -35,8 +35,8 @@ const artifact: ArtifactManifestItem = {
 
 beforeEach(() => {
   jest.clearAllMocks();
-  mockedDownloadAndOpen.mockImplementation(async (_metadata, readFreshArtifact, onProgress) => {
-    await readFreshArtifact('plan');
+  mockedDownloadAndOpen.mockImplementation(async (metadata, readFreshArtifact, onProgress) => {
+    await readFreshArtifact(metadata.artifactId);
     onProgress({ bytesWritten: 50, totalBytes: 100 });
   });
 });
@@ -61,6 +61,32 @@ it('renders returned metadata without retaining the presigned URL and shows prog
   fireEvent.press(getByTestId('open-document-plan'));
   await waitFor(() => expect(getByText('Document ready to view or share.')).toBeTruthy());
   expect(mockedGetTourArtifacts).toHaveBeenCalledWith('T1', 'plan');
+});
+
+it.each([
+  ['rider-docket', 'application/pdf', 'Rider docket', 'pdf'],
+  ['tour-schedule', 'text/csv', 'Tour schedule', 'csv'],
+  ['additional-document', 'application/octet-stream', 'Additional document', 'bin'],
+])('downloads tour artifact %s without an ID or non-image MIME allow-list', async (artifactId, contentType, title, extension) => {
+  const document: ArtifactManifestItem = {
+    ...artifact,
+    artifactId,
+    contentType,
+    title,
+    s3Key: `tours/T1/${artifactId}.${extension}`,
+  };
+  mockedGetTourArtifacts.mockResolvedValue({ success: true, data: [document], timestamp: '' });
+  const { getByText, getByTestId } = render(<DocumentsSection tourId="T1" />);
+
+  await waitFor(() => expect(getByText(title)).toBeTruthy());
+  fireEvent.press(getByTestId(`open-document-${artifactId}`));
+  await waitFor(() => expect(getByText('Document ready to view or share.')).toBeTruthy());
+
+  expect(mockedGetTourArtifacts).toHaveBeenCalledWith('T1', artifactId);
+  expect(mockedGetRideArtifacts).not.toHaveBeenCalled();
+  const metadata = mockedDownloadAndOpen.mock.calls[0][0];
+  expect(metadata).toEqual(expect.objectContaining({ artifactId, contentType, title }));
+  expect(metadata).not.toHaveProperty('downloadUrl');
 });
 
 it('loads ride-scoped manifests and presents manifest failures with retry', async () => {

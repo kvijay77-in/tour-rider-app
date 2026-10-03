@@ -19,12 +19,14 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { COLORS } from '../../constants';
 import { Card } from '../../components/common/Card';
 import { DocumentsSection } from '../../components/tour/DocumentsSection';
+import { TourArtifactImage } from '../../components/tour/TourArtifactImage';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
 import { SearchableSelectField, type SelectOption } from '../../components/common/SearchableSelectField';
 import { getTourRides } from '../../services/api/rideApi';
 import { getTours, getProfileTourParticipations } from '../../services/api/tourApi';
 import { getRiderRideCheckIns } from '../../services/api/checkInApi';
 import { useTour } from '../../hooks/useTour';
+import { useTourArtifactImages } from '../../hooks/useTourArtifactImages';
 import { useRider } from '../../hooks/useRider';
 import {
   cacheHistoricalTourCatalog,
@@ -101,6 +103,7 @@ export function TourScreen({ navigation }: Props) {
   const [participations, setParticipations] = useState<TourParticipation[]>([]);
   const [loadingCheckInKey, setLoadingCheckInKey] = useState<string | null>(null);
   const [documentsRefreshKey, setDocumentsRefreshKey] = useState(0);
+  const tourImages = useTourArtifactImages(selectedTourId ?? undefined, documentsRefreshKey);
 
   useEffect(() => {
     selectedTourIdRef.current = selectedTourId;
@@ -408,6 +411,15 @@ export function TourScreen({ navigation }: Props) {
             </Card>
 
             <DocumentsSection tourId={selectedTour.tourId} refreshKey={documentsRefreshKey} />
+
+            <TourArtifactImage
+              title="Tour Elevation"
+              source={tourImages.sources['tour-elevation']}
+              loading={tourImages.loading}
+              error={tourImages.errors['tour-elevation'] ?? tourImages.error}
+              onError={() => void tourImages.onImageError('tour-elevation')}
+              onRetry={() => void tourImages.refresh()}
+            />
 
             {isLoadingRides ? (
               <Card>

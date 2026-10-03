@@ -16,7 +16,7 @@
 #   - Keys with empty values are skipped (e.g. REVIEW_* in preview).
 #   - Flags managed by eas.json build profiles are skipped (APP_VARIANT,
 #     EXPO_PUBLIC_SUBSCRIPTION_MODE, EXPO_PUBLIC_LOG_LEVEL, EXPO_PUBLIC_API_DEBUG_GET).
-#   - Each key is created or overwritten (--force) as a plaintext string variable
+#   - Each key is created or updated as a plaintext string variable
 #     in every given EAS environment (development | preview | production).
 #   - --dry-run prints the actions without calling EAS. Values are never printed.
 #
@@ -115,14 +115,13 @@ while IFS= read -r line || [[ -n "$line" ]]; do
       echo "[dry-run] upsert $key -> $environment"
     else
       echo "upsert $key -> $environment"
-      npx --yes eas-cli@latest env:create \
+      npx --yes eas-cli@latest env:set \
         --environment "$environment" \
         --name "$key" \
         --value "$value" \
         --type string \
         --visibility plaintext \
-        --force \
-        --non-interactive
+        --non-interactive </dev/null
     fi
   done
   pushed=$((pushed + 1))
