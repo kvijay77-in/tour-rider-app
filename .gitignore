@@ -91,3 +91,4 @@ coverage/
 temp
 Temp
 *.zip
+.eas-generated/
