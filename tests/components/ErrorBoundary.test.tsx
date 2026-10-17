@@ -1,5 +1,5 @@
 import React from 'react';
-import TestRenderer from 'react-test-renderer';
+import { render, screen } from '@testing-library/react-native';
 
 import { ErrorBoundary } from '../../src/components/common/ErrorBoundary';
 import { logger } from '../../src/utils/logger';
@@ -23,21 +23,15 @@ describe('ErrorBoundary', () => {
   });
 
   it('renders the fallback UI when a child throws', () => {
-    let renderer: TestRenderer.ReactTestRenderer;
+    render(
+      React.createElement(
+        ErrorBoundary,
+        null,
+        React.createElement(ThrowOnRender),
+      ),
+    );
 
-    TestRenderer.act(() => {
-      renderer = TestRenderer.create(
-        React.createElement(
-          ErrorBoundary,
-          null,
-          React.createElement(ThrowOnRender),
-        ),
-      );
-    });
-
-    const renderedText = JSON.stringify(renderer!.toJSON());
-
-    expect(renderedText).toContain('Something went wrong');
-    expect(renderedText).toContain('Try Again');
+    expect(screen.getByText('Something went wrong')).toBeTruthy();
+    expect(screen.getByText('Try Again')).toBeTruthy();
   });
 });

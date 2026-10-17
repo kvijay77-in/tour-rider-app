@@ -84,6 +84,9 @@ GoogleService-Info*.plist
 # Android Profiling
 *.hprof
 
+# Jest
+coverage/
+
 # My exclusions
 temp
 Temp

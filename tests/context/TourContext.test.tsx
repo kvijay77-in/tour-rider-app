@@ -1,5 +1,5 @@
 import React from 'react';
-import TestRenderer from 'react-test-renderer';
+import { act, renderAsync } from '@testing-library/react-native';
 
 jest.mock('../../src/config/subscription.config', () => ({
   subscriptionConfig: {
@@ -123,7 +123,7 @@ function Consumer() {
   return (
     React.createElement(
       'Text',
-      null,
+      { testID: 'payload' },
       JSON.stringify({
         activeTourId: activeTour?.tourId ?? null,
         enrollmentStatus: enrollment?.status ?? null,
@@ -137,7 +137,7 @@ function Consumer() {
 }
 
 async function flushEffects(): Promise<void> {
-  await TestRenderer.act(async () => {
+  await act(async () => {
     await Promise.resolve();
   });
 }
@@ -177,12 +177,9 @@ describe('TourProvider', () => {
     cacheActiveTourSnapshot.mockResolvedValue(undefined);
     getCachedActiveTourSnapshot.mockResolvedValue(snapshot);
 
-    let renderer: TestRenderer.ReactTestRenderer;
-    await TestRenderer.act(async () => {
-      renderer = TestRenderer.create(
-        React.createElement(TourProvider, null, React.createElement(Consumer)),
-      );
-    });
+    const renderer = await renderAsync(
+      React.createElement(TourProvider, null, React.createElement(Consumer)),
+    );
 
     await flushEffects();
 
@@ -191,7 +188,7 @@ describe('TourProvider', () => {
     expect(getTourRides).toHaveBeenCalledTimes(1);
     expect(cacheActiveTourSnapshot).toHaveBeenCalledWith(snapshot);
 
-    const payload = renderer!.root.findByType('Text').props.children as string;
+    const payload = renderer.getByTestId('payload').props.children as string;
     const parsed = JSON.parse(payload) as {
       activeTourId: string | null;
       enrollmentStatus: string | null;
@@ -221,12 +218,9 @@ describe('TourProvider', () => {
     cacheActiveTourSnapshot.mockResolvedValue(undefined);
     getCachedActiveTourSnapshot.mockResolvedValue(snapshot);
 
-    let renderer: TestRenderer.ReactTestRenderer;
-    await TestRenderer.act(async () => {
-      renderer = TestRenderer.create(
-        React.createElement(TourProvider, null, React.createElement(Consumer)),
-      );
-    });
+    const renderer = await renderAsync(
+      React.createElement(TourProvider, null, React.createElement(Consumer)),
+    );
 
     await flushEffects();
 
@@ -235,7 +229,7 @@ describe('TourProvider', () => {
     expect(getTourRides).toHaveBeenCalledTimes(1);
     expect(cacheActiveTourSnapshot).toHaveBeenCalledWith(snapshot);
 
-    const payload = renderer!.root.findByType('Text').props.children as string;
+    const payload = renderer.getByTestId('payload').props.children as string;
     const parsed = JSON.parse(payload) as {
       activeTourId: string | null;
       enrollmentStatus: string | null;

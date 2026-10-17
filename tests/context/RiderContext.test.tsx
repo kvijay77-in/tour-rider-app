@@ -1,5 +1,5 @@
 import React from 'react';
-import TestRenderer, { act } from 'react-test-renderer';
+import { renderAsync } from '@testing-library/react-native';
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -92,19 +92,16 @@ describe('RiderContext profile picture', () => {
       return null;
     }
 
-    let renderer: TestRenderer.ReactTestRenderer;
-    await act(async () => {
-      renderer = TestRenderer.create(
-        <RiderProvider>
-          <Consumer />
-        </RiderProvider>,
-      );
-    });
+    const renderer = await renderAsync(
+      <RiderProvider>
+        <Consumer />
+      </RiderProvider>,
+    );
 
     expect(getProfilePictureDownloadUrl).toHaveBeenCalledWith('P1');
     expect(photoUrl).toBe('https://example.test/profile.jpg');
 
-    act(() => renderer.unmount());
+    await renderer.unmountAsync();
   });
 
   it('marks the profile picture as access denied when its download URL returns 403', async () => {
@@ -133,19 +130,16 @@ describe('RiderContext profile picture', () => {
       return null;
     }
 
-    let renderer: TestRenderer.ReactTestRenderer;
-    await act(async () => {
-      renderer = TestRenderer.create(
-        <RiderProvider>
-          <Consumer />
-        </RiderProvider>,
-      );
-    });
+    const renderer = await renderAsync(
+      <RiderProvider>
+        <Consumer />
+      </RiderProvider>,
+    );
 
     expect(getProfilePictureDownloadUrl).toHaveBeenCalledWith('P1');
     expect(photoAccessDenied).toBe(true);
 
-    act(() => renderer.unmount());
+    await renderer.unmountAsync();
   });
 
   it('falls back to the profile response definitionsVersion when config does not include one', async () => {
@@ -178,17 +172,14 @@ describe('RiderContext profile picture', () => {
       return null;
     }
 
-    let renderer: TestRenderer.ReactTestRenderer;
-    await act(async () => {
-      renderer = TestRenderer.create(
-        <RiderProvider>
-          <Consumer />
-        </RiderProvider>,
-      );
-    });
+    const renderer = await renderAsync(
+      <RiderProvider>
+        <Consumer />
+      </RiderProvider>,
+    );
 
     expect(definitionsVersion).toBe('profile-defs-v2');
 
-    act(() => renderer.unmount());
+    await renderer.unmountAsync();
   });
 });

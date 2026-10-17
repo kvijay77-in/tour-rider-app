@@ -39,7 +39,7 @@ describe('buildProfileSavePayload', () => {
         type: 'TEXT',
         storage: { scope: 'ATTRIBUTES' },
       }, false),
-    ]);
+    ], 'profile-v1');
 
     const profile: RiderProfile = {
       profileId: 'PROFILE-1',
