@@ -18,7 +18,6 @@ const BASE_ID = 'com.tourrider.app';
 const BASE_NAME = 'Tour Rider';
 const BASE_SCHEME = 'tour-rider-app';
 const ID = IS_TEST ? `${BASE_ID}.dev` : BASE_ID;
-const GOOGLE_SERVICES_FILE = process.env.GOOGLE_SERVICES_JSON;
 
 export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
@@ -30,11 +29,13 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   android: {
     ...config.android,
     package: ID,
-    ...(GOOGLE_SERVICES_FILE ? { googleServicesFile: GOOGLE_SERVICES_FILE } : {}),
     adaptiveIcon: {
       ...config.android?.adaptiveIcon,
       foregroundImage: IS_TEST ? './assets/adaptive-icon-test.png' : './assets/adaptive-icon.png',
     },
+    ...(process.env.GOOGLE_SERVICES_JSON
+      ? { googleServicesFile: process.env.GOOGLE_SERVICES_JSON }
+      : {})
   },
   extra: { ...config.extra, appVariant: VARIANT },
 });
