@@ -98,6 +98,10 @@ export interface TourRider {
   updatedAt?: string;
 }
 
+export interface TourParticipation extends TourRider {
+  tourId: string;
+}
+
 /**
  * Tour registration request
  */

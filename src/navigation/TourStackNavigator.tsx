@@ -11,6 +11,7 @@ import { DrawerActions } from '@react-navigation/native';
 import { COLORS } from '../constants';
 import { TourScreen } from '../screens/tour/TourScreen';
 import { RideDetailsScreen } from '../screens/tour/RideDetailsScreen';
+import { CheckInStatusScreen } from '../screens/checkin/CheckInStatusScreen';
 import type { TourStackParamList } from '../types/navigation';
 
 const Stack = createNativeStackNavigator<TourStackParamList>();
@@ -40,6 +41,13 @@ export function TourStackNavigator() {
         component={RideDetailsScreen}
         options={{
           title: 'Ride Details',
+        }}
+      />
+      <Stack.Screen
+        name="CheckInStatus"
+        component={CheckInStatusScreen}
+        options={{
+          title: 'Check-In Status',
         }}
       />
     </Stack.Navigator>

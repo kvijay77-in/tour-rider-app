@@ -3,7 +3,7 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -12,8 +12,11 @@ import { Card } from '../../components/common/Card';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
 import { ProfileSummaryCard } from '../../components/home/ProfileSummaryCard';
 import { HomeSectionCard } from '../../components/home/HomeSectionCard';
+import { SelfCheckInPanel } from '../../components/checkin/SelfCheckInPanel';
 import { useRider } from '../../hooks/useRider';
 import { useNotifications } from '../../hooks/useNotifications';
+import { useTour } from '../../hooks/useTour';
+import { useTourArtifactImages } from '../../hooks/useTourArtifactImages';
 import { getRelativeTime } from '../../utils/dateFormatter';
 
 interface HomeNavigation {
@@ -35,11 +38,13 @@ interface Props {
 export function HomeScreen({ navigation, route }: Props) {
   const { profile, isLoading } = useRider();
   const { latestItems } = useNotifications();
+  const { activeTour } = useTour();
+  const tourImages = useTourArtifactImages(activeTour?.tourId);
 
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    const incomingMessage = route.params?.successMessage;
+    const incomingMessage = route?.params?.successMessage;
     if (!incomingMessage) {
       return;
     }
@@ -52,7 +57,7 @@ export function HomeScreen({ navigation, route }: Props) {
     }, 3000);
 
     return () => clearTimeout(timer);
-  }, [navigation, route.params?.successMessage]);
+  }, [navigation, route?.params?.successMessage]);
 
   if (isLoading && !profile) {
     return <LoadingSpinner message="Loading home..." />;
@@ -60,7 +65,7 @@ export function HomeScreen({ navigation, route }: Props) {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <View style={styles.container}>
+      <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
         {successMessage ? (
           <View style={styles.banner}>
             <Text style={styles.bannerText}>{successMessage}</Text>
@@ -78,16 +83,24 @@ export function HomeScreen({ navigation, route }: Props) {
           <HomeSectionCard
             title="Training Challenge"
             subtitle="Track your prep journey"
-            imageSource={require('../../../assets/TC_2026.jpg')}
+            imageSource={tourImages.sources['training-challenge']}
+            onImageError={() => void tourImages.onImageError('training-challenge')}
+            imageError={tourImages.errors['training-challenge'] ?? tourImages.error}
+            onRetry={() => void tourImages.refresh()}
             onPress={() => navigation.navigate('TrainingChallenge')}
           />
           <HomeSectionCard
             title="Tour"
-            subtitle="ToT 2026"
-            imageSource={require('../../../assets/rideplan-2026.png')}
+            subtitle={activeTour?.name}
+            imageSource={tourImages.sources['ride-plan']}
+            onImageError={() => void tourImages.onImageError('ride-plan')}
+            imageError={tourImages.errors['ride-plan'] ?? tourImages.error}
+            onRetry={() => void tourImages.refresh()}
             onPress={() => navigation.navigate('Tour')}
           />
         </View>
+
+        <SelfCheckInPanel />
 
         <View style={styles.rowThree}>
           <Card style={styles.newsCard}>
@@ -122,7 +135,7 @@ export function HomeScreen({ navigation, route }: Props) {
             </Pressable>
           </Card>
         </View>
-      </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -133,9 +146,9 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.background,
   },
   container: {
-    flex: 1,
     padding: 16,
     gap: 12,
+    flexGrow: 1,
   },
   banner: {
     backgroundColor: COLORS.success,
@@ -149,17 +162,17 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   rowOne: {
-    flex: 3,
+    flexShrink: 0,
     minHeight: 150,
   },
   rowTwo: {
-    flex: 2,
+    flexShrink: 0,
     minHeight: 130,
     flexDirection: 'row',
     gap: 12,
   },
   rowThree: {
-    flex: 5,
+    flexShrink: 0,
     minHeight: 220,
   },
   newsCard: {

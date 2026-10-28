@@ -3,26 +3,35 @@
  */
 
 import React from 'react';
-import { Image, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { COLORS } from '../../constants';
 import { Card } from '../../components/common/Card';
+import { TourArtifactImage } from '../../components/tour/TourArtifactImage';
+import { useTour } from '../../hooks/useTour';
+import { useTourArtifactImages } from '../../hooks/useTourArtifactImages';
 
 export function TrainingChallengeScreen() {
+  const { activeTour } = useTour();
+  const tourImages = useTourArtifactImages(activeTour?.tourId);
   return (
     <SafeAreaView style={styles.safeArea}>
-      <View style={styles.container}>
+      <ScrollView contentContainerStyle={styles.container}>
         <Card style={styles.card}>
-          <Image
-            source={require('../../../assets/TC_2026.jpg')}
-            resizeMode="cover"
-            style={styles.image}
+          <TourArtifactImage
+            title="Training Challenge"
+            showTitle={false}
+            source={tourImages.sources['training-challenge']}
+            loading={tourImages.loading}
+            error={tourImages.errors['training-challenge'] ?? tourImages.error}
+            onError={() => void tourImages.onImageError('training-challenge')}
+            onRetry={() => void tourImages.refresh()}
           />
           <Text style={styles.title}>Training Challenge</Text>
           <Text style={styles.subtitle}>Coming soon....</Text>
         </Card>
-      </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -33,7 +42,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.background,
   },
   container: {
-    flex: 1,
+    flexGrow: 1,
     padding: 16,
   },
   card: {
@@ -41,11 +50,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     gap: 12,
-  },
-  image: {
-    width: '100%',
-    height: 260,
-    borderRadius: 10,
   },
   title: {
     fontSize: 24,

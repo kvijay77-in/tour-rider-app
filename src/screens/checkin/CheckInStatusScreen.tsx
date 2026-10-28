@@ -17,15 +17,23 @@ import { LoadingSpinner } from '../../components/common/LoadingSpinner';
 import { Card } from '../../components/common/Card';
 import { StageIndicator } from '../../components/checkin/StageIndicator';
 import { CheckInCard } from '../../components/checkin/CheckInCard';
+import { SelfCheckInPanel } from '../../components/checkin/SelfCheckInPanel';
 import { useTour } from '../../hooks/useTour';
-import { getRideCheckIns } from '../../services/api/checkInApi';
+import { getRideCheckIns, getRiderRideCheckIns } from '../../services/api/checkInApi';
+import { getRideDetails } from '../../services/api/rideApi';
 import { logger } from '../../utils/logger';
 import type { CheckIn } from '../../types/checkin';
 import { CheckInStatus } from '../../types/checkin';
+import type { Ride } from '../../types/ride';
+import type { TourStackParamList } from '../../types/navigation';
 
 const TAG = 'CheckInStatusScreen';
 
-export function CheckInStatusScreen() {
+type Props = {
+  route?: { params?: TourStackParamList['CheckInStatus'] };
+};
+
+export function CheckInStatusScreen({ route }: Props) {
   const {
     activeTour,
     enrollment,
@@ -35,13 +43,45 @@ export function CheckInStatusScreen() {
   } = useTour();
 
   const [checkIns, setCheckIns] = useState<CheckIn[]>([]);
+  const [ride, setRide] = useState<Ride | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const routeParams = route?.params;
 
   const fetchData = useCallback(async () => {
+    if (routeParams) {
+      setError(null);
+      try {
+        const [rideResponse, checkInsResponse] = await Promise.all([
+          getRideDetails(routeParams.tourId, routeParams.rideId),
+          getRiderRideCheckIns(routeParams.tourId, routeParams.riderId, routeParams.rideNo),
+        ]);
+
+        if (rideResponse.success && rideResponse.data) {
+          setRide(rideResponse.data);
+        } else {
+          setRide(null);
+        }
+
+        if (checkInsResponse.success && checkInsResponse.data) {
+          setCheckIns(checkInsResponse.data.checkIns);
+        } else {
+          setCheckIns([]);
+        }
+      } catch (err) {
+        logger.error(TAG, 'Error fetching parameterized check-in data', err);
+        setError('Unable to load check-in data. Please try again.');
+      } finally {
+        setIsLoading(false);
+        setRefreshing(false);
+      }
+      return;
+    }
+
     if (!activeTour || !enrollment) {
       setCheckIns([]);
+      setRide(null);
       setIsLoading(false);
       return;
     }
@@ -50,8 +90,11 @@ export function CheckInStatusScreen() {
     try {
       if (!activeTodaysRide) {
         setCheckIns([]);
+        setRide(null);
         return;
       }
+
+      setRide(activeTodaysRide);
 
       const checkInsResponse = await getRideCheckIns(
         activeTour.tourId,
@@ -71,7 +114,7 @@ export function CheckInStatusScreen() {
       setIsLoading(false);
       setRefreshing(false);
     }
-  }, [activeTodaysRide, activeTour, enrollment]);
+  }, [activeTodaysRide, activeTour, enrollment, routeParams]);
 
   useEffect(() => {
     void fetchData();
@@ -80,7 +123,10 @@ export function CheckInStatusScreen() {
   const handleRefresh = async () => {
     setRefreshing(true);
     setIsLoading(true);
-    await loadActiveTour();
+    if (!routeParams) {
+      await loadActiveTour();
+    }
+    await fetchData();
   };
 
   /** Derive overall check-in status from check-in records. */
@@ -93,8 +139,8 @@ export function CheckInStatusScreen() {
 
   /** Resolve stage name for a check-in. */
   const getStageName = (checkIn: CheckIn): string => {
-    if (!activeTodaysRide) return `Stage ${checkIn.stageNumber}`;
-    const stage = activeTodaysRide.stages.find((s) => s.stageId === checkIn.stageId);
+    if (!ride) return `Stage ${checkIn.stageNumber}`;
+    const stage = ride.stages.find((s) => s.stageId === checkIn.stageId);
     return stage?.name ?? `Stage ${checkIn.stageNumber}`;
   };
 
@@ -106,7 +152,7 @@ export function CheckInStatusScreen() {
     );
   }
 
-  if (!activeTour || !enrollment) {
+  if (!routeParams && (!activeTour || !enrollment)) {
     return (
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.centered}>
@@ -128,16 +174,21 @@ export function CheckInStatusScreen() {
         </View>
       ) : null}
 
-      {activeTodaysRide ? (
+      {ride ? (
         <FlatList
           data={checkIns}
           keyExtractor={(item) => item.checkInId}
           ListHeaderComponent={
             <View>
+              <SelfCheckInPanel
+                expectedTourId={routeParams?.tourId}
+                expectedRideId={routeParams?.rideId}
+                onRefresh={fetchData}
+              />
               <Card style={styles.progressCard}>
-                <Text style={styles.rideName}>{activeTodaysRide.name}</Text>
+                <Text style={styles.rideName}>{ride.name}</Text>
                 <StageIndicator
-                  stages={activeTodaysRide.stages}
+                  stages={ride.stages}
                   checkIns={checkIns}
                   checkInStatus={deriveOverallStatus()}
                 />

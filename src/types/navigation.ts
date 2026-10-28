@@ -31,7 +31,14 @@ export type MainDrawerParamList = {
   ViewProfile: undefined;
   TrainingChallenge: undefined;
   Tour: undefined;
+  Events: undefined;
   ChangePassword: undefined;
+};
+
+/** Event list and details screens. */
+export type EventsStackParamList = {
+  EventsList: undefined;
+  EventDetails: { tourId: string; eventId: string; riderId: string };
 };
 
 /**
@@ -40,6 +47,7 @@ export type MainDrawerParamList = {
 export type TourStackParamList = {
   TourRides: undefined;
   RideDetails: { rideId: string; tourId: string };
+  CheckInStatus: { tourId: string; riderId: string; rideId: string; rideNo: number };
 };
 
 /**

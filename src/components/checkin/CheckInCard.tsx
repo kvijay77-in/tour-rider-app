@@ -11,6 +11,7 @@ import { StatusBadge } from '../common/StatusBadge';
 import { formatDateTime } from '../../utils/dateFormatter';
 import type { CheckIn } from '../../types';
 import { deriveCheckInStatus, CheckInStatus } from '../../types';
+import { getCheckInMethodLabel } from '../../utils/checkInPresentation';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -53,6 +54,10 @@ function CheckInCardInner({ checkIn, stageName }: CheckInCardProps) {
 
       <Text style={styles.timestamp}>{formatDateTime(checkIn.timestamp)}</Text>
 
+      {getCheckInMethodLabel(checkIn.method) ? (
+        <Text style={styles.method}>{getCheckInMethodLabel(checkIn.method)}</Text>
+      ) : null}
+
       {checkIn.notes ? (
         <Text style={styles.notes} numberOfLines={2}>
           {checkIn.notes}
@@ -86,6 +91,11 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   timestamp: {
+    fontSize: 13,
+    color: COLORS.textSecondary,
+  },
+  method: {
+    marginTop: 4,
     fontSize: 13,
     color: COLORS.textSecondary,
   },

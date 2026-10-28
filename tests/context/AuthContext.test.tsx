@@ -3,7 +3,7 @@
  */
 
 import React from 'react';
-import TestRenderer, { act } from 'react-test-renderer';
+import { act, renderAsync } from '@testing-library/react-native';
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -74,13 +74,11 @@ async function renderAuth(): Promise<{ current: () => AuthValue }> {
     latest = useAuth();
     return null;
   }
-  await act(async () => {
-    TestRenderer.create(
-      <AuthProvider>
-        <Probe />
-      </AuthProvider>,
-    );
-  });
+  await renderAsync(
+    <AuthProvider>
+      <Probe />
+    </AuthProvider>,
+  );
   return { current: () => latest as unknown as AuthValue };
 }
 

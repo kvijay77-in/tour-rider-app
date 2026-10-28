@@ -8,11 +8,18 @@ export type {
   ProfileAttributeFileUrlResponse,
   LinkProfileResponse,
 } from './rider';
-export type { Tour, TourRider, TourRegistrationRequest, RiderTourStatistics } from './tour';
+export type { Tour, TourParticipation, TourRider, TourRegistrationRequest, RiderTourStatistics } from './tour';
 export { TourStatus, TourRiderStatus } from './tour';
-export type { Ride, Stage } from './ride';
+export type { Ride, RideSelfService, RideSelfServiceStage, Stage } from './ride';
 export { RideStatus } from './ride';
-export type { CheckIn, NotRidingRequest, QuitRidingRequest } from './checkin';
+export type {
+  CheckIn,
+  CheckInHistory,
+  CheckInMethod,
+  SelfCheckInRequest,
+  NotRidingRequest,
+  QuitRidingRequest,
+} from './checkin';
 export { CheckInStatus, deriveCheckInStatus } from './checkin';
 export type {
   Notification,
@@ -24,10 +31,28 @@ export type {
   PushDevicePlatform,
 } from './notification';
 export type { ApiResponse, PaginatedResponse } from './api';
+export type { ArtifactDisplayMetadata, ArtifactManifestItem, ArtifactScope } from './artifact';
+export type {
+  EventActivity,
+  EventActivityOutcome,
+  EventActivityRecord,
+  EventBootstrap,
+  EventBootstrapOccurrence,
+  EventDefinition,
+  EventOccurrence,
+  EventOccurrenceStatus,
+  EventProgressItem,
+  EventProgressRegistration,
+  EventType,
+  EventVariantOption,
+  RiderEventProgress,
+  SelfEventRecordRequest,
+} from './event';
 export type {
   AuthStackParamList,
   MainTabParamList,
   MainDrawerParamList,
+  EventsStackParamList,
   TourStackParamList,
   HomeStackParamList,
   CheckInStackParamList,

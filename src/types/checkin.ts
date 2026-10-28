@@ -13,6 +13,8 @@ export enum CheckInStatus {
   QUIT_RIDING = 'QUIT_RIDING',
 }
 
+export type CheckInMethod = 'QR_SCAN' | 'MANUAL' | 'SELF_SERVICE' | string;
+
 /**
  * Check-in record for a rider at a specific stage (from CheckIn-{tourId} table)
  */
@@ -38,6 +40,15 @@ export interface CheckIn {
   /** User who performed the check-in */
   checkedInBy: string;
 
+  /** Method used to create the record */
+  method?: CheckInMethod;
+
+  /** Backend status for the record */
+  status?: CheckInStatus | 'FLOAT' | 'CANCELLED' | string;
+
+  /** Ride sequence number returned by rider-history endpoints */
+  rideNo?: number;
+
   /** True if rider is Not Riding for the day */
   isNotRiding: boolean;
 
@@ -55,7 +66,24 @@ export interface CheckIn {
 
   /** Created timestamp */
   createdAt?: string;
+
+  /** Cancellation audit metadata */
+  cancelledAt?: string;
+  cancelledBy?: string;
 }
+
+export interface CheckInHistory {
+  tourId?: string;
+  riderId: string;
+  rideNo: number;
+  checkIns: CheckIn[];
+  available: boolean;
+}
+
+export type SelfCheckInRequest =
+  | { stageNumber: number; isNotRiding?: never; isQuitRiding?: never; timestamp?: string; notes?: string }
+  | { isNotRiding: true; stageNumber?: never; isQuitRiding?: never; timestamp?: string; notes?: string }
+  | { isQuitRiding: true; stageNumber?: never; isNotRiding?: never; timestamp?: string; notes?: string };
 
 /**
  * Not Riding request body

@@ -22,7 +22,7 @@ npx eas-cli@latest login
 npx eas-cli@latest whoami
 ```
 
-The examples below write `eas` for brevity; run them as `npx eas-cli@latest <command>`.
+The examples below write `eas` for brevity; run them as `npx eas-cli@latest <command>`. Alternatively you can use `alias eas="npx eas-cli@latest"` to avoid typing `npx eas-cli@latest` each time. Add it to your shell configuration file (e.g., `.bashrc` or `.zshrc`).
 
 ## 2. Link the EAS project (once)
 

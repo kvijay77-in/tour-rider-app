@@ -1,5 +1,5 @@
 import React from 'react';
-import TestRenderer, { act } from 'react-test-renderer';
+import { act, renderAsync } from '@testing-library/react-native';
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -85,7 +85,7 @@ function Consumer() {
 
   return React.createElement(
     'Text',
-    null,
+    { testID: 'payload' },
     JSON.stringify({ unreadCount, itemCount: items.length, isApiAvailable }),
   );
 }
@@ -119,16 +119,13 @@ describe('NotificationContext', () => {
       timestamp: '',
     });
 
-    let renderer: TestRenderer.ReactTestRenderer;
-    await act(async () => {
-      renderer = TestRenderer.create(
-        <NotificationProvider>
-          <Consumer />
-        </NotificationProvider>,
-      );
-    });
+    const renderer = await renderAsync(
+      <NotificationProvider>
+        <Consumer />
+      </NotificationProvider>,
+    );
 
-    const payload = renderer!.root.findByType('Text').props.children as string;
+    const payload = renderer.getByTestId('payload').props.children as string;
     const parsed = JSON.parse(payload) as {
       unreadCount: number;
       itemCount: number;
@@ -139,7 +136,7 @@ describe('NotificationContext', () => {
     expect(parsed.itemCount).toBe(1);
     expect(parsed.isApiAvailable).toBe(true);
 
-    act(() => renderer!.unmount());
+    await renderer.unmountAsync();
   });
 
   it('hides badge availability when API returns 404/501', async () => {
@@ -150,16 +147,13 @@ describe('NotificationContext', () => {
     });
     isNotificationsApiUnavailable.mockReturnValue(true);
 
-    let renderer: TestRenderer.ReactTestRenderer;
-    await act(async () => {
-      renderer = TestRenderer.create(
-        <NotificationProvider>
-          <Consumer />
-        </NotificationProvider>,
-      );
-    });
+    const renderer = await renderAsync(
+      <NotificationProvider>
+        <Consumer />
+      </NotificationProvider>,
+    );
 
-    const payload = renderer!.root.findByType('Text').props.children as string;
+    const payload = renderer.getByTestId('payload').props.children as string;
     const parsed = JSON.parse(payload) as {
       unreadCount: number;
       itemCount: number;
@@ -170,20 +164,17 @@ describe('NotificationContext', () => {
     expect(parsed.itemCount).toBe(0);
     expect(parsed.isApiAvailable).toBe(false);
 
-    act(() => renderer!.unmount());
+    await renderer.unmountAsync();
   });
 
   it('refreshes when a foreground push notification is received', async () => {
     getNotifications.mockResolvedValue({ success: true, data: { items: [], unreadCount: 0 }, timestamp: '' });
 
-    let renderer: TestRenderer.ReactTestRenderer;
-    await act(async () => {
-      renderer = TestRenderer.create(
-        <NotificationProvider>
-          <Consumer />
-        </NotificationProvider>,
-      );
-    });
+    const renderer = await renderAsync(
+      <NotificationProvider>
+        <Consumer />
+      </NotificationProvider>,
+    );
 
     const receivedListener = addNotificationReceivedListener.mock.calls[0][0] as (notification: unknown) => void;
 
@@ -198,25 +189,22 @@ describe('NotificationContext', () => {
 
     expect(getNotifications).toHaveBeenCalledTimes(2);
 
-    const payload = renderer!.root.findByType('Text').props.children as string;
+    const payload = renderer.getByTestId('payload').props.children as string;
     const parsed = JSON.parse(payload) as { unreadCount: number };
     expect(parsed.unreadCount).toBe(1);
 
-    act(() => renderer!.unmount());
+    await renderer.unmountAsync();
   });
 
   it('routes push tap responses through target allow-list', async () => {
     getNotifications.mockResolvedValue({ success: true, data: { items: [], unreadCount: 0 }, timestamp: '' });
     navigationRef.isReady.mockReturnValue(true);
 
-    let renderer: TestRenderer.ReactTestRenderer;
-    await act(async () => {
-      renderer = TestRenderer.create(
-        <NotificationProvider>
-          <Consumer />
-        </NotificationProvider>,
-      );
-    });
+    const renderer = await renderAsync(
+      <NotificationProvider>
+        <Consumer />
+      </NotificationProvider>,
+    );
 
     const responseListener = addNotificationResponseReceivedListener.mock.calls[0][0] as (response: unknown) => void;
 
@@ -239,22 +227,19 @@ describe('NotificationContext', () => {
 
     expect(navigationRef.navigate).toHaveBeenCalledWith('ViewProfile');
 
-    act(() => renderer!.unmount());
+    await renderer.unmountAsync();
   });
 
   it('cleans up push token registration on provider unmount', async () => {
     getNotifications.mockResolvedValue({ success: true, data: { items: [], unreadCount: 0 }, timestamp: '' });
 
-    let renderer: TestRenderer.ReactTestRenderer;
-    await act(async () => {
-      renderer = TestRenderer.create(
-        <NotificationProvider>
-          <Consumer />
-        </NotificationProvider>,
-      );
-    });
+    const renderer = await renderAsync(
+      <NotificationProvider>
+        <Consumer />
+      </NotificationProvider>,
+    );
 
-    act(() => renderer!.unmount());
+    await renderer.unmountAsync();
 
     expect(unregisterPushTokenForCurrentUser).toHaveBeenCalled();
   });

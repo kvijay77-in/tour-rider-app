@@ -37,14 +37,31 @@ describe('getTodaysRide', () => {
     });
 
     const result = await getTodaysRide('T1');
-    expect(mockedGet).toHaveBeenCalledWith('/v1/tours/T1/rides/today');
+    expect(mockedGet).toHaveBeenCalledWith('/v1/tours/T1/rides/today', expect.objectContaining({
+      returnErrorResponseForStatuses: [404],
+    }));
     expect(result.data).toEqual({ rideId: 'R1', name: 'Day 1' });
   });
 
   it('encodes tourId', async () => {
     mockedGet.mockResolvedValueOnce({ success: true, timestamp: '' });
     await getTodaysRide('TOUR/2026');
-    expect(mockedGet).toHaveBeenCalledWith(`/v1/tours/${encodeURIComponent('TOUR/2026')}/rides/today`);
+    expect(mockedGet).toHaveBeenCalledWith(
+      `/v1/tours/${encodeURIComponent('TOUR/2026')}/rides/today`,
+      expect.objectContaining({ returnErrorResponseForStatuses: [404] }),
+    );
+  });
+
+  it('returns the expected no-active-ride 404 for the caller to handle as an empty state', async () => {
+    mockedGet.mockResolvedValueOnce({
+      success: false,
+      error: { code: 'NO_ACTIVE_RIDE', message: 'No ride is scheduled for today' },
+      timestamp: '',
+    });
+
+    const result = await getTodaysRide('T1');
+    expect(result.success).toBe(false);
+    expect(result.error?.code).toBe('NO_ACTIVE_RIDE');
   });
 });
 
