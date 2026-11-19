@@ -2,6 +2,8 @@
  * Navigation types for the Tour Rider App.
  */
 
+import type { NavigatorScreenParams } from '@react-navigation/native';
+
 /**
  * Auth stack screens (unauthenticated)
  */
@@ -30,7 +32,7 @@ export type MainDrawerParamList = {
   Notifications: undefined;
   ViewProfile: undefined;
   TrainingChallenge: undefined;
-  Tour: undefined;
+  Tour: NavigatorScreenParams<TourStackParamList> | undefined;
   Events: undefined;
   ChangePassword: undefined;
 };

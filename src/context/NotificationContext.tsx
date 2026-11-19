@@ -16,7 +16,7 @@ import {
   unregisterPushTokenForCurrentUser,
 } from '../services/push/pushService';
 import { logger } from '../utils/logger';
-import { navigationRef } from '../navigation/navigationRef';
+import { navigateForNotificationTarget } from '../navigation/notificationNavigation';
 import type { Notification } from '../types/notification';
 
 const TAG = 'NotificationContext';
@@ -74,44 +74,6 @@ function getTargetParams(target: NotificationTargetPayload): Record<string, unkn
   }
 
   return target.params as Record<string, unknown>;
-}
-
-function navigateForNotificationTarget(target: NotificationTargetPayload, fallbackTourId?: string): void {
-  if (!navigationRef.isReady()) {
-    return;
-  }
-
-  const screen = getTargetScreen(target);
-  const params = getTargetParams(target);
-
-  if (screen === 'PROFILE') {
-    navigationRef.navigate('ViewProfile' as never);
-    return;
-  }
-
-  if (screen === 'TOUR') {
-    navigationRef.navigate('Tour' as never);
-    return;
-  }
-
-  if (screen === 'RIDE_DETAILS') {
-    const rideId = typeof params?.rideId === 'string' ? params.rideId : undefined;
-    const tourId = typeof params?.tourId === 'string' ? params.tourId : fallbackTourId;
-
-    if (rideId && tourId) {
-      navigationRef.navigate('Tour' as never, {
-        screen: 'RideDetails',
-        params: { rideId, tourId },
-      } as never);
-      return;
-    }
-  }
-
-  if (screen !== 'NOTIFICATIONS') {
-    logger.info(TAG, `Unknown notification target ${screen}, opening Notifications.`);
-  }
-
-  navigationRef.navigate('Notifications' as never);
 }
 
 export function NotificationProvider({ children }: { children: React.ReactNode }) {
@@ -295,7 +257,10 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       const target = mapTargetPayload(data?.target);
       const fallbackTourId = typeof data?.tourId === 'string' ? data.tourId : undefined;
 
-      navigateForNotificationTarget(target, fallbackTourId);
+      navigateForNotificationTarget(getTargetScreen(target), getTargetParams(target), {
+        fallbackTourId,
+        fallbackToInbox: true,
+      });
       void refresh();
     });
 

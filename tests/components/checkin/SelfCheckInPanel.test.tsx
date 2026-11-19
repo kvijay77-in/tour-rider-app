@@ -7,7 +7,7 @@ import { useRider } from '../../../src/hooks/useRider';
 import { cancelSelfCheckIn, getRiderRideCheckIns, submitSelfCheckIn } from '../../../src/services/api/checkInApi';
 import { getTodaysRide } from '../../../src/services/api/rideApi';
 import { StageType } from '../../../src/constants/stages';
-import { TourRiderStatus, TourStatus } from '../../../src/types/tour';
+import { TourRiderStatus, TourStatus, type Tour } from '../../../src/types/tour';
 import { RideStatus, type Ride } from '../../../src/types/ride';
 import type { CheckIn } from '../../../src/types/checkin';
 
@@ -37,7 +37,15 @@ const mockedGetRiderRideCheckIns = getRiderRideCheckIns as jest.MockedFunction<t
 const mockedSubmit = submitSelfCheckIn as jest.MockedFunction<typeof submitSelfCheckIn>;
 const mockedCancel = cancelSelfCheckIn as jest.MockedFunction<typeof cancelSelfCheckIn>;
 
-const activeTour = { tourId: 'TOUR-1', status: TourStatus.ACTIVE };
+const activeTour: Tour = {
+  tourId: 'TOUR-1',
+  name: 'Test Tour',
+  startDate: '2026-01-01',
+  endDate: '2026-12-31',
+  status: TourStatus.ACTIVE,
+  createdAt: '2026-01-01T00:00:00Z',
+  updatedAt: '2026-01-01T00:00:00Z',
+};
 const enrollment = {
   tourId: 'TOUR-1',
   riderId: 'R1',

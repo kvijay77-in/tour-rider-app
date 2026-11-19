@@ -4,7 +4,7 @@ import { render, screen } from '@testing-library/react-native';
 import { ErrorBoundary } from '../../src/components/common/ErrorBoundary';
 import { logger } from '../../src/utils/logger';
 
-function ThrowOnRender() {
+function ThrowOnRender(): React.ReactElement {
   throw new Error('boom');
 }
 
