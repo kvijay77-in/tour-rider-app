@@ -2,7 +2,14 @@
  * Unit tests for src/services/api/checkInApi.ts
  */
 
-import { getRideCheckIns, submitNotRiding, submitQuitRiding } from '../../src/services/api/checkInApi';
+import {
+  cancelSelfCheckIn,
+  getRideCheckIns,
+  getRiderRideCheckIns,
+  submitNotRiding,
+  submitQuitRiding,
+  submitSelfCheckIn,
+} from '../../src/services/api/checkInApi';
 import { apiClient } from '../../src/services/api/apiClient';
 
 // Mock apiClient
@@ -71,6 +78,59 @@ describe('getRideCheckIns', () => {
     const path = mockedGet.mock.calls[0][0];
     expect(path).toContain(encodeURIComponent('TOUR/1'));
     expect(path).toContain(encodeURIComponent('RIDE/1'));
+  });
+});
+
+describe('getRiderRideCheckIns', () => {
+  it('uses the Rider ride-number history endpoint and normalizes checkIns', async () => {
+    mockedGet.mockResolvedValueOnce({
+      success: true,
+      data: { riderId: 'R1', rideNo: 2, checkIns: [{ checkInId: 'ci-1' }] },
+      timestamp: '2026-01-01T00:00:00Z',
+    });
+
+    const result = await getRiderRideCheckIns('TOUR/1', 'R/1', 2);
+
+    expect(mockedGet).toHaveBeenCalledWith(
+      '/v1/tours/TOUR%2F1/riders/R%2F1/rides/2/checkins',
+      expect.objectContaining({ returnErrorResponseForStatuses: [404] }),
+    );
+    expect(result.data?.checkIns).toEqual([{ checkInId: 'ci-1' }]);
+    expect(result.data?.available).toBe(true);
+  });
+
+  it('turns the expected 404 response into unavailable empty data', async () => {
+    mockedGet.mockResolvedValueOnce({
+      success: false,
+      error: { code: 'HTTP_404', message: 'Not found' },
+      timestamp: '2026-01-01T00:00:00Z',
+    });
+
+    const result = await getRiderRideCheckIns('TOUR-1', 'R1', 1);
+    expect(result.success).toBe(true);
+    expect(result.data).toMatchObject({ riderId: 'R1', rideNo: 1, checkIns: [], available: false });
+  });
+});
+
+describe('Rider self-check-in endpoints', () => {
+  it('posts exactly the supplied self-check-in body', async () => {
+    mockedPost.mockResolvedValueOnce({ success: true, data: { checkInId: 'ci-1' }, timestamp: '' });
+
+    await submitSelfCheckIn('TOUR-1', 'RIDE-1', { stageNumber: 0 });
+    expect(mockedPost).toHaveBeenCalledWith(
+      '/v1/tours/TOUR-1/rides/RIDE-1/self-checkins',
+      { stageNumber: 0 },
+    );
+  });
+
+  it('uses the Rider cancellation route without a rider ID', async () => {
+    mockedPost.mockResolvedValueOnce({ success: true, data: { checkInId: 'ci-1' }, timestamp: '' });
+
+    await cancelSelfCheckIn('TOUR-1', 'RIDE-1', 'ci/1');
+    expect(mockedPost).toHaveBeenCalledWith(
+      '/v1/tours/TOUR-1/rides/RIDE-1/self-checkins/ci%2F1/cancel',
+      {},
+    );
   });
 });
 

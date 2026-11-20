@@ -1,0 +1,231 @@
+name: Deploy
+run-name: Deploy mobile (${{ inputs.platform }}) from ${{ github.ref_name }}
+
+# Manual EAS Build + store submit. The branch chosen in "Run workflow" decides the app and environment:
+#   develop -> dev:  com.tourrider.app.dev, EAS build profile `test`,       EAS environment `preview`
+#   main    -> prod: com.tourrider.app,     EAS build profile `production`, EAS environment `production`
+# Any other branch or tag fails before AWS or EAS is called.
+#
+# Backend values (EXPO_PUBLIC_*) are read from tour-data-api's SSM handover on every run and synced
+# to EAS by tools/backend-config.mjs; only changed variables are written. Jobs that assume AWS roles
+# must not use `environment:`; it changes the OIDC subject and AWS rejects the role.
+# Setup and troubleshooting: docs/guides/deployment.md
+
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: Mobile platform(s)
+        type: choice
+        options: [all, android, ios]
+        default: all
+      submit:
+        description: Submit builds to the stores when they finish (--auto-submit)
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  CONFIG_AWS_REGION: ${{ vars.CONFIG_AWS_REGION || 'ap-south-1' }}
+  # tour-data-api SSM handover paths for the rider app (no trailing slash).
+  SSM_PATH_DEV: /tour-data-api/dev/rider
+  SSM_PATH_PROD: /tour-data-api/prod/rider
+  # The Production app routes the store-reviewer account to the dev backend (EXPO_PUBLIC_REVIEW_*).
+  REVIEWER_ROUTING: 'true'
+
+jobs:
+  resolve:
+    name: Resolve environment
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      env: ${{ steps.map.outputs.env }}
+      eas_env: ${{ steps.map.outputs.eas_env }}
+      eas_profile: ${{ steps.map.outputs.eas_profile }}
+      read_dev: ${{ steps.map.outputs.read_dev }}
+      read_prod: ${{ steps.map.outputs.read_prod }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - id: map
+        env:
+          REF: ${{ github.ref }}
+          PLATFORM: ${{ inputs.platform }}
+          SUBMIT: ${{ inputs.submit }}
+          HAS_EXPO_TOKEN: ${{ secrets.EXPO_TOKEN != '' }}
+          CONFIG_ROLE_DEV: ${{ vars.AWS_CONFIG_READ_ROLE_ARN_DEV }}
+          CONFIG_ROLE_PROD: ${{ vars.AWS_CONFIG_READ_ROLE_ARN_PROD }}
+          REVIEW_USERNAME: ${{ vars.REVIEW_USERNAME }}
+        run: |
+          case "$REF" in
+            refs/heads/develop) env=dev;  eas_env=preview;    eas_profile=test ;;
+            refs/heads/main)    env=prod; eas_env=production; eas_profile=production ;;
+            *) echo "::error::Run this workflow on develop (dev) or main (prod), not $REF"; exit 1 ;;
+          esac
+          routing=false; [[ "$REVIEWER_ROUTING" == true ]] && routing=true
+          read_dev=false; read_prod=false
+          [[ "$env" == dev ]] && read_dev=true
+          [[ "$env" == prod ]] && read_prod=true
+          [[ "$env" == prod ]] && $routing && read_dev=true
+
+          # Fail fast when a setting is unset or still a <placeholder>.
+          missing=()
+          need() { [[ -n "$2" && "$2" != \<* ]] || missing+=("$1"); }
+          [[ "$HAS_EXPO_TOKEN" == true ]] || missing+=("secret EXPO_TOKEN")
+          if $read_dev; then
+            [[ "$SSM_PATH_DEV" == /* && "$SSM_PATH_DEV" != *\<* ]] || missing+=("workflow env SSM_PATH_DEV")
+            need "variable AWS_CONFIG_READ_ROLE_ARN_DEV" "$CONFIG_ROLE_DEV"
+          fi
+          if [[ "$env" == prod ]]; then
+            [[ "$SSM_PATH_PROD" == /* && "$SSM_PATH_PROD" != *\<* ]] || missing+=("workflow env SSM_PATH_PROD")
+            need "variable AWS_CONFIG_READ_ROLE_ARN_PROD" "$CONFIG_ROLE_PROD"
+            $routing && need "variable REVIEW_USERNAME" "$REVIEW_USERNAME"
+          fi
+          if [[ "$SUBMIT" == true && "$PLATFORM" != android ]]; then
+            need "eas.json submit.$eas_profile.ios.ascAppId" \
+              "$(jq -r --arg p "$eas_profile" '.submit[$p].ios.ascAppId // empty' eas.json)"
+          fi
+          if (( ${#missing[@]} )); then
+            echo "::error::Not configured for $env: ${missing[*]}"
+            [[ "$env" == prod ]] && echo "::error::Production may not be set up yet; see docs/guides/deployment.md (Production readiness)"
+            exit 1
+          fi
+
+          {
+            echo "env=$env"; echo "eas_env=$eas_env"; echo "eas_profile=$eas_profile"
+            echo "read_dev=$read_dev"; echo "read_prod=$read_prod"
+          } >> "$GITHUB_OUTPUT"
+          {
+            echo "### Deploy plan"
+            echo "| Branch | Environment | EAS profile | EAS environment | Platform | Submit |"
+            echo "|---|---|---|---|---|---|"
+            echo "| \`${REF#refs/heads/}\` | $env | \`$eas_profile\` | \`$eas_env\` | \`$PLATFORM\` | \`$SUBMIT\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  verify:
+    name: Lint, typecheck, test
+    needs: resolve
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test -- --ci
+
+  read-dev:
+    name: Read dev backend config
+    needs: resolve
+    if: needs.resolve.outputs.read_dev == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      id-token: write
+      contents: read
+    outputs:
+      params: ${{ steps.read.outputs.params }}
+    steps:
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ vars.AWS_CONFIG_READ_ROLE_ARN_DEV }}
+          aws-region: ${{ env.CONFIG_AWS_REGION }}
+          retry-max-attempts: 3
+      - id: read
+        run: |
+          params=$(aws ssm get-parameters-by-path --path "$SSM_PATH_DEV" \
+            --query 'Parameters[].[Name,Value]' --output json | jq -c .)
+          echo "Read $(jq length <<<"$params") parameter(s) from $SSM_PATH_DEV"
+          echo "params=$params" >> "$GITHUB_OUTPUT"
+
+  read-prod:
+    name: Read prod backend config
+    needs: resolve
+    if: needs.resolve.outputs.read_prod == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      id-token: write
+      contents: read
+    outputs:
+      params: ${{ steps.read.outputs.params }}
+    steps:
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ vars.AWS_CONFIG_READ_ROLE_ARN_PROD }}
+          aws-region: ${{ env.CONFIG_AWS_REGION }}
+          retry-max-attempts: 3
+      - id: read
+        run: |
+          params=$(aws ssm get-parameters-by-path --path "$SSM_PATH_PROD" \
+            --query 'Parameters[].[Name,Value]' --output json | jq -c .)
+          echo "Read $(jq length <<<"$params") parameter(s) from $SSM_PATH_PROD"
+          echo "params=$params" >> "$GITHUB_OUTPUT"
+
+  mobile:
+    name: EAS sync + build
+    needs: [resolve, verify, read-dev, read-prod]
+    if: >-
+      !cancelled()
+      && needs.resolve.result == 'success'
+      && needs.verify.result == 'success'
+      && (needs.read-dev.result == 'success' || needs.resolve.outputs.read_dev != 'true')
+      && (needs.read-prod.result == 'success' || needs.resolve.outputs.read_prod != 'true')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+      EAS_CLI: eas
+      EAS_ENV: ${{ needs.resolve.outputs.eas_env }}
+      EAS_PROFILE: ${{ needs.resolve.outputs.eas_profile }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Install latest eas-cli
+        run: npm install --global eas-cli@latest && eas --version && eas whoami
+
+      - name: Sync EAS environment from backend config
+        env:
+          DEV_PARAMS: ${{ needs.read-dev.outputs.params }}
+          PROD_PARAMS: ${{ needs.read-prod.outputs.params }}
+          REVIEW_USERNAME: ${{ vars.REVIEW_USERNAME }}
+        run: node tools/backend-config.mjs sync-eas --environment "$EAS_ENV"
+
+      - name: Start EAS build
+        env:
+          PLATFORM: ${{ inputs.platform }}
+          SUBMIT: ${{ inputs.submit }}
+          MESSAGE: "GitHub run ${{ github.run_number }} (${{ github.ref_name }} ${{ github.sha }})"
+        run: |
+          args=(build --profile "$EAS_PROFILE" --platform "$PLATFORM" --non-interactive --no-wait
+                --freeze-credentials --json --message "${MESSAGE:0:120}")
+          [[ "$SUBMIT" == true ]] && args+=(--auto-submit)
+          eas "${args[@]}" > builds.json
+          {
+            echo "### EAS builds queued (profile \`$EAS_PROFILE\`, submit \`$SUBMIT\`)"
+            echo "| Platform | Build ID |"
+            echo "|---|---|"
+            jq -r '.[] | "| \(.platform) | \(.id) |"' builds.json
+            echo
+            echo "The run does not wait for the builds. Follow builds and store submissions in the EAS dashboard."
+          } | tee -a "$GITHUB_STEP_SUMMARY"

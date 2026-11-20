@@ -11,6 +11,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { COLORS } from '../../constants';
 import { StageType } from '../../constants/stages';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
+import { DocumentsSection } from '../../components/tour/DocumentsSection';
 import { getRideDetails } from '../../services/api/rideApi';
 import { logger } from '../../utils/logger';
 import { RideStatus } from '../../types/ride';
@@ -271,6 +272,8 @@ export function RideDetailsScreen({ route }: Props) {
             </View>
           </View>
         </View>
+
+        <DocumentsSection tourId={tourId} rideId={rideId} />
 
         {error ? (
           <View style={styles.errorBanner}>

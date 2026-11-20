@@ -1,6 +1,6 @@
 # Rider app documentation
 
-_Last updated: 2026-09-30_
+_Last updated: 2026-11-20_
 
 This repository documents the rider-facing Expo app. The [platform overview](https://kvijay77-in.github.io/cycling-tour-platform/) describes the whole system; the [shared glossary](https://github.com/kvijay77-in/cycling-tour-platform/blob/main/docs/glossary.md) defines cross-app terms.
 
@@ -24,8 +24,8 @@ This repository documents the rider-facing Expo app. The [platform overview](htt
 ## Guides
 
 - [Development and project structure](guides/development.md)
-- [Build and distribution](guides/deployment.md)
-- [EAS build and release](guides/eas-build-and-release.md)
+- [Deployment](guides/deployment.md): prerequisites, settings and steps for the build and store-submission workflow, and production readiness
+- [EAS build and release](guides/eas-build-and-release.md): Test/Production profiles, store records, credentials, tester distribution and release checklist
 - [Rider's guide](user-guide/README.md)
 - [Historical planning notes](misc/INITIAL_PLANNING_SUMMARY.md)
 

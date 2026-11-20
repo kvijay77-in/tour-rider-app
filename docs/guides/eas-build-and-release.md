@@ -1,8 +1,8 @@
 # EAS build and release guide
 
-_Last updated: 2026-09-30_
+_Last updated: 2026-11-20_
 
-This is the step-by-step reference for building, submitting and distributing the two rider apps with Expo Application Services (EAS). The design and its reasoning are in [App variants and environments](../design/app-variants-and-environments.md).
+This is the step-by-step reference for setting up, submitting and distributing the two rider apps with Expo Application Services (EAS). The design and its reasoning are in [App variants and environments](../design/app-variants-and-environments.md). Store builds run from the deployment workflow; its prerequisites, settings and steps are in the [deployment guide](deployment.md). `develop` builds Test (profile `test`, EAS environment `preview`) and `main` builds Production (profile `production`, EAS environment `production`).
 
 | Variant | Build profile | EAS environment | Identifier | Store track |
 |---|---|---|---|---|
@@ -22,7 +22,7 @@ npx eas-cli@latest login
 npx eas-cli@latest whoami
 ```
 
-The examples below write `eas` for brevity; run them as `npx eas-cli@latest <command>`.
+The examples below write `eas` for brevity; run them as `npx eas-cli@latest <command>`. Alternatively you can use `alias eas="npx eas-cli@latest"` to avoid typing `npx eas-cli@latest` each time. Add it to your shell configuration file (e.g., `.bashrc` or `.zshrc`).
 
 ## 2. Link the EAS project (once)
 
@@ -98,36 +98,25 @@ These files are git-ignored (`google-services*.json`). Delete the local copies a
 
 ## 5. Environment variables
 
+The Test app uses the EAS environment `preview` and Production uses `production`. The EAS free plan has no custom environment names, so the Test environment cannot be renamed. `EXPO_PUBLIC_*` variables are bundled into the app; treat them as public configuration, never as secrets.
+
+The deployment workflow syncs the backend `EXPO_PUBLIC_*` values, including the reviewer variables in `production`, from the tour-data-api SSM handover before every build; see [EAS environment sync](deployment.md#eas-environment-sync) for the full variable table. Do not set them by hand: the next run overwrites them. Set only this by hand:
+
 | Variable | `preview` (Test) | `production` |
 |---|---|---|
-| `EXPO_PUBLIC_AWS_REGION`, `EXPO_PUBLIC_AWS_USER_POOL_ID`, `EXPO_PUBLIC_AWS_USER_POOL_WEB_CLIENT_ID`, `EXPO_PUBLIC_AWS_IDENTITY_POOL_ID` | Dev | Prod |
-| `EXPO_PUBLIC_TOUR_DATA_API_BASE_URL` | Dev | Prod |
-| `EXPO_PUBLIC_ORGANIZER_ID`, `EXPO_PUBLIC_ORGANIZER_NAME` | same | same |
-| `EXPO_PUBLIC_REVIEW_USERNAME` | **not set** | reviewer email |
-| `EXPO_PUBLIC_REVIEW_AWS_REGION`, `EXPO_PUBLIC_REVIEW_AWS_USER_POOL_ID`, `EXPO_PUBLIC_REVIEW_AWS_USER_POOL_WEB_CLIENT_ID`, `EXPO_PUBLIC_REVIEW_AWS_IDENTITY_POOL_ID`, `EXPO_PUBLIC_REVIEW_TOUR_DATA_API_BASE_URL` | **not set** | Dev |
-| `GOOGLE_SERVICES_JSON` (file, secret) | `.dev` Firebase file | prod Firebase file |
+| `GOOGLE_SERVICES_JSON` (file, secret) | `.dev` Firebase file | prod Firebase file (§4) |
 
-The `eas.json` profile sets `APP_VARIANT`, `EXPO_PUBLIC_SUBSCRIPTION_MODE`, `EXPO_PUBLIC_LOG_LEVEL` and `EXPO_PUBLIC_API_DEBUG_GET`, so do not create them in EAS environments. Get the values from the tour-data-api deployment outputs.
+Each variable must belong to one environment only. A variable linked to both `preview` and `production` takes the same value in both, and writing it changes both. The workflow splits such variables automatically; when you add a variable by hand, select a single environment.
 
-Create or update one variable:
+The `eas.json` profile sets `APP_VARIANT`, `EXPO_PUBLIC_SUBSCRIPTION_MODE`, `EXPO_PUBLIC_LOG_LEVEL`, `EXPO_PUBLIC_API_DEBUG_GET` and, when used, `EXPO_PUBLIC_ORGANIZER_ID` and `EXPO_PUBLIC_ORGANIZER_NAME`, so do not create them in EAS environments.
+
+Inspect the environments:
 
 ```bash
-eas env:create --environment production --name EXPO_PUBLIC_TOUR_DATA_API_BASE_URL \
-  --value https://api.example.com --type string --visibility plaintext --force
-eas env:list --environment preview
-eas env:list --environment production
+eas env:list preview --format long
+eas env:list production --format long
 eas env:pull --environment preview   # writes .env.local for local inspection (git-ignored)
 ```
-
-Push a whole file of values with the helper script. Keep one git-ignored file per environment:
-
-```bash
-tools/push-eas-env.sh --dry-run --file .env.preview preview
-tools/push-eas-env.sh --file .env.preview preview
-tools/push-eas-env.sh --file .env.production production
-```
-
-The script pushes only `EXPO_PUBLIC_*` keys, and skips empty values and profile-managed flags. That is why the `REVIEW_*` keys stay unset in `preview`. It never prints values.
 
 ## 6. `eas.json` reference
 
@@ -141,30 +130,15 @@ The script pushes only `EXPO_PUBLIC_*` keys, and skips empty values and profile-
 | Submit profile | iOS | Android |
 |---|---|---|
 | `test` | `ascAppId` of the Test app → TestFlight | `track: internal`, `releaseStatus: completed` |
-| `production` | `ascAppId` of the Production app → TestFlight | `track: alpha` (closed testing), `releaseStatus: completed` |
+| `production` | `ascAppId` of the Production app → TestFlight | `track: alpha` (closed testing), `releaseStatus: draft` (roll out in Play Console) |
 
 The `channel` values are reserved for a future EAS Update rollout and have no effect today.
 
 ## 7. Build and submit
 
-Run `npm run lint`, `npx tsc --noEmit` and `npm test -- --runInBand` first.
+Run the deployment workflow on `develop` for the Test app or on `main` for Production. The [deployment guide](deployment.md) covers the prerequisites, the [first run](deployment.md#first-dev-run) (including the manual first Android upload), the [inputs](deployment.md#running-a-deployment), the [store tracks](deployment.md#store-submission) and [terminal builds for emergencies](deployment.md#local-and-emergency-builds). Review the build logs and the build's environment-variable summary before each release; EAS Submit does not replace human review of the target app and release track.
 
-```bash
-# Test app (Dev backend) → TestFlight + Play internal
-eas build -p all --profile test --auto-submit
-
-# Production app (Prod backend) → TestFlight + Play closed (alpha)
-eas build -p all --profile production --auto-submit
-```
-
-You can also build first and submit later:
-
-```bash
-eas build -p ios --profile production
-eas submit -p ios --profile production --latest
-```
-
-> **The first Android upload for each package must be manual.** Google Play does not accept API uploads until the app has one release. Download the `.aab` from the EAS build page. In Play Console → Testing → Internal testing (Test app) or Closed testing (Production app), create a release and upload it. After that, `eas submit` and `--auto-submit` work.
+> **The first Android upload for each package must be manual.** Google Play does not accept API uploads until the app has one release. Run the workflow with `platform=android` and `submit` off, download the `.aab` from the EAS build page, and upload it in Play Console → Testing → Internal testing (Test app) or Closed testing (Production app). After that, `--auto-submit` works.
 
 ### Emergency iOS ad hoc build (Test app)
 
@@ -211,11 +185,10 @@ Share the install link from the build page. Devices must be registered before th
 
 ## 11. Release checklist
 
-- [ ] `expo.version` raised in `app.json`; changes merged to `main`.
-- [ ] Lint, typecheck and tests pass.
-- [ ] `eas env:list` checked for `preview` and `production`. `REVIEW_*` are set only in `production`.
+- [ ] `expo.version` raised in `app.json`.
+- [ ] Deploy workflow run on `develop`; its sync table checked. `REVIEW_*` are set only in `production`.
 - [ ] Test build on TestFlight and Play internal, verified by testers against Dev.
-- [ ] Production build from the **same commit**; install check (§8) done.
+- [ ] `develop` merged to `main`; Deploy workflow run on `main` from the **same code**; install check (§8) done.
 - [ ] Reviewer account exists in the Dev pool and its password works. **Re-create it if it was deleted**, for example through Delete my account.
 - [ ] Review notes and demo login updated in App Store Connect and Play App access.
 - [ ] Data safety deletion web link still reachable.
@@ -226,8 +199,9 @@ Share the install link from the build page. Devices must be registered before th
 
 | Symptom | Fix |
 |---|---|
+| Deploy workflow fails (resolve, AWS read, EAS sync, CI credentials) | See [Deployment troubleshooting](deployment.md#troubleshooting). |
 | `eas build` asks for a project or fails with a projectId error | Run `eas init` and replace `<EAS_PROJECT_ID>` in `app.json`. |
-| Build uses the wrong backend | Check the profile's `environment` in `eas.json` and `eas env:list --environment <env>`. The startup log shows the API host. |
+| Build uses the wrong backend | Check the sync table in the run summary, the profile's `environment` in `eas.json` and `eas env:list <env>`. The startup log shows the API host. |
 | Test app shows no TEST strip | `APP_VARIANT` is not `test`. Check the `test` profile env and `npx expo config --type public`. |
 | `eas submit` Android fails with "package not found" | The first upload must be manual (§7). |
 | `eas submit` iOS asks for the app | Set `ascAppId` in `eas.json` for that submit profile. |

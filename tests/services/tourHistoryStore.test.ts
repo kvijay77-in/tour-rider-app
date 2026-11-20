@@ -32,6 +32,7 @@ const baseTour = (overrides: Partial<Tour>): Tour => ({
 
 const baseRide = (overrides: Partial<Ride>): Ride => ({
   rideId: 'RIDE001',
+  rideNo: 1,
   date: '2026-02-11',
   name: 'Day 1',
   startLocation: 'Chennai',

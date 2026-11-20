@@ -44,12 +44,14 @@
       "expo-font",
       "expo-secure-store",
       "expo-status-bar",
-      "expo-sqlite"
+      "expo-sqlite",
+      "expo-sharing"
     ],
     "extra": {
       "eas": {
-        "projectId": "<EAS_PROJECT_ID>"
-      }
+        "projectId": "ab32d89b-2dda-4aae-bc90-df46dc38fd97"
+      },
+      "appVariant": "production"
     }
   }
 }

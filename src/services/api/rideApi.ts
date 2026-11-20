@@ -45,7 +45,13 @@ export async function getTodaysRide(
   tourId: string,
 ): Promise<ApiResponse<Ride>> {
   logger.debug(TAG, `Fetching today's ride for tour ${tourId}`);
-  return apiClient.get<Ride>(`/v1/tours/${encodeURIComponent(tourId)}/rides/today`);
+  return apiClient.get<Ride>(
+    `/v1/tours/${encodeURIComponent(tourId)}/rides/today`,
+    {
+      returnErrorResponseForStatuses: [404],
+      isExpectedError: (error) => error.statusCode === 404,
+    },
+  );
 }
 
 /**

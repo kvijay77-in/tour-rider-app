@@ -10,9 +10,24 @@ import { StageType } from '../constants/stages';
  */
 export enum RideStatus {
   PLANNED = 'PLANNED',
+  OPEN = 'OPEN',
+  STARTED = 'STARTED',
   ACTIVE = 'ACTIVE',
   COMPLETED = 'COMPLETED',
   CLOSED = 'CLOSED',
+}
+
+export interface RideSelfService {
+  quitRidingAllowed: boolean;
+  notRidingAllowed: boolean;
+  stages: RideSelfServiceStage[];
+}
+
+export interface RideSelfServiceStage {
+  stageNumber: number;
+  stageId: string;
+  stageType: StageType | string;
+  checkInAllowed: boolean;
 }
 
 /**
@@ -28,6 +43,9 @@ export interface Stage {
   /** Stage type */
   type: StageType;
 
+  /** API stage type alias returned by live ride endpoints */
+  stageType?: StageType | string;
+
   /** Stage name/label */
   name: string;
 
@@ -39,6 +57,16 @@ export interface Stage {
 
   /** Estimated time from start (in minutes) */
   estimatedTimeFromStart?: number;
+
+  /** Whether the rider may self-check in for this stage */
+  checkInAllowed?: boolean;
+
+  /** Runtime pit-stop state, when this stage is a pit stop */
+  pitStopStatus?: 'OPEN' | 'CLOSED' | string;
+
+  /** Runtime pit-stop timestamps */
+  openedAt?: string;
+  closedAt?: string;
 }
 
 /**
@@ -52,7 +80,7 @@ export interface Ride {
   date: string;
 
   /** Ride sequence number for the day */
-  rideNo?: number;
+  rideNo: number;
 
   /** Ride name/title (e.g., Day1, Day2) */
   name: string;
@@ -77,6 +105,9 @@ export interface Ride {
 
   /** Ride status */
   status: RideStatus;
+
+  /** Backend-resolved self-service policy for the current caller */
+  selfService?: RideSelfService;
 
   /** Timestamp when ride was started */
   startedAt?: string;

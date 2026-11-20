@@ -49,7 +49,7 @@ describe('createRiderProfile', () => {
     };
     mockedPost.mockResolvedValueOnce({
       success: true,
-      data: { profileId: 'P1', ...data },
+      data: { ...data },
       timestamp: '',
     });
 

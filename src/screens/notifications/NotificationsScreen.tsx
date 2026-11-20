@@ -17,11 +17,8 @@ import { useFocusEffect } from '@react-navigation/native';
 import { COLORS } from '../../constants';
 import { useNotifications } from '../../hooks/useNotifications';
 import { getRelativeTime } from '../../utils/dateFormatter';
-import { logger } from '../../utils/logger';
-import { navigationRef } from '../../navigation/navigationRef';
+import { navigateForNotificationTarget } from '../../navigation/notificationNavigation';
 import type { Notification } from '../../types/notification';
-
-const TAG = 'NotificationsScreen';
 
 function navigateFromNotification(item: Notification): void {
   const target = item.target;
@@ -34,36 +31,7 @@ function navigateFromNotification(item: Notification): void {
     ? target.params
     : undefined;
 
-  if (!navigationRef.isReady()) {
-    return;
-  }
-
-  if (target.screen === 'PROFILE') {
-    navigationRef.navigate('ViewProfile' as never);
-    return;
-  }
-
-  if (target.screen === 'TOUR') {
-    navigationRef.navigate('Tour' as never);
-    return;
-  }
-
-  if (target.screen === 'RIDE_DETAILS') {
-    const rideId = typeof params?.rideId === 'string' ? params.rideId : undefined;
-    const tourId = typeof params?.tourId === 'string' ? params.tourId : item.tourId;
-
-    if (rideId && tourId) {
-      navigationRef.navigate('Tour' as never, {
-        screen: 'RideDetails',
-        params: { rideId, tourId },
-      } as never);
-      return;
-    }
-  }
-
-  if (target.screen !== 'NOTIFICATIONS') {
-    logger.info(TAG, `Unknown notification target ${target.screen}, staying in Notifications.`);
-  }
+  navigateForNotificationTarget(target.screen, params, { fallbackTourId: item.tourId });
 }
 
 export function NotificationsScreen() {

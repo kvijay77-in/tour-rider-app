@@ -15,7 +15,7 @@
  * See docs/design-signup-approach.md for multi-organizer support details.
  */
 
-import { Amplify } from 'aws-amplify';
+import { Amplify, type ResourcesConfig } from 'aws-amplify';
 import { logger } from '../utils/logger';
 import {
   subscriptionConfig,
@@ -48,6 +48,23 @@ function getEnvCognitoConfig(): EnvCognitoConfig | null {
 }
 
 /**
+ * Builds the Amplify Auth config. Amplify's types require `identityPoolId` to be
+ * either absent (user pool only) or a string (user pool + identity pool), so an
+ * optional/undefined value must be handled as two distinct shapes.
+ */
+function buildAuthConfig({
+  userPoolId,
+  userPoolClientId,
+  identityPoolId,
+}: EnvCognitoConfig): NonNullable<ResourcesConfig['Auth']> {
+  if (identityPoolId) {
+    return { Cognito: { userPoolId, userPoolClientId, identityPoolId } };
+  }
+
+  return { Cognito: { userPoolId, userPoolClientId } };
+}
+
+/**
  * Configure Amplify Auth with Cognito User Pool settings.
  *
  * In single-subscription mode, uses pre-configured organizer settings.
@@ -63,13 +80,11 @@ export function configureAmplify(): void {
     }
 
     Amplify.configure({
-      Auth: {
-        Cognito: {
-          userPoolId: organizer.cognitoPoolId,
-          userPoolClientId: organizer.cognitoClientId,
-          ...(organizer.identityPoolId ? { identityPoolId: organizer.identityPoolId } : {}),
-        },
-      },
+      Auth: buildAuthConfig({
+        userPoolId: organizer.cognitoPoolId,
+        userPoolClientId: organizer.cognitoClientId,
+        identityPoolId: organizer.identityPoolId,
+      }),
     });
 
     logger.info(
@@ -82,9 +97,7 @@ export function configureAmplify(): void {
     if (envCognitoConfig) {
       // Dev/test fallback: allow direct auth in multi mode when env values are present.
       Amplify.configure({
-        Auth: {
-          Cognito: envCognitoConfig,
-        },
+        Auth: buildAuthConfig(envCognitoConfig),
       });
 
       logger.warn(
@@ -110,13 +123,11 @@ export function configureAmplify(): void {
  */
 export function configureAmplifyForOrganizer(organizer: OrganizerConfig): void {
   Amplify.configure({
-    Auth: {
-      Cognito: {
-        userPoolId: organizer.cognitoPoolId,
-        userPoolClientId: organizer.cognitoClientId,
-        ...(organizer.identityPoolId ? { identityPoolId: organizer.identityPoolId } : {}),
-      },
-    },
+    Auth: buildAuthConfig({
+      userPoolId: organizer.cognitoPoolId,
+      userPoolClientId: organizer.cognitoClientId,
+      identityPoolId: organizer.identityPoolId,
+    }),
   });
 
   logger.info(

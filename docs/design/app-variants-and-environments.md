@@ -1,6 +1,6 @@
 # App variants and environments (Test / Production)
 
-_Last updated: 2026-09-30_
+_Last updated: 2026-11-20_
 
 Status: **Approved — implemented in tour-rider-app** (tour-mgmt-app follows the same design separately).
 
@@ -69,20 +69,21 @@ Both variants of an app can be installed side by side on the same device. They h
 | `app.json` | Static config: `owner`, `slug`, `version`, `runtimeVersion` (`appVersion` policy), plugins, `extra.eas.projectId` (placeholder `<EAS_PROJECT_ID>` until `eas init`). There are no bundle IDs and no `updates.url`. |
 | `app.config.ts` | Reads `APP_VARIANT` and sets `name`, `scheme`, `icon`, `ios.bundleIdentifier`, `android.package`, the adaptive icon, `android.googleServicesFile` (only when `GOOGLE_SERVICES_JSON` is set) and `extra.appVariant`. |
 | `eas.json` | Build profiles `development`, `test`, `adhoc` (extends `test`, internal distribution) and `production`. Each profile sets `APP_VARIANT` and the profile-managed flags, and selects the EAS environment. Submit profiles `test` (Play internal track) and `production` (Play alpha/closed track). |
-| `tools/push-eas-env.sh` | Upserts non-empty `EXPO_PUBLIC_*` values from a git-ignored `.env` into the chosen EAS environments. Supports `--dry-run`. |
+| `.github/workflows/deploy.yml` | Manual GitHub Actions workflow. `develop` builds the Test app, `main` the Production app; any other branch fails. It checks the code, reads the backend values from SSM, syncs the EAS environment, then starts the EAS build with optional `--auto-submit`. |
+| `tools/backend-config.mjs` | Makes an EAS environment match tour-data-api's SSM handover (`/tour-data-api/<env>/rider/*`). It writes only changed variables, separates variables shared between environments, refuses `preview` writes outside `develop` and `production` writes outside `main`, and supports `--dry-run`. |
 
 ### EAS environment variable matrix
 
 | Variable | `preview` (Test) | `production` |
 |---|---|---|
-| `EXPO_PUBLIC_AWS_REGION`, `EXPO_PUBLIC_AWS_USER_POOL_ID`, `EXPO_PUBLIC_AWS_USER_POOL_WEB_CLIENT_ID`, `EXPO_PUBLIC_AWS_IDENTITY_POOL_ID` | Dev | Prod |
+| `EXPO_PUBLIC_AWS_REGION`, `EXPO_PUBLIC_AWS_USER_POOL_ID`, `EXPO_PUBLIC_AWS_USER_POOL_WEB_CLIENT_ID` | Dev | Prod |
 | `EXPO_PUBLIC_TOUR_DATA_API_BASE_URL` | Dev | Prod |
-| `EXPO_PUBLIC_ORGANIZER_ID`, `EXPO_PUBLIC_ORGANIZER_NAME` | same | same |
-| `EXPO_PUBLIC_REVIEW_USERNAME` | not set | reviewer email |
+| `EXPO_PUBLIC_AWS_IDENTITY_POOL_ID` | not set (the backend has no identity pool) | not set |
+| `EXPO_PUBLIC_REVIEW_USERNAME` | not set | reviewer email (GitHub variable `REVIEW_USERNAME`) |
 | `EXPO_PUBLIC_REVIEW_AWS_*`, `EXPO_PUBLIC_REVIEW_TOUR_DATA_API_BASE_URL` | not set | Dev |
 | `GOOGLE_SERVICES_JSON` (file, secret) | `.dev` Firebase file | prod Firebase file |
 
-`APP_VARIANT`, `EXPO_PUBLIC_SUBSCRIPTION_MODE`, `EXPO_PUBLIC_LOG_LEVEL` and `EXPO_PUBLIC_API_DEBUG_GET` are set by the `eas.json` profile, not the EAS environment. `EXPO_PUBLIC_*` values are embedded in the binary. They are public identifiers, **never secrets**.
+The deploy workflow writes every row except `GOOGLE_SERVICES_JSON` from tour-data-api's SSM handover on each run. `APP_VARIANT`, `EXPO_PUBLIC_SUBSCRIPTION_MODE`, `EXPO_PUBLIC_LOG_LEVEL`, `EXPO_PUBLIC_API_DEBUG_GET` and, when used, `EXPO_PUBLIC_ORGANIZER_ID` and `EXPO_PUBLIC_ORGANIZER_NAME` are set by the `eas.json` profile, not the EAS environment. `EXPO_PUBLIC_*` values are embedded in the binary. They are public identifiers, **never secrets**.
 
 ## 6. Runtime routing
 
@@ -125,19 +126,20 @@ flowchart TD
 
 ## 9. Release process
 
-1. Build and submit the Test app: `eas build -p all --profile test --auto-submit`. Testers receive it through TestFlight external groups and the Play internal track, and test against Dev.
-2. When testing is done, build the **same commit** with `eas build -p all --profile production --auto-submit`. It goes to TestFlight and the Play closed (alpha) track.
+1. Build and submit the Test app: run the **Deploy** workflow on `develop`. Testers receive it through TestFlight external groups and the Play internal track, and test against Dev.
+2. When testing is done, merge `develop` to `main` and run the **Deploy** workflow on `main`. It goes to TestFlight and the Play closed (alpha) track.
 3. Before the first go-live: run the Play closed test against Prod (12 testers × 14 days), apply for production access, then clean up Prod (D13).
 4. Submit the Production app for review with the Dev reviewer credentials, then release manually.
 
-Step-by-step commands are in the [EAS build and release guide](../guides/eas-build-and-release.md).
+The workflow setup and steps are in the [deployment guide](../guides/deployment.md); store, credential and tester steps are in the [EAS build and release guide](../guides/eas-build-and-release.md).
 
 ## 10. Risks
 
 | Risk | Mitigation |
 |---|---|
 | Tester uses the Production app by mistake | Different name, icon and TEST banner; the Test app cannot reach Prod. |
-| Wrong values in an EAS environment | `tools/push-eas-env.sh --dry-run`; verify with `eas env:list` and `npx expo config --type public`; the startup log shows the API host. |
+| Wrong values in an EAS environment | The deploy workflow syncs them from SSM before every build and verifies the result; the run summary lists each variable's action. The startup log shows the API host. |
+| Dev build writes Prod values, or the reverse | The workflow maps `develop` → `preview` and `main` → `production`, and `tools/backend-config.mjs` refuses any other combination. The prod read role trusts `main` only. |
 | Reviewer routing points at Prod | Review variables are Dev-only and exist only in the `production` environment. |
 | Reviewer account deleted or expired | Release checklist: re-create the reviewer before each submission. |
 | TestFlight build expires (90 days) | Rebuild the Test app at least every 90 days. |
@@ -147,7 +149,8 @@ Step-by-step commands are in the [EAS build and release guide](../guides/eas-bui
 
 ## 11. Implementation plan
 
-1. EAS project setup: `app.json`, `eas.json`, `.env.example`, `tools/push-eas-env.sh`. ✅
+1. EAS project setup: `app.json`, `eas.json`, `.env.example`. ✅
+    - Deploy workflow with EAS sync from the SSM handover (`.github/workflows/deploy.yml`, `tools/backend-config.mjs`). ✅ Dev run pending; prod pending the production AWS account.
 2. `app.config.ts` and placeholder Test icons (`assets/icon-test.png`, `assets/adaptive-icon-test.png`). Replace them with "TEST" ribbon art. ✅ (art pending)
 3. Store-reviewer routing and `AuthContext` wiring. ✅
 4. TEST banner and startup logging. ✅

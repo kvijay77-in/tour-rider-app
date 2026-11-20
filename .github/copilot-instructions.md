@@ -82,6 +82,11 @@ These instructions are general for our interaction and MUST BE STRICTLY FOLLOWED
 Some specific or explicit instructions that must be followed. Same will be updated here if not covered above.  
 
 ## Do's
+- Create unit test for all critical components and functions.
+- Keep tests as lightweight and focused on specific functionality.
+- Tests should be updated whenever the related code changes.
 
 ## Don'ts
 - Do not install Expo CLI globally as this is deprecated. Use npx/npm exec to run Expo CLI commands.
+- Do not create UI Tests. It will be done manually.
+
