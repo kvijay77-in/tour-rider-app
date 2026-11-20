@@ -17,6 +17,7 @@ tour-rider-app/
 ├── App.tsx                  app entry and providers
 ├── app.json                 static Expo application metadata
 ├── app.config.ts            variant (Test / Production) identity from APP_VARIANT
+├── .github/workflows/       deploy.yml: manual EAS build + store submit
 ├── eas.json                 EAS build and submit profiles
 ├── .env.example             build-time configuration example
 ├── assets/                  images and fonts
@@ -26,7 +27,7 @@ tour-rider-app/
 │   ├── guides/              development and distribution
 │   ├── user-guide/          rider instructions
 │   └── misc/                historical material
-├── tools/                   operator scripts (push-eas-env.sh)
+├── tools/                   operator scripts (backend-config.mjs: EAS sync from SSM)
 ├── src/
 │   ├── components/          checkin, common, home, profile, tour
 │   ├── config/              Amplify, subscription, app variant and reviewer routing
