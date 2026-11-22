@@ -68,6 +68,9 @@ export function ProfileCreationScreen({ navigation }: Props) {
     [profileDefinitions],
   );
 
+  // Fields kept out of the form are also kept out of validation.
+  const formExcludedKeys = useMemo(() => (photoAttribute ? [photoAttribute.key] : []), [photoAttribute]);
+
   const handleFieldChange = (field: string, value: unknown) => {
     setValues((previous) => ({ ...previous, [field]: value }));
     setFormErrors((previous) => Object.fromEntries(
@@ -132,7 +135,7 @@ export function ProfileCreationScreen({ navigation }: Props) {
       return;
     }
 
-    const errors = validateProfileDraftValues(profileDefinitions, values, { skipReadOnly: true });
+    const errors = validateProfileDraftValues(profileDefinitions, values, { skipReadOnly: true, excludedKeys: formExcludedKeys });
     if (photoAttribute?.required && !selectedPhotoUri) {
       errors[photoAttribute.key] = 'Profile picture is required.';
     }
@@ -284,7 +287,7 @@ export function ProfileCreationScreen({ navigation }: Props) {
           values={values}
           errors={formErrors}
           disabled={isSubmitting}
-          excludedKeys={photoAttribute ? [photoAttribute.key] : []}
+          excludedKeys={formExcludedKeys}
           showAdminOnly={false}
           onChange={handleFieldChange}
         />

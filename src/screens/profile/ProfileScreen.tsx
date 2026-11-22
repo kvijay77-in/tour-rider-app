@@ -105,6 +105,9 @@ export function ProfileScreen() {
     [profileDefinitions],
   );
 
+  // Fields kept out of the edit form are also kept out of validation.
+  const formExcludedKeys = useMemo(() => (photoAttribute ? [photoAttribute.key] : []), [photoAttribute]);
+
   const resetEditor = useCallback(() => {
     if (!profileDefinitions) {
       return;
@@ -185,7 +188,7 @@ export function ProfileScreen() {
     }
 
     const hasPhoto = Boolean(selectedPhotoUri || profile?.photoUrl || profile?.photoS3Key);
-    const errors = validateProfileDraftValues(profileDefinitions, values, { skipReadOnly: true });
+    const errors = validateProfileDraftValues(profileDefinitions, values, { skipReadOnly: true, excludedKeys: formExcludedKeys });
     if (photoAttribute?.required && !hasPhoto) {
       errors[photoAttribute.key] = 'Profile picture is required.';
     }
@@ -237,6 +240,7 @@ export function ProfileScreen() {
       setIsSaving(false);
     }
   }, [
+    formExcludedKeys,
     photoAttribute,
     profile,
     profileDefinitions,
@@ -415,7 +419,7 @@ export function ProfileScreen() {
               values={values}
               errors={formErrors}
               disabled={isSaving}
-              excludedKeys={photoAttribute ? [photoAttribute.key] : []}
+              excludedKeys={formExcludedKeys}
               showAdminOnly
               onChange={handleFieldChange}
             />
