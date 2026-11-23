@@ -1,6 +1,6 @@
 import type { ProfileAttributeDefinition, ProfileDefinitions, ProfileDraftValues, ProfileFieldDefinition, ProfileValidationErrors } from './types';
 import { getLovItems } from './bindings';
-import { isAttributeReadOnlyForRider } from './handlers';
+import { getProfileHandler, isAttributeReadOnlyForRider } from './handlers';
 import { evaluateVisibleWhen } from './visibility';
 
 function isEmptyValue(value: unknown): boolean {
@@ -271,16 +271,28 @@ function validateFieldValue(
 export function validateProfileDraftValues(
   definitions: ProfileDefinitions,
   values: ProfileDraftValues,
-  options: { skipReadOnly?: boolean } = {},
+  options: { skipReadOnly?: boolean; excludedKeys?: string[] } = {},
 ): ProfileValidationErrors {
   const errors: ProfileValidationErrors = {};
+  const excludedKeys = new Set(options.excludedKeys);
 
   for (const attribute of definitions.orderedAttributes) {
+    // Attributes that are not shown in the form cannot be edited, so they are not validated.
+    if (excludedKeys.has(attribute.key)) {
+      continue;
+    }
+
     if (!evaluateVisibleWhen(attribute.visibleWhen, values)) {
       continue;
     }
 
     if (options.skipReadOnly && isAttributeReadOnlyForRider(attribute)) {
+      continue;
+    }
+
+    // Handler-managed attributes that never go into the save payload (e.g. PROFILE_PHOTO) hold a
+    // stored reference such as an S3 key rather than form data. The screens validate them directly.
+    if (getProfileHandler(attribute).omitFromPayload) {
       continue;
     }
 

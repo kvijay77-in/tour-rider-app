@@ -123,4 +123,122 @@ describe('validateProfileDraftValues', () => {
 
     expect(visibleEditableAttributes.map((attribute) => attribute.key)).toEqual(['name']);
   });
+
+  describe('profile photo attribute', () => {
+    const definitions = buildProfileDefinitions([
+      entry('RIDER_PROFILE_SECTION', 'personal', { label: 'Personal', order: 10 }),
+      entry('RIDER_PROFILE_ATTRIBUTE', 'photo', {
+        label: 'Photo',
+        sectionId: 'personal',
+        order: 10,
+        type: 'IMAGE',
+        storage: { scope: 'CORE', path: 'photoS3Key' },
+        handler: 'PROFILE_PHOTO',
+      }),
+      entry('RIDER_PROFILE_ATTRIBUTE', 'phone', {
+        label: 'Phone',
+        sectionId: 'personal',
+        order: 20,
+        type: 'PHONE',
+        storage: { scope: 'CORE', path: 'phone' },
+      }),
+    ]);
+
+    it('does not reject the stored S3 key of an existing profile photo', () => {
+      const errors = validateProfileDraftValues(
+        definitions,
+        { photo: 'riders/P123/photo/profile.jpg', phone: '+14155550123' },
+        { skipReadOnly: true },
+      );
+
+      expect(errors).toEqual({});
+    });
+
+    it('skips the photo attribute even when the skipReadOnly option is not set', () => {
+      const errors = validateProfileDraftValues(definitions, { photo: 'riders/P123/photo/profile.jpg' });
+
+      expect(errors.photo).toBeUndefined();
+    });
+
+    it('still validates other fields alongside an existing photo', () => {
+      const errors = validateProfileDraftValues(
+        definitions,
+        { photo: 'riders/P123/photo/profile.jpg', phone: '12345' },
+        { skipReadOnly: true },
+      );
+
+      expect(errors.photo).toBeUndefined();
+      expect(errors.phone).toContain('valid phone');
+    });
+
+    it('still reports invalid file information for non-photo IMAGE attributes', () => {
+      const withDocument = buildProfileDefinitions([
+        entry('RIDER_PROFILE_SECTION', 'personal', { label: 'Personal', order: 10 }),
+        entry('RIDER_PROFILE_ATTRIBUTE', 'idScan', {
+          label: 'ID scan',
+          sectionId: 'personal',
+          order: 10,
+          type: 'IMAGE',
+          storage: { scope: 'ATTRIBUTES' },
+        }),
+      ]);
+
+      expect(validateProfileDraftValues(withDocument, { idScan: 'not-an-object' }).idScan)
+        .toContain('file information is invalid');
+    });
+  });
+
+  describe('excludedKeys option', () => {
+    const definitions = buildProfileDefinitions([
+      entry('RIDER_PROFILE_SECTION', 'personal', { label: 'Personal', order: 10 }),
+      entry('RIDER_PROFILE_ATTRIBUTE', 'phone', {
+        label: 'Phone',
+        sectionId: 'personal',
+        order: 10,
+        type: 'PHONE',
+        storage: { scope: 'CORE', path: 'phone' },
+      }),
+      entry('RIDER_PROFILE_ATTRIBUTE', 'badge', {
+        label: 'Badge',
+        sectionId: 'personal',
+        order: 20,
+        type: 'IMAGE',
+        storage: { scope: 'ATTRIBUTES' },
+        required: true,
+      }),
+    ]);
+
+    it('does not validate attributes that are excluded from the form', () => {
+      const errors = validateProfileDraftValues(
+        definitions,
+        { phone: '+14155550123', badge: 'stored-reference' },
+        { excludedKeys: ['badge'] },
+      );
+
+      expect(errors).toEqual({});
+    });
+
+    it('does not report a required excluded attribute with no value', () => {
+      const errors = validateProfileDraftValues(definitions, { phone: '+14155550123' }, { excludedKeys: ['badge'] });
+
+      expect(errors.badge).toBeUndefined();
+    });
+
+    it('still validates attributes that are not excluded', () => {
+      const errors = validateProfileDraftValues(
+        definitions,
+        { phone: '12345', badge: 'stored-reference' },
+        { excludedKeys: ['badge'] },
+      );
+
+      expect(errors.phone).toContain('valid phone');
+      expect(errors.badge).toBeUndefined();
+    });
+
+    it('validates every attribute when no keys are excluded', () => {
+      const errors = validateProfileDraftValues(definitions, { phone: '+14155550123', badge: 'stored-reference' });
+
+      expect(errors.badge).toContain('file information is invalid');
+    });
+  });
 });
