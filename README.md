@@ -11,3 +11,7 @@ The rider-facing React Native/Expo app for cycling tours. Riders can manage thei
 For local development, run `npm ci`, copy `.env.example` to `.env` with values from the backend deployment, and run `npm start`. See the [development guide](docs/guides/development.md) and [app build guide](docs/guides/deployment.md). The app does not provision AWS resources; the backend owns the rider account pool and the authenticated HTTP API.
 
 Related repositories: [tour-data-api](https://github.com/kvijay77-in/tour-data-api) (backend and infrastructure), [tour-mgmt-app](https://github.com/kvijay77-in/tour-mgmt-app) (organizer/crew app), and [cycling-tour-platform](https://github.com/kvijay77-in/cycling-tour-platform) (platform site).
+
+
+## License
+Licensed under the [PolyForm Noncommercial License 1.0.0](LICENSE). Free for learning and non-commercial use. For commercial use, contact [kvijay77.in@gmail.com].
