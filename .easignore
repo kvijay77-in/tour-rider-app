@@ -1,0 +1,44 @@
+# .easignore — files/dirs excluded from the tarball uploaded to EAS Build.
+#
+# EAS Build honours .gitignore by default; .easignore overrides that when
+# present. We start by mirroring .gitignore, then add project-specific
+# artefacts that must not be uploaded (backend snapshots, docs, dev tools).
+#
+# Keep this list short — anything the JS bundler needs at build time MUST
+# NOT be listed here.
+
+# -- Mirrored from .gitignore --
+node_modules/
+.expo/
+dist/
+web-build/
+*.log
+.DS_Store
+.env
+.env.local
+.env.*.local
+android/
+ios/
+*.jks
+*.keystore
+
+# Firebase config comes from the EAS file variable GOOGLE_SERVICES_JSON.
+# Excluding the local copy makes local builds fail the same way CI does
+# if that variable is missing or has the wrong type.
+google-services*.json
+
+# -- Project-specific exclusions --
+
+# Backend snapshot — reference only, not needed to build the mobile app.
+tour-data-api-main.zip
+
+# Documentation is not needed at build time.
+docs/
+
+# Dev-only publisher tools (setup-link generator etc.).
+tools/
+
+# Local test / IDE artefacts
+.vscode/
+.idea/
+coverage/
